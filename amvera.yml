@@ -4,5 +4,5 @@ meta:
     name: pip
     version: "3.12"
 run:
-  command: uvicorn main:app --host 0.0.0.0 --port 80
-  containerPort: 80
+  command: uvicorn main:app --host 0.0.0.0 --port 8000
+  containerPort: 8000
