@@ -1,0 +1,129 @@
+openapi: 3.0.0
+info:
+  title: OkTolk API
+  version: 1.0.0
+paths:
+  /register:
+    post:
+      summary: Register user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: {type: string}
+                password: {type: string}
+                telegram_id: {type: string}
+      responses:
+        '200':
+          description: User created
+  /login:
+    post:
+      summary: Login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: {type: string}
+                password: {type: string}
+      responses:
+        '200':
+          description: Returns JWT token
+  /chat:
+    post:
+      summary: Send message to AI chatbot
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                text: {type: string}
+                image: {type: string, format: binary}
+      responses:
+        '200':
+          description: AI response with scam risk
+  /risk:
+    post:
+      summary: Report suspicious message/call
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content: {type: string}
+                type: {type: string, enum: [sms, call]}
+      responses:
+        '200':
+          description: Risk level 0-3
+  /news:
+    get:
+      summary: Get simplified news feed
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lang
+          in: query
+          schema: {type: string}
+      responses:
+        '200':
+          description: List of simplified news articles
+  /voice/input:
+    post:
+      summary: Speech-to-text
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                audio: {type: string, format: binary}
+      responses:
+        '200':
+          description: Transcribed text
+  /voice/output:
+    post:
+      summary: Text-to-speech
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text: {type: string}
+      responses:
+        '200':
+          description: Audio file
+  /notifications/trusted:
+    post:
+      summary: Add trusted contact
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                telegram_id: {type: string}
+                name: {type: string}
+      responses:
+        '200':
+          description: Contact added
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

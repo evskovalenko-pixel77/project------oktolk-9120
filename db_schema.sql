@@ -1,0 +1,6 @@
+CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, telegram_id TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE trusted_contacts (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, contact_telegram_id TEXT NOT NULL, name TEXT, FOREIGN KEY (user_id) REFERENCES users(id));
+CREATE TABLE chats (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, user_message TEXT, ai_response TEXT, image_path TEXT, risk_level INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id));
+CREATE TABLE risk_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, content TEXT, type TEXT, risk_level INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id));
+CREATE TABLE news_articles (id INTEGER PRIMARY KEY AUTOINCREMENT, original_url TEXT UNIQUE, title TEXT, original_content TEXT, simplified_content TEXT, language TEXT, published_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE user_news_preferences (user_id INTEGER, language TEXT, PRIMARY KEY (user_id, language), FOREIGN KEY (user_id) REFERENCES users(id));

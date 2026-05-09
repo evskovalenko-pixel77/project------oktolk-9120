@@ -1,0 +1,5 @@
+- As a user, I want to chat with the AI about suspicious messages or images so that I can quickly determine if something is a scam
+- As a user, I want to see a clear risk level (0-3) for unexpected calls or texts so that I know how to respond
+- As a user, I want to read or listen to simplified news so that I can stay informed without feeling overwhelmed
+- As a user, I want to use voice commands to ask questions or navigate the app so that it's easier for me to use
+- As a user, I want my trusted contacts to be automatically alerted via Telegram if a scam is detected so that they can help me
