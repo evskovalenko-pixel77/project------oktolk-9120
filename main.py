@@ -83,3 +83,7 @@ async def analyze_text(req: AnalyzeRequest):
         "summary": "СТОП! Это мошенники! Не отвечайте и не переводите деньги!" if risk_level == 3 else "Проверьте ещё раз",
         "action": "Заблокируйте отправителя и расскажите близким" if risk_level == 3 else "Будьте осторожны"
     }
+
+@app.get("/")
+async def root():
+    return FileResponse("index.html")
