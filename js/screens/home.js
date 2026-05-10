@@ -130,7 +130,7 @@ window.ScreenHome = {
     window.pomoshnikApp.showHome();
 
     try {
-      const result = await window.PomoshnikAPI.processInput('text', text);
+      const result = await window.PomoshnikAPI.processInput(text);
       this.addMessage('ai', result.analysis);
       window.pomoshnikApp.showHome();
     } catch (error) {
