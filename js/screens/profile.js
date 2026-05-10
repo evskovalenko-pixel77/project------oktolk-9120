@@ -41,7 +41,7 @@ window.ScreenProfile = {
               <div style="font-size: 17px; font-weight: 800;">Размер шрифта</div>
               <div style="font-size: 14px; color: var(--text-soft); margin-top: 3px; font-weight: 600;">Для удобства чтения</div>
             </div>
-            <select id="font-size-select" style="background: #F7F7F7; border: 2px solid #E0E0E0; border-radius: 12px; padding: 10px 14px; font-family: Nunito, sans-serif; font-size: 15px; font-weight: 700; outline: none;">
+            <select id="font-size-select" style="background: #F7F7F7; border: 2px solid #E0E0E0; border-radius: 16px; padding: 12px 16px; font-family: Nunito, sans-serif; font-size: 15px; font-weight: 700; outline: none; cursor: pointer;">
               <option value="small">Маленький</option>
               <option value="normal" selected>Обычный</option>
               <option value="large">Большой</option>
@@ -53,7 +53,7 @@ window.ScreenProfile = {
               <div style="font-size: 17px; font-weight: 800;">Тема оформления</div>
               <div style="font-size: 14px; color: var(--text-soft); margin-top: 3px; font-weight: 600;">Светлая или тёмная</div>
             </div>
-            <select id="theme-select" style="background: #F7F7F7; border: 2px solid #E0E0E0; border-radius: 12px; padding: 10px 14px; font-family: Nunito, sans-serif; font-size: 15px; font-weight: 700; outline: none;">
+            <select id="theme-select" style="background: #F7F7F7; border: 2px solid #E0E0E0; border-radius: 16px; padding: 12px 16px; font-family: Nunito, sans-serif; font-size: 15px; font-weight: 700; outline: none; cursor: pointer;">
               <option value="light" selected>☀️ День</option>
               <option value="dark">🌙 Ночь</option>
             </select>
@@ -75,8 +75,8 @@ window.ScreenProfile = {
         </div>
       </div>
 
-      <div id="contact-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: flex-end; justify-content: center;">
-        <div style="background: white; border-radius: 28px 28px 0 0; padding: 28px 24px 40px; width: 100%; max-width: 480px;">
+      <div id="contact-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 28px; padding: 28px 24px 32px; width: 90%; max-width: 420px;">
           <div style="font-size: 22px; font-weight: 900; margin-bottom: 24px; text-align: center;">Добавить доверенное лицо</div>
           <div style="display: flex; flex-direction: column; gap: 14px;">
             <div>
