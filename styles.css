@@ -634,3 +634,75 @@ body {
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .fade-in { animation: fadeIn 0.3s ease both; }
+
+/* ── Алиасы для совместимости ── */
+.input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: #F7F7F7;
+  border: 2px solid #E0E0E0;
+  border-radius: 28px;
+  padding: 10px 10px 10px 20px;
+  transition: border-color 0.2s;
+}
+.input-row:focus-within { border-color: var(--green); }
+
+.text-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: "Nunito", sans-serif;
+  font-size: 18px;
+  color: var(--text);
+  outline: none;
+  font-weight: 600;
+}
+.text-input::placeholder { color: var(--text-soft); font-weight: 400; }
+
+.input-buttons {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0 4px;
+}
+
+.input-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  background: #F4F9F6;
+  border: 2px solid #E0E0E0;
+  border-radius: 16px;
+  cursor: pointer;
+  font-family: "Nunito", sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  color: #444;
+  transition: all 0.15s;
+}
+.input-btn:active { border-color: var(--green); background: var(--green-light); }
+
+.btn-icon { font-size: 26px; line-height: 1; }
+.btn-label { font-size: 13px; font-weight: 800; color: var(--text-mid); }
+
+.big-action-btn {
+  width: 100%;
+  padding: 18px;
+  background: var(--green-light);
+  border: 2px dashed var(--green);
+  border-radius: var(--radius-lg);
+  font-family: "Nunito", sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--green-dark);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.big-action-btn:active { background: var(--green); color: white; }
