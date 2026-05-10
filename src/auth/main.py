@@ -8,7 +8,14 @@ from passlib.hash import bcrypt
 from datetime import datetime, timedelta
 import os
 
-app = FastAPI()
+from fastapi.middleware.cors import CORSMiddleware
+
+AITUNNEL_API_KEY = os.getenv("AITUNNEL_API_KEY", "")
+AITUNNEL_BASE_URL = os.getenv("AITUNNEL_BASE_URL", "https://api.aitunnel.ru/v1/")
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
+
+app = FastAPI(title="OkTolk API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 DATABASE = "auth.db"
 
