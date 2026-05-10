@@ -62,7 +62,7 @@ window.ScreenNews = {
           <div class="news-card-title">${item.title}</div>
           <div class="news-card-text">${item.content}</div>
           <div style="font-size: 11px; color: var(--text-muted); font-style: italic;">📍 ${item.source}</div>
-          <button class="explain-btn" data-news-index="${index}" style="margin-top: 12px; width: 100%; padding: 10px 14px; background: var(--accent); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;">
+          <button class="explain-btn" data-news-index="${index}" style="margin-top: 12px; width: 100%; padding: 10px 14px; background: var(--green); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;">
             💡 Объясни по простому
           </button>
         </div>
@@ -200,7 +200,7 @@ window.ScreenNews = {
       followUpBtn.disabled = true;
 
       dialogContent.innerHTML += `
-        <div class="user-message" style="margin-top: 16px; padding: 12px 14px; background: var(--accent); color: white; border-radius: 10px; font-size: 14px;">
+        <div class="user-message" style="margin-top: 16px; padding: 12px 14px; background: var(--green); color: white; border-radius: 10px; font-size: 14px;">
           ${question}
         </div>
         <div class="ai-message" style="margin-top: 8px; padding: 12px 14px; background: var(--bg-card); border-radius: 10px; font-size: 14px;">
