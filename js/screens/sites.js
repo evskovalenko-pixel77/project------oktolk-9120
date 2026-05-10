@@ -20,7 +20,9 @@ window.ScreenSites = {
       html += `
         <a href="${site.url}" target="_blank" rel="noopener" class="site-card">
           <div style="display: flex; align-items: center; gap: 14px; padding: 18px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; margin-bottom: 14px; text-decoration: none; color: inherit;">
-            <div style="width: 52px; height: 52px; border-radius: 16px; background: var(--secondary-soft); display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0;">${site.emoji}</div>
+            <div style="width: 56px; height: 56px; border-radius: 16px; background: #F4F9F6; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; border: 2px solid #E0E0E0;">
+              <img src="https://www.google.com/s2/favicons?domain=${new URL(site.url).hostname}&sz=64" style="width: 40px; height: 40px; object-fit: contain;" onerror="this.style.display='none';this.parentElement.innerHTML='🏛️'">
+            </div>
             <div style="flex: 1;">
               <div style="font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 2px;">${site.name}</div>
               <div style="font-size: 13px; color: var(--text-muted);">${site.description}</div>

@@ -63,7 +63,7 @@ window.ScreenNews = {
           <div class="news-card-text">${item.content}</div>
           <div style="font-size: 11px; color: var(--text-muted); font-style: italic;">📍 ${item.source}</div>
           <div style="display: flex; gap: 10px; margin-top: 14px;">
-            <a href="${item.url || '#'}" target="_blank" rel="noopener" style="flex: 1; padding: 12px; background: #F4F9F6; border: 2px solid #2A7D4F; border-radius: 12px; font-family: Nunito, sans-serif; font-size: 14px; font-weight: 800; color: #1A5C38; text-align: center; text-decoration: none; display: block;">
+            <a href="${item.url || '#'}" target="_blank" rel="noopener" style="flex: 1; padding: 12px; background: #2A7D4F; border: 2px solid #2A7D4F; border-radius: 12px; font-family: Nunito, sans-serif; font-size: 14px; font-weight: 800; color: white; text-align: center; text-decoration: none; display: block;">
               🔗 На источник
             </a>
             <button class="explain-btn" data-news-index="${index}" style="flex: 1; padding: 12px; background: #2A7D4F; color: white; border: none; border-radius: 12px; font-family: Nunito, sans-serif; font-size: 14px; font-weight: 800; cursor: pointer;">
