@@ -91,6 +91,14 @@ window.ScreenProfile = {
               <label style="font-size: 14px; font-weight: 800; color: #444; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">Телефон</label>
               <input id="modal-phone" type="tel" placeholder="+7 900 000 00 00" style="width: 100%; padding: 16px 18px; background: #F7F7F7; border: 2px solid #E0E0E0; border-radius: 16px; font-family: Nunito, sans-serif; font-size: 18px; font-weight: 600; outline: none;">
             </div>
+            <div>
+              <label style="font-size: 14px; font-weight: 800; color: #444; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">Telegram</label>
+              <input id="modal-telegram" type="text" placeholder="@username" style="width: 100%; padding: 16px 18px; background: #F7F7F7; border: 2px solid #E0E0E0; border-radius: 16px; font-family: Nunito, sans-serif; font-size: 18px; font-weight: 600; outline: none;">
+            </div>
+            <div>
+              <label style="font-size: 14px; font-weight: 800; color: #444; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">VK / Макс</label>
+              <input id="modal-vk" type="text" placeholder="id или ник" style="width: 100%; padding: 16px 18px; background: #F7F7F7; border: 2px solid #E0E0E0; border-radius: 16px; font-family: Nunito, sans-serif; font-size: 18px; font-weight: 600; outline: none;">
+            </div>
           </div>
           <div style="display: flex; gap: 12px; margin-top: 24px;">
             <button id="modal-cancel" style="flex: 1; padding: 18px; background: #F7F7F7; border: 2px solid #E0E0E0; border-radius: 16px; font-family: Nunito, sans-serif; font-size: 17px; font-weight: 800; color: #777; cursor: pointer;">Отмена</button>
@@ -113,6 +121,8 @@ window.ScreenProfile = {
       document.getElementById('modal-name').value = '';
       document.getElementById('modal-role').value = '';
       document.getElementById('modal-phone').value = '';
+      document.getElementById('modal-telegram').value = '';
+      document.getElementById('modal-vk').value = '';
     }
   },
 
@@ -147,9 +157,11 @@ window.ScreenProfile = {
         const name = document.getElementById('modal-name').value.trim();
         const role = document.getElementById('modal-role').value.trim();
         const phone = document.getElementById('modal-phone').value.trim();
+        const telegram = document.getElementById('modal-telegram').value.trim();
+        const vk = document.getElementById('modal-vk').value.trim();
         if (!name) { document.getElementById('modal-name').style.borderColor = '#D32F2F'; return; }
         if (!role) { document.getElementById('modal-role').style.borderColor = '#D32F2F'; return; }
-        PomoshnikDB.addTrustedContact(name, role, phone, '');
+        PomoshnikDB.addTrustedContact(name, role, phone, telegram || vk || '');
         this.hideModal();
         window.pomoshnikApp.showScreen('profile');
       });

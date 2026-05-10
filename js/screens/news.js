@@ -10,8 +10,8 @@ window.ScreenNews = {
           <button class="listen-all-btn" id="listen-all-btn">
             <div style="width: 44px; height: 44px; border-radius: 14px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">🎧</div>
             <div style="flex: 1;">
-              <div style="font-size: 16px; font-weight: 700; display: block; margin-bottom: 2px;">Слушать все новости</div>
-              <div style="font-size: 13px; opacity: 0.85; display: block;">Как утреннее радио</div>
+              <div style="font-size: 19px; font-weight: 800; display: block; margin-bottom: 2px;">Слушать все новости</div>
+              <div style="font-size: 15px; opacity: 0.85; display: block;">Как утреннее радио</div>
             </div>
             <div style="font-size: 22px; opacity: 0.7;">→</div>
           </button>
@@ -122,7 +122,7 @@ window.ScreenNews = {
         const result = await PomoshnikMultimedia.textToSpeech(newsText);
         
         listenAllBtn.disabled = false;
-        listenAllBtn.innerHTML = '<div style="width: 44px; height: 44px; border-radius: 14px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">🎧</div><div style="flex: 1;"><div style="font-size: 16px; font-weight: 700; display: block; margin-bottom: 2px;">Слушать все новости</div><div style="font-size: 13px; opacity: 0.85; display: block;">Как утреннее радио</div></div><div style="font-size: 22px; opacity: 0.7;">→</div>';
+        listenAllBtn.innerHTML = '<div style="width: 44px; height: 44px; border-radius: 14px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">🎧</div><div style="flex: 1;"><div style="font-size: 19px; font-weight: 800; display: block; margin-bottom: 2px;">Слушать все новости</div><div style="font-size: 15px; opacity: 0.85; display: block;">Как утреннее радио</div></div><div style="font-size: 22px; opacity: 0.7;">→</div>';
       });
     }
   },
