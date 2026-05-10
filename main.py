@@ -88,3 +88,26 @@ async def root():
     return FileResponse("index.html")
 
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
+
+@app.get("/news")
+async def get_news():
+    return [
+        {"title": "Мошенники звонят от имени банков", "content": "Участились случаи звонков мошенников, представляющихся сотрудниками банков. Никогда не сообщайте код из СМС!", "type": "danger", "source": "МВД России", "timestamp": "2026-05-10"},
+        {"title": "Новые льготы для пенсионеров", "content": "С июня 2026 года пенсионеры старше 70 лет получат дополнительную выплату 5000 рублей. Оформить можно в МФЦ.", "type": "benefit", "source": "Пенсионный фонд России", "timestamp": "2026-05-09"},
+        {"title": "Как не попасться на фишинг", "content": "Мошенники создают сайты-копии банков. Всегда проверяйте адрес сайта в браузере перед вводом данных.", "type": "danger", "source": "Банк России", "timestamp": "2026-05-08"},
+        {"title": "Бесплатная диспансеризация", "content": "До конца года все граждане могут пройти бесплатную диспансеризацию в поликлинике по месту прописки.", "type": "benefit", "source": "Минздрав России", "timestamp": "2026-05-07"},
+        {"title": "Осторожно: фальшивые сайты госуслуг", "content": "Появились поддельные сайты Госуслуг. Настоящий адрес только gosuslugi.ru — других нет!", "type": "danger", "source": "Госуслуги", "timestamp": "2026-05-06"}
+    ]
+
+@app.get("/sites")
+async def get_sites():
+    return [
+        {"name": "Госуслуги", "url": "https://gosuslugi.ru", "description": "Государственные услуги онлайн", "emoji": "🏛"},
+        {"name": "Пенсионный фонд", "url": "https://sfr.gov.ru", "description": "Социальный фонд России", "emoji": "👴"},
+        {"name": "МФЦ", "url": "https://mfc.ru", "description": "Мои документы — центр услуг", "emoji": "📋"},
+        {"name": "Банк России", "url": "https://cbr.ru", "description": "Центральный банк — проверка банков", "emoji": "🏦"},
+        {"name": "МВД — антискам", "url": "https://mvd.ru", "description": "Сообщить о мошенниках", "emoji": "👮"},
+        {"name": "Минздрав", "url": "https://minzdrav.gov.ru", "description": "Здоровье и медицина", "emoji": "🏥"},
+        {"name": "ФНС", "url": "https://nalog.gov.ru", "description": "Федеральная налоговая служба", "emoji": "📊"},
+        {"name": "Стоп мошенник", "url": "https://stopmoscam.ru", "description": "Официальный портал против мошенников", "emoji": "🛡"}
+    ]
