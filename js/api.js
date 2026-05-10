@@ -28,3 +28,18 @@ window.OkTolkAPI = {
 };
 
 window.PomoshnikAPI = window.OkTolkAPI;
+
+window.OkTolkAPI.processInput = async function(text) {
+  return await this.chat(text);
+};
+window.OkTolkAPI.getNews = async function() {
+  const response = await fetch(this.baseURL + '/news');
+  return response.json();
+};
+window.OkTolkAPI.getSafeWebsites = async function() {
+  const response = await fetch(this.baseURL + '/sites');
+  return response.json();
+};
+window.PomoshnikAPI.processInput = window.OkTolkAPI.processInput.bind(window.OkTolkAPI);
+window.PomoshnikAPI.getNews = window.OkTolkAPI.getNews.bind(window.OkTolkAPI);
+window.PomoshnikAPI.getSafeWebsites = window.OkTolkAPI.getSafeWebsites.bind(window.OkTolkAPI);
