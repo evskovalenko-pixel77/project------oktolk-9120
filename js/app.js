@@ -4,7 +4,7 @@ window.pomoshnikApp = {
   currentInputData: null,
 
   init: function() {
-    PomoshnikAPI.loadAPIKey();
+    
     
     const user = PomoshnikDB.getCurrentUser();
     if (!user) {
