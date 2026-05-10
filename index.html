@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1c1815">
+<meta name="description" content="Помощник — мобильное приложение для помощи в бытовых вопросах">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Помощник">
+<title>Помощник — помощь в бытовых вопросах</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%232D6A4F' width='192' height='192'/><text x='96' y='120' font-size='100' font-weight='bold' text-anchor='middle' fill='white' font-family='serif' font-style='italic'>П</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%232D6A4F' width='180' height='180' rx='40'/><text x='90' y='130' font-size='90' font-weight='bold' text-anchor='middle' fill='white' font-family='serif' font-style='italic'>П</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div id="app" class="app-wrapper">
+  <div class="phone">
+    <div class="notch"></div>
+    
+    <div class="status-bar">
+      <div class="signals">
+        <div class="signal-dot"></div>
+        <div class="signal-dot"></div>
+        <div class="signal-dot"></div>
+      </div>
+      <span class="time">9:41</span>
+      <div class="battery">📶</div>
+    </div>
+
+    <div class="app-content" id="content">
+      <!-- Screen content will be rendered here -->
+    </div>
+
+    <div class="bottom-bar" id="nav-bar">
+      <div class="nav-btn active" data-screen="home">
+        <div class="nav-icon">🤝</div>
+        <span>Помощник</span>
+      </div>
+      <div class="nav-btn" data-screen="news">
+        <div class="nav-icon">📰</div>
+        <span>Новости</span>
+      </div>
+      <div class="nav-btn" data-screen="sites">
+        <div class="nav-icon">🌐</div>
+        <span>Сайты</span>
+      </div>
+      <div class="nav-btn" data-screen="profile">
+        <div class="nav-icon">👤</div>
+        <span>Моё</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<audio id="speech-audio" style="display: none;"></audio>
+
+<script src="/js/utils.js"></script>
+<script src="/js/db.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/screens/home.js"></script>
+<script src="/js/screens/news.js"></script>
+<script src="/js/screens/sites.js"></script>
+<script src="/js/screens/profile.js"></script>
+<script src="/js/screens/answer.js"></script>
+<script src="/js/screens/auth.js"></script>
+<script src="/js/multimedia.js"></script>
+<script src="/js/app.js"></script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
+}
+</script>
+</body>
+</html>
