@@ -3,7 +3,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'auth'))
 from src.auth.main import app
-app.mount("/static", StaticFiles(directory="."), name="static")
 
 AITUNNEL_API_KEY = os.getenv("AITUNNEL_API_KEY", "")
 AITUNNEL_BASE_URL = os.getenv("AITUNNEL_BASE_URL", "https://api.aitunnel.ru/v1/")
@@ -87,3 +86,5 @@ async def analyze_text(req: AnalyzeRequest):
 @app.get("/")
 async def root():
     return FileResponse("index.html")
+
+app.mount("/", StaticFiles(directory=".", html=True), name="static")
