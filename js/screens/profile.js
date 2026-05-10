@@ -63,6 +63,62 @@ window.ScreenProfile = {
           <input type="checkbox" id="dark-mode-toggle" style="width: 40px; height: 24px; cursor: pointer;">
         </div>
 
+        <h3 style="font-family: 'Lora', serif; font-size: 18px; font-weight: 600; margin-bottom: 12px;">Доверенные лица</h3>
+      `;
+      contacts.forEach(contact => {
+        contactsHtml += `
+          <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 700; margin-bottom: 2px;">${contact.name}</div>
+              <div style="font-size: 13px; color: var(--text-muted);">${contact.role}</div>
+              ${contact.phone ? '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">☎️ ' + contact.phone + '</div>' : ''}
+              ${contact.telegram ? '<div style="font-size: 12px; color: var(--text-muted);">💬 ' + contact.telegram + '</div>' : ''}
+            </div>
+            <button class="remove-contact-btn" data-contact-id="${contact.id}" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+          </div>
+        `;
+      });
+      contactsHtml += `</div>`;
+    }
+
+    return `
+      <div class="profile-screen">
+        <div style="padding: 12px 0 24px;">
+          <h2 style="font-family: 'Lora', serif; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 6px;">Мое <em style="font-style: italic; color: var(--accent);">профилю</em></h2>
+        </div>
+
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 24px;">
+          <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 16px;">
+            <div style="width: 56px; height: 56px; border-radius: 12px; background: var(--accent); display: flex; align-items: center; justify-content: center; color: white; font-size: 28px;">👤</div>
+            <div>
+              <div style="font-weight: 700; font-size: 18px;">${user.name || 'Пользователь'}</div>
+              <div style="font-size: 13px; color: var(--text-muted);">${user.phone}</div>
+            </div>
+          </div>
+        </div>
+
+        <h3 style="font-family: 'Lora', serif; font-size: 18px; font-weight: 600; margin-bottom: 12px;">Настройки</h3>
+
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-weight: 700; margin-bottom: 2px;">Размер шрифта</div>
+            <div style="font-size: 13px; color: var(--text-muted);">Для удобства чтения</div>
+          </div>
+          <select id="font-size-select" style="background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-family: inherit; color: var(--text-primary);">
+            <option value="small">Маленький</option>
+            <option value="normal" selected>Нормальный</option>
+            <option value="large">Большой</option>
+          </select>
+        </div>
+
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 14px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-weight: 700; margin-bottom: 2px;">Темная тема</div>
+            <div style="font-size: 13px; color: var(--text-muted);">Для глаз ночью</div>
+          </div>
+          <input type="checkbox" id="dark-mode-toggle" style="width: 40px; height: 24px; cursor: pointer;">
+        </div>
+
         <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 14px; margin-bottom: 24px;">
           <div style="font-weight: 700; margin-bottom: 4px;">⚡ API ключ aiTunnel</div>
           <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
