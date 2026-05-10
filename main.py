@@ -84,8 +84,7 @@ async def get_sites():
         {"name": "Банк России", "url": "https://cbr.ru", "description": "Центральный банк — проверка банков", "emoji": "🏦"},
         {"name": "МВД", "url": "https://mvd.ru", "description": "Сообщить о мошенниках", "emoji": "👮"},
         {"name": "Минздрав", "url": "https://minzdrav.gov.ru", "description": "Здоровье и медицина", "emoji": "🏥"},
-        {"name": "ФНС", "url": "https://nalog.gov.ru", "description": "Федеральная налоговая служба", "emoji": "📊"},
-        {"name": "Стоп мошенник", "url": "https://stopmoscam.ru", "description": "Официальный портал против мошенников", "emoji": "🛡"}
+        {"name": "ФНС", "url": "https://nalog.gov.ru", "description": "Федеральная налоговая служба", "emoji": "📊"}
     ]
 
 app.mount("/", StaticFiles(directory=".", html=True), name="static")

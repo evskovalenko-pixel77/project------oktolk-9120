@@ -49,7 +49,7 @@ window.ScreenHome = {
 
         <div class="input-section">
           <div class="input-row">
-            <input type="text" id="text-input" class="text-input" placeholder="Напишите свой вопрос..." />
+            <textarea id="text-input" class="text-input" placeholder="Напишите свой вопрос..." rows="1" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
             <button class="send-btn" id="send-btn" title="Отправить">➤</button>
           </div>
           

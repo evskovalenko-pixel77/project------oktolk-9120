@@ -12,14 +12,19 @@ window.ScreenSites = {
   },
 
   renderSites: function(sites) {
+    var icons = {
+      'mvd.ru': 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7f/Emblem_of_the_Ministry_of_Internal_Affairs.svg/120px-Emblem_of_the_Ministry_of_Internal_Affairs.svg.png',
+      'mfc.ru': 'https://rp-konosha-r29.gosweb.gosuslugi.ru/netcat_files/37/45/moi_doki_0.jpg'
+    };
     var html = '';
     sites.forEach(function(site) {
       var domain = '';
       try { domain = new URL(site.url).hostname; } catch(e) { domain = site.url; }
+      var iconUrl = icons[domain] || 'https://www.google.com/s2/favicons?domain=' + domain + '&sz=64';
       html += '<a href="' + site.url + '" target="_blank" rel="noopener" style="text-decoration: none; color: inherit; display: block; margin-bottom: 12px;">' +
         '<div style="display: flex; align-items: center; gap: 16px; padding: 18px; background: white; border: 2px solid #E0E0E0; border-radius: 20px;">' +
           '<div style="width: 56px; height: 56px; border-radius: 16px; background: #F4F9F6; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; border: 2px solid #E0E0E0;">' +
-            '<img src="https://www.google.com/s2/favicons?domain=' + domain + '&sz=64" style="width: 40px; height: 40px; object-fit: contain;" onerror="this.style.display=\'none\';this.parentElement.textContent=\'\ud83c\udfdb\ufe0f\'">' +
+            '<img src="' + iconUrl + '" style="width: 40px; height: 40px; object-fit: contain; border-radius: 8px;" onerror="this.parentElement.textContent=\'🏛️\'">' +
           '</div>' +
           '<div style="flex: 1;">' +
             '<div style="font-size: 20px; font-weight: 900; margin-bottom: 3px;">' + site.name + '</div>' +

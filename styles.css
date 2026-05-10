@@ -262,7 +262,7 @@ body {
   font-family: 'Nunito', sans-serif;
   font-size: 18px; color: var(--text);
   resize: none; outline: none;
-  line-height: 1.5; max-height: 120px; min-height: 28px;
+  line-height: 1.5; max-height: 120px; min-height: 24px;
   font-weight: 600;
 }
 .msg-input::placeholder { color: var(--text-soft); font-weight: 400; }
@@ -686,7 +686,7 @@ body {
 }
 .input-btn:active { border-color: var(--green); background: var(--green-light); }
 
-.btn-icon { font-size: 28px; line-height: 1; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: #E8F5EE; border-radius: 12px; }
+.btn-icon { font-size: 28px; line-height: 1; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; }
 .btn-label { font-size: 15px; font-weight: 800; color: var(--text-mid); }
 
 .big-action-btn {
