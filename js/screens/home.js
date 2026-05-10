@@ -131,7 +131,7 @@ window.ScreenHome = {
 
     try {
       const result = await window.PomoshnikAPI.processInput(text);
-      this.addMessage('ai', result.analysis);
+      this.addMessage('ai', result.reply);
       window.pomoshnikApp.showHome();
     } catch (error) {
       console.error('Error processing text:', error);

@@ -56,12 +56,12 @@ window.ScreenNews = {
       html += `
         <div class="news-card ${item.type}">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-            <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; padding: 4px 9px; border-radius: 6px; background: ${item.type === 'danger' ? 'var(--danger-soft)' : item.type === 'benefit' ? 'var(--accent-soft)' : 'var(--secondary-soft)'}; color: ${item.type === 'danger' ? 'var(--danger)' : item.type === 'benefit' ? 'var(--accent-dark)' : 'var(--secondary)'}">${typeEmoji} ${item.type === 'danger' ? 'Опасно' : item.type === 'benefit' ? 'Льгота' : 'Информация'}</span>
-            <span style="font-size: 12px; color: var(--text-muted);">${timeAgo}</span>
+            <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; padding: 4px 9px; border-radius: 6px; background: ${item.type === 'danger' ? '#FFEBEE' : item.type === 'benefit' ? '#E8F5EE' : '#E3F2FD'}; color: ${item.type === 'danger' ? '#D32F2F' : item.type === 'benefit' ? '#1A5C38' : '#1565C0'}">${typeEmoji} ${item.type === 'danger' ? 'Опасно' : item.type === 'benefit' ? 'Льгота' : 'Информация'}</span>
+            <span style="font-size: 12px; color: #777;">${timeAgo}</span>
           </div>
           <div class="news-card-title">${item.title}</div>
           <div class="news-card-text">${item.content}</div>
-          <div style="font-size: 11px; color: var(--text-muted); font-style: italic;">📍 ${item.source}</div>
+          <div style="font-size: 11px; color: #777; font-style: italic;">📍 ${item.source}</div>
           <div style="display: flex; gap: 10px; margin-top: 14px;">
             <a href="${item.url || '#'}" target="_blank" rel="noopener" style="flex: 1; padding: 14px 12px; background: white; border: 2px solid #2A7D4F; border-radius: 12px; font-family: Nunito, sans-serif; font-size: 15px; font-weight: 800; color: #2A7D4F; text-align: center; text-decoration: none; display: block;">
               🔗 На источник
@@ -74,7 +74,7 @@ window.ScreenNews = {
       `;
     });
 
-    return html || '<div style="padding: 40px 22px; text-align: center; color: var(--text-muted);">Нет новостей</div>';
+    return html || '<div style="padding: 40px 22px; text-align: center; color: #777;">Нет новостей</div>';
   },
 
   init: async function() {
@@ -208,7 +208,7 @@ window.ScreenNews = {
         <div class="user-message" style="margin-top: 16px; padding: 12px 14px; background: var(--green); color: white; border-radius: 10px; font-size: 14px;">
           ${question}
         </div>
-        <div class="ai-message" style="margin-top: 8px; padding: 12px 14px; background: var(--bg-card); border-radius: 10px; font-size: 14px;">
+        <div class="ai-message" style="margin-top: 8px; padding: 12px 14px; background: white; border-radius: 10px; font-size: 14px;">
           <div class="loading">
             <div class="spinner"></div>
           </div>
