@@ -707,3 +707,17 @@ body {
   gap: 8px;
 }
 .big-action-btn:active { background: var(--green); color: white; }
+
+/* Одинаковые кнопки */
+.input-btn.voice-btn,
+.input-btn.photo-btn,
+.input-btn.file-btn {
+  flex: 1;
+  min-height: 80px;
+  padding: 16px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
