@@ -27,7 +27,7 @@
   --shadow-lg: 0 4px 24px rgba(0,0,0,0.12);
   --radius: 16px;
   --radius-lg: 24px;
-  --nav-h: 80px;
+  --nav-h: 60px;
 }
 
 *, *::before, *::after {
@@ -68,32 +68,31 @@ body {
 .bottom-bar {
   height: var(--nav-h);
   background: var(--bg);
-  border-top: 2px solid var(--border);
+  border-top: 1px solid var(--border);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-around;
-  padding: 0 8px 10px;
+  padding: 0 8px 6px;
   flex-shrink: 0;
-  box-shadow: 0 -2px 16px rgba(0,0,0,0.05);
 }
 
 .nav-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 8px 16px;
+  gap: 2px;
+  padding: 4px 16px;
   border-radius: var(--radius);
   cursor: pointer;
-  min-width: 72px;
+  min-width: 64px;
   position: relative;
   transition: all 0.15s;
 }
 
-.nav-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
+.nav-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
 
 .nav-icon svg {
-  width: 26px; height: 26px;
+  width: 22px; height: 22px;
   stroke: var(--text-soft);
   fill: none;
   stroke-width: 2;
@@ -103,7 +102,7 @@ body {
 }
 
 .nav-btn span {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   color: var(--text-soft);
   text-transform: uppercase;
@@ -134,7 +133,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px 16px;
+  padding: 12px 20px 10px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -309,9 +308,9 @@ body {
 
 .news-screen { min-height: 100%; }
 
-.news-hero { background: var(--green); padding: 24px 24px 20px; }
+.news-hero { background: var(--green); padding: 16px 20px 14px; }
 
-.news-title { font-size: 28px; font-weight: 900; color: white; margin-bottom: 16px; }
+.news-title { font-size: 24px; font-weight: 900; color: white; margin-bottom: 10px; }
 .news-title em { font-style: italic; opacity: 0.85; }
 
 .listen-all-btn {
@@ -319,7 +318,7 @@ body {
   background: rgba(255,255,255,0.15);
   border: 2px solid rgba(255,255,255,0.3);
   border-radius: var(--radius);
-  padding: 14px 18px;
+  padding: 10px 14px;
   cursor: pointer; width: 100%;
   transition: all 0.15s;
   font-family: 'Nunito', sans-serif; color: white;
@@ -487,22 +486,22 @@ body {
 
 .profile-header {
   background: var(--green);
-  padding: 24px 24px 28px;
-  display: flex; align-items: center; gap: 16px;
+  padding: 16px 20px 18px;
+  display: flex; align-items: center; gap: 14px;
 }
 
 .profile-avatar {
-  width: 72px; height: 72px;
+  width: 56px; height: 56px;
   background: rgba(255,255,255,0.2);
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  border: 3px solid rgba(255,255,255,0.4);
+  border: 2px solid rgba(255,255,255,0.4);
 }
-.profile-avatar svg { width: 36px; height: 36px; stroke: white; fill: none; stroke-width: 1.5; }
+.profile-avatar svg { width: 28px; height: 28px; stroke: white; fill: none; stroke-width: 1.5; }
 
-.profile-name { font-size: 24px; font-weight: 900; color: white; }
-.profile-phone { font-size: 16px; color: rgba(255,255,255,0.8); margin-top: 4px; font-weight: 600; }
+.profile-name { font-size: 20px; font-weight: 900; color: white; }
+.profile-phone { font-size: 15px; color: rgba(255,255,255,0.8); margin-top: 2px; font-weight: 600; }
 
 .profile-body { padding: 24px; display: flex; flex-direction: column; gap: 12px; }
 
