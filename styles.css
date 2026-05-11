@@ -225,7 +225,7 @@ body {
 .input-bar:focus-within { border-color: var(--green); }
 
 .msg-input {
-  flex: 1; border: none; background: transparent;
+  flex: 1; border: none; background: #FFF0F0;
   font-family: 'Nunito', sans-serif;
   font-size: 18px; color: var(--text);
   resize: none; outline: none;
@@ -511,7 +511,8 @@ a.news-card-source:active { background: var(--green-light); color: var(--green);
   border: none;
   transition: all 0.15s;
 }
-.profile-item:active { border-color: var(--green); background: var(--green-light); }
+.profile-item:active { background: var(--green-light); }
+a.profile-item { text-decoration: none; color: var(--text); }
 
 .profile-item-icon {
   width: 48px; height: 48px;
@@ -555,8 +556,8 @@ a.news-card-source:active { background: var(--green-light); color: var(--green);
 
 .logout-btn {
   width: 100%; padding: 18px;
-  background: transparent;
-  border: 2px solid var(--red);
+  background: #FFF0F0;
+  border: none;
   border-radius: var(--radius-lg);
   font-family: 'Nunito', sans-serif;
   font-size: 17px; font-weight: 800;
@@ -685,7 +686,7 @@ a.news-card-source:active { background: var(--green-light); color: var(--green);
 .text-input {
   flex: 1;
   border: none;
-  background: transparent;
+  background: #FFF0F0;
   font-family: "Nunito", sans-serif;
   font-size: 18px;
   color: var(--text);
