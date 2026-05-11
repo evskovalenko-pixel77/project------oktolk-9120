@@ -398,63 +398,40 @@ body {
 
 .news-card-title { font-size: 20px; font-weight: 800; line-height: 1.3; color: var(--text); margin-bottom: 10px; }
 .news-card-text { font-size: 16px; color: var(--text-mid); line-height: 1.6; margin-bottom: 12px; font-weight: 600; }
-.news-card-source { font-size: 13px; color: var(--text-soft); font-weight: 700; }
-
-/* ── Пара кнопок в карточке новости ── */
-.news-card-buttons {
+.news-card-source {
   display: flex;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.news-card-buttons a,
-.news-card-buttons button {
-  flex: 1 1 0;
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 12px 8px;
-  font-family: 'Nunito', sans-serif;
-  font-size: 14px;
-  font-weight: 800;
-  border-radius: var(--radius);
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-soft);
+  font-style: italic;
+  font-weight: 700;
+  margin: 10px 0 12px;
   text-decoration: none;
-  cursor: pointer;
-  box-sizing: border-box;
-  white-space: nowrap;
-  text-align: center;
-  transition: all 0.15s;
+  padding: 8px 12px;
+  background: var(--bg-soft);
+  border-radius: 8px;
+  transition: background 0.15s;
 }
+a.news-card-source:active { background: var(--green-light); color: var(--green); }
+.news-source-arrow { font-size: 14px; font-style: normal; color: var(--green); font-weight: 900; }
 
-/* "На источник" — outline */
-.news-card-buttons a {
-  background: transparent;
-  color: var(--green);
-  border: 2px solid var(--green);
-}
-.news-card-buttons a:active {
-  background: var(--green-light);
-}
-
-/* "Объясни просто" — filled */
-.news-card-buttons button {
+.explain-btn {
+  width: 100%;
+  padding: 14px;
   background: var(--green);
   color: white;
-  border: 2px solid var(--green);
-}
-.news-card-buttons button:active {
-  transform: scale(0.98);
-}
-
-/* Обратная совместимость с .explain-btn если где-то используется */
-.explain-btn {
-  width: 100%; margin-top: 14px; padding: 14px;
-  background: var(--green); color: white; border: none;
+  border: none;
   border-radius: var(--radius);
-  font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 800;
-  cursor: pointer; transition: all 0.15s;
+  font-family: 'Nunito', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: opacity 0.15s;
 }
-.explain-btn:active { transform: scale(0.98); }
+.explain-btn:active { opacity: 0.85; }
+
+/* ── Пара кнопок в карточке новости ── */
 
 /* ════════════════ SITES SCREEN ════════════════ */
 
