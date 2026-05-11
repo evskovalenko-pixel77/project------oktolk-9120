@@ -3,21 +3,73 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#1c1815">
-<meta name="description" content="Помощник — мобильное приложение для помощи в бытовых вопросах">
+<meta name="theme-color" content="#2A7D4F">
+<meta name="description" content="OkTolk — простой AI-помощник. Задайте вопрос, проверьте документ, получите инструкцию. Антискам-анализ сообщений. Без сложных настроек.">
+<meta name="keywords" content="AI помощник, проверка документов, антискам, проверка сообщений на мошенничество, голосовой помощник, простой чат, инструкции">
+<meta name="author" content="OkTolk">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://oktolk.ru/">
+
+<!-- Open Graph (для шаринга в соцсетях, мессенджерах) -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://oktolk.ru/">
+<meta property="og:title" content="OkTolk — простой AI-помощник">
+<meta property="og:description" content="Задайте вопрос, проверьте документ, получите инструкцию. Антискам-анализ сообщений. Без сложных настроек.">
+<meta property="og:site_name" content="OkTolk">
+<meta property="og:locale" content="ru_RU">
+
+<!-- Twitter/VK Card -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="OkTolk — простой AI-помощник">
+<meta name="twitter:description" content="Чат, проверка документов, антискам. Всё просто.">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="OkTolk">
-<title>OkTolk — помощник для людей 40+</title>
+<title>OkTolk — простой AI-помощник: чат, документы, антискам</title>
 <link rel="manifest" href="/manifest.json">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%232D6A4F' width='192' height='192'/><text x='96' y='120' font-size='100' font-weight='bold' text-anchor='middle' fill='white' font-family='serif' font-style='italic'>П</text></svg>">
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%232D6A4F' width='180' height='180' rx='40'/><text x='90' y='130' font-size='90' font-weight='bold' text-anchor='middle' fill='white' font-family='serif' font-style='italic'>П</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%232A7D4F' width='192' height='192' rx='40'/><text x='96' y='130' font-size='80' font-weight='900' text-anchor='middle' fill='white' font-family='sans-serif'>Ok</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect fill='%232A7D4F' width='180' height='180' rx='40'/><text x='90' y='125' font-size='75' font-weight='900' text-anchor='middle' fill='white' font-family='sans-serif'>Ok</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=4">
+<link rel="stylesheet" href="/styles.css?v=5">
+
+<!-- Schema.org для поисковиков -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "OkTolk",
+  "url": "https://oktolk.ru",
+  "description": "Простой AI-помощник. Задайте вопрос, проверьте документ, получите инструкцию. Антискам-анализ сообщений.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "RUB"
+  },
+  "featureList": [
+    "AI-чат для вопросов и инструкций",
+    "Проверка документов",
+    "Антискам-анализ сообщений",
+    "Озвучка текста",
+    "Простая навигация без сложных настроек"
+  ],
+  "inLanguage": "ru"
+}
+</script>
 </head>
 <body>
+
+<!-- SEO: текстовый контент для поисковиков (скрыт от пользователя при загрузке JS) -->
+<noscript>
+  <h1>OkTolk — простой AI-помощник</h1>
+  <p>Задайте вопрос — получите понятный ответ. Проверьте документ или сообщение на мошенничество. Получите пошаговую инструкцию. Если неудобно читать — включите озвучку.</p>
+  <h2>Возможности</h2>
+  <p>AI-чат для личных вопросов. Антискам — проверка сообщений на мошенничество. Проверка документов. Новости от госорганов простым языком. Безопасные сайты госуслуг.</p>
+  <p>Без сложных настроек. Без регистрации в больших системах. Просто откройте и спросите.</p>
+</noscript>
+
 <div id="app">
 
     <div class="app-content" id="content">

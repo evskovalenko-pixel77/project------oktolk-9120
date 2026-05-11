@@ -25,8 +25,8 @@
   --border: #E0E0E0;
   --shadow: 0 2px 12px rgba(0,0,0,0.08);
   --shadow-lg: 0 4px 24px rgba(0,0,0,0.12);
-  --radius: 16px;
-  --radius-lg: 24px;
+  --radius: 12px;
+  --radius-lg: 16px;
   --nav-h: 60px;
 }
 
@@ -72,7 +72,7 @@ body {
   display: flex;
   align-items: flex-end;
   justify-content: space-around;
-  padding: 0 8px 6px;
+  padding: 0 8px max(6px, env(safe-area-inset-bottom));
   flex-shrink: 0;
 }
 
@@ -325,6 +325,24 @@ body {
 }
 .listen-all-btn:active { background: rgba(255,255,255,0.25); }
 
+.listen-icon {
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.listen-text { flex: 1; }
+.listen-title { font-size: 17px; font-weight: 800; margin-bottom: 1px; }
+.listen-sub { font-size: 14px; opacity: 0.85; }
+.listen-arrow { font-size: 20px; opacity: 0.7; }
+
+.news-card-meta {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.news-card-time { font-size: 12px; color: var(--text-soft); }
+.news-empty { padding: 40px 22px; text-align: center; color: var(--text-soft); font-weight: 600; }
+
 .news-tabs {
   display: flex; gap: 8px;
   padding: 16px 24px;
@@ -336,9 +354,9 @@ body {
 .news-tab {
   display: flex; align-items: center; gap: 6px;
   padding: 10px 16px;
-  border-radius: 24px;
-  border: 2px solid var(--border);
-  background: var(--bg);
+  border-radius: 20px;
+  border: none;
+  background: var(--bg-soft);
   font-family: 'Nunito', sans-serif;
   font-size: 15px; font-weight: 800;
   color: var(--text-mid);
@@ -359,20 +377,20 @@ body {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
   padding: 20px;
-  border: 2px solid var(--border);
+  border: none;
   box-shadow: var(--shadow);
   cursor: pointer; transition: all 0.15s;
 }
-.news-card.danger { border-left: 5px solid var(--red); }
-.news-card.benefit { border-left: 5px solid var(--green); }
-.news-card.info { border-left: 5px solid var(--blue); }
+.news-card.danger { box-shadow: var(--shadow), inset 4px 0 0 var(--red); }
+.news-card.benefit { box-shadow: var(--shadow), inset 4px 0 0 var(--green); }
+.news-card.info { box-shadow: var(--shadow), inset 4px 0 0 var(--blue); }
 .news-card:active { transform: scale(0.99); }
 
 .news-card-badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 12px; font-weight: 800;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 800;
   text-transform: uppercase; letter-spacing: 0.5px;
-  padding: 5px 12px; border-radius: 20px; margin-bottom: 12px;
+  padding: 4px 10px; border-radius: 6px;
 }
 .news-card.danger .news-card-badge { background: var(--red-light); color: var(--red); }
 .news-card.benefit .news-card-badge { background: var(--green-light); color: var(--green-dark); }
@@ -448,14 +466,14 @@ body {
 .site-card {
   display: flex; align-items: center; gap: 16px;
   padding: 18px;
-  background: var(--bg-card);
-  border: 2px solid var(--border);
+  background: var(--bg-soft);
+  border: none;
   border-radius: var(--radius-lg);
   margin-bottom: 12px;
   text-decoration: none; color: inherit;
   transition: all 0.15s; cursor: pointer;
 }
-.site-card:active { border-color: var(--green); background: var(--green-light); transform: scale(0.99); }
+.site-card:active { background: var(--green-light); transform: scale(0.99); }
 
 .site-icon-box {
   width: 56px; height: 56px;
@@ -508,12 +526,12 @@ body {
 .profile-section-title { font-size: 20px; font-weight: 900; color: var(--text); margin: 8px 0 4px; }
 
 .profile-item {
-  background: var(--bg-card);
+  background: var(--bg-soft);
   border-radius: var(--radius-lg);
   padding: 18px 20px;
   display: flex; align-items: center; gap: 14px;
   cursor: pointer;
-  border: 2px solid var(--border);
+  border: none;
   transition: all 0.15s;
 }
 .profile-item:active { border-color: var(--green); background: var(--green-light); }
@@ -650,6 +668,19 @@ body {
 .spinner { width: 40px; height: 40px; border: 4px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 40px auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.loading-text { margin-top: 20px; text-align: center; font-size: 16px; font-weight: 700; color: var(--text-mid); }
+
+.dialog-user-msg {
+  margin-top: 16px; padding: 12px 14px;
+  background: var(--green); color: white;
+  border-radius: 10px; font-size: 14px; font-weight: 600;
+}
+.dialog-ai-msg {
+  margin-top: 8px; padding: 12px 14px;
+  background: var(--bg-soft); color: var(--text);
+  border-radius: 10px; font-size: 14px; font-weight: 600;
+}
+
 .scam-alert { margin: 16px 24px; padding: 24px; background: var(--red); border-radius: var(--radius-lg); color: white; text-align: center; animation: pulse 2s ease infinite; }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(211,47,47,0.4); } 50% { box-shadow: 0 0 0 14px rgba(211,47,47,0); } }
 .scam-alert-title { font-size: 28px; font-weight: 900; margin-bottom: 10px; }
@@ -693,21 +724,24 @@ body {
 }
 
 .input-btn {
-  flex: 1;
+  flex: 1 1 0;
+  width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 16px 8px;
+  padding: 12px 4px;
   min-height: 80px;
-  background: #F4F9F6;
-  border: 2px solid #E0E0E0;
-  border-radius: 16px;
+  max-height: 80px;
+  background: var(--bg-soft);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
   cursor: pointer;
   font-family: "Nunito", sans-serif;
   font-size: 13px;
   font-weight: 800;
-  color: #444;
+  color: var(--text-mid);
   transition: all 0.15s;
 }
 .input-btn:active { border-color: var(--green); background: var(--green-light); }
@@ -734,26 +768,15 @@ body {
 }
 .big-action-btn:active { background: var(--green); color: white; }
 
-/* Одинаковые кнопки */
-.input-buttons {
-  display: flex;
-  gap: 10px;
-  padding: 10px 0 4px;
-}
-.input-buttons .input-btn {
-  flex: 1 1 0;
-  width: 0;
-  min-height: 80px;
-  max-height: 80px;
-  padding: 12px 4px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: #F4F9F6;
-  border: 2px solid #E0E0E0;
-  border-radius: 16px;
-  cursor: pointer;
-  font-family: "Nunito", sans-serif;
+/* ── Hover states for desktop ── */
+@media (hover: hover) {
+  .news-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+  .site-card:hover { background: var(--green-light); }
+  .profile-item:hover { background: var(--green-light); }
+  .action-card:hover { border-color: var(--green); transform: translateY(-2px); }
+  .nav-btn:hover span { color: var(--green); }
+  .nav-btn:hover .nav-icon svg { stroke: var(--green); }
+  .news-card-buttons a:hover { background: var(--green-light); }
+  .news-card-buttons button:hover { opacity: 0.9; }
+  .input-btn:hover { border-color: var(--green); background: var(--green-light); }
 }

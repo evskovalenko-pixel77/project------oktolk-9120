@@ -8,12 +8,12 @@ window.ScreenNews = {
         <div class="news-hero">
           <div class="news-title">Что новое</div>
           <button class="listen-all-btn" id="listen-all-btn">
-            <div style="width: 44px; height: 44px; border-radius: 14px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">🎧</div>
-            <div style="flex: 1;">
-              <div style="font-size: 19px; font-weight: 800; display: block; margin-bottom: 2px;">Слушать все новости</div>
-              <div style="font-size: 15px; opacity: 0.85; display: block;">Как утреннее радио</div>
+            <div class="listen-icon">🎧</div>
+            <div class="listen-text">
+              <div class="listen-title">Слушать все новости</div>
+              <div class="listen-sub">Как утреннее радио</div>
             </div>
-            <div style="font-size: 22px; opacity: 0.7;">→</div>
+            <div class="listen-arrow">→</div>
           </button>
         </div>
 
@@ -55,13 +55,13 @@ window.ScreenNews = {
       
       html += `
         <div class="news-card ${item.type}">
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-            <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; padding: 4px 9px; border-radius: 6px; background: ${item.type === 'danger' ? '#FFEBEE' : item.type === 'benefit' ? '#E8F5EE' : '#E3F2FD'}; color: ${item.type === 'danger' ? '#D32F2F' : item.type === 'benefit' ? '#1A5C38' : '#1565C0'}">${typeEmoji} ${item.type === 'danger' ? 'Опасно' : item.type === 'benefit' ? 'Льгота' : 'Информация'}</span>
-            <span style="font-size: 12px; color: #777;">${timeAgo}</span>
+          <div class="news-card-meta">
+            <span class="news-card-badge">${typeEmoji} ${item.type === 'danger' ? 'Опасно' : item.type === 'benefit' ? 'Льгота' : 'Информация'}</span>
+            <span class="news-card-time">${timeAgo}</span>
           </div>
           <div class="news-card-title">${item.title}</div>
           <div class="news-card-text">${item.content}</div>
-          <div style="font-size: 11px; color: #777; font-style: italic;">📍 ${item.source}</div>
+          <div class="news-card-source">📍 ${item.source}</div>
           <div class="news-card-buttons">
             <a href="${item.url || '#'}" target="_blank" rel="noopener">🔗 На источник</a>
             <button class="explain-btn" data-news-index="${index}">💡 Объясни просто</button>
@@ -70,7 +70,7 @@ window.ScreenNews = {
       `;
     });
 
-    return html || '<div style="padding: 40px 22px; text-align: center; color: #777;">Нет новостей</div>';
+    return html || '<div class="news-empty">Нет новостей</div>';
   },
 
   init: async function() {
@@ -112,13 +112,13 @@ window.ScreenNews = {
     if (listenAllBtn) {
       listenAllBtn.addEventListener('click', async () => {
         listenAllBtn.disabled = true;
-        listenAllBtn.innerHTML = '<div style="width: 44px; height: 44px; border-radius: 14px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">⏳</div><div style="flex: 1;"><div style="font-size: 16px; font-weight: 700; display: block; margin-bottom: 2px;">Загружаю...</div></div>';
+        listenAllBtn.innerHTML = '<div class="listen-icon">⏳</div><div class="listen-text"><div class="listen-title">Загружаю...</div></div>';
         
         const newsText = this.news.map(n => `${n.title}. ${n.content}.`).join(' ');
         const result = await PomoshnikMultimedia.textToSpeech(newsText);
         
         listenAllBtn.disabled = false;
-        listenAllBtn.innerHTML = '<div style="width: 44px; height: 44px; border-radius: 14px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;">🎧</div><div style="flex: 1;"><div style="font-size: 19px; font-weight: 800; display: block; margin-bottom: 2px;">Слушать все новости</div><div style="font-size: 15px; opacity: 0.85; display: block;">Как утреннее радио</div></div><div style="font-size: 22px; opacity: 0.7;">→</div>';
+        listenAllBtn.innerHTML = '<div class="listen-icon">🎧</div><div class="listen-text"><div class="listen-title">Слушать все новости</div><div class="listen-sub">Как утреннее радио</div></div><div class="listen-arrow">→</div>';
       });
     }
   },
@@ -149,9 +149,7 @@ window.ScreenNews = {
           <div class="dialog-content" id="dialog-content">
             <div class="loading">
               <div class="spinner"></div>
-              <div style="margin-top: 20px; text-align: center;">
-                <div style="font-size: 16px; font-weight: 700; margin-bottom: 6px;">Анализирую новость...</div>
-              </div>
+              <div class="loading-text">Анализирую новость...</div>
             </div>
           </div>
           <div class="dialog-input-section">
@@ -201,10 +199,10 @@ window.ScreenNews = {
       followUpBtn.disabled = true;
 
       dialogContent.innerHTML += `
-        <div class="user-message" style="margin-top: 16px; padding: 12px 14px; background: var(--green); color: white; border-radius: 10px; font-size: 14px;">
+        <div class="dialog-user-msg">
           ${question}
         </div>
-        <div class="ai-message" style="margin-top: 8px; padding: 12px 14px; background: white; border-radius: 10px; font-size: 14px;">
+        <div class="dialog-ai-msg">
           <div class="loading">
             <div class="spinner"></div>
           </div>
@@ -213,10 +211,10 @@ window.ScreenNews = {
 
       try {
         const followUpResult = await PomoshnikAPI.callAbacusAPI(question);
-        const aiMessageDiv = dialogContent.querySelector('.ai-message:last-of-type');
+        const aiMessageDiv = dialogContent.querySelector('.dialog-ai-msg:last-of-type');
         aiMessageDiv.innerHTML = followUpResult;
       } catch (error) {
-        const aiMessageDiv = dialogContent.querySelector('.ai-message:last-of-type');
+        const aiMessageDiv = dialogContent.querySelector('.dialog-ai-msg:last-of-type');
         aiMessageDiv.innerHTML = 'Ошибка получения ответа: ' + error.message;
       }
 

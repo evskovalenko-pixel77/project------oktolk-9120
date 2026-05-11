@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /js/
+Disallow: /sw.js
+
+Sitemap: https://oktolk.ru/sitemap.xml
+Host: https://oktolk.ru
