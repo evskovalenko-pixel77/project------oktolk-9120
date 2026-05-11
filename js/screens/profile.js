@@ -22,53 +22,89 @@ window.ScreenProfile = {
 
     return `
       <div class="profile-screen">
-        <div style="background: var(--green); padding: 24px 24px 28px; display: flex; align-items: center; gap: 16px;">
-          <div style="width: 72px; height: 72px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 3px solid rgba(255,255,255,0.4);">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <div class="profile-header">
+          <div class="profile-avatar">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           </div>
           <div>
-            <div style="font-size: 24px; font-weight: 900; color: white;">${user ? (user.name || 'Пользователь') : 'Гость'}</div>
-            <div style="font-size: 16px; color: rgba(255,255,255,0.8); margin-top: 4px; font-weight: 600;">${user ? (user.phone || '') : ''}</div>
+            <div class="profile-name">${user ? (user.name || 'Пользователь') : 'Гость'}</div>
+            <div class="profile-phone">${user ? (user.phone || '') : ''}</div>
           </div>
         </div>
 
-        <div style="padding: 24px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="padding: 20px; display: flex; flex-direction: column; gap: 10px;">
 
-          <div style="font-size: 20px; font-weight: 900; color: var(--text); margin: 4px 0;">Настройки</div>
+          <div class="profile-section-title">Настройки</div>
 
-          <div style="background: white; border-radius: 20px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; border: 2px solid var(--border);">
-            <div>
-              <div style="font-size: 17px; font-weight: 800;">Размер шрифта</div>
-              <div style="font-size: 14px; color: var(--text-soft); margin-top: 3px; font-weight: 600;">Для удобства чтения</div>
+          <div class="profile-item">
+            <div class="profile-item-body">
+              <div class="profile-item-title">Размер шрифта</div>
+              <div class="profile-item-sub">Для удобства чтения</div>
             </div>
-            <select id="font-size-select" style="background: #F7F7F7; border: 2px solid #E0E0E0; border-radius: 16px; padding: 12px 16px; font-family: Nunito, sans-serif; font-size: 15px; font-weight: 700; outline: none; cursor: pointer;">
+            <select id="font-size-select" class="profile-select">
               <option value="small">Маленький</option>
               <option value="normal" selected>Обычный</option>
               <option value="large">Большой</option>
             </select>
           </div>
 
-          <div style="background: white; border-radius: 20px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; border: 2px solid var(--border);">
-            <div>
-              <div style="font-size: 17px; font-weight: 800;">Тема оформления</div>
-              <div style="font-size: 14px; color: var(--text-soft); margin-top: 3px; font-weight: 600;">Светлая или тёмная</div>
+          <div class="profile-item">
+            <div class="profile-item-body">
+              <div class="profile-item-title">Тема оформления</div>
+              <div class="profile-item-sub">Светлая или тёмная</div>
             </div>
-            <select id="theme-select" style="background: #F7F7F7; border: 2px solid #E0E0E0; border-radius: 16px; padding: 12px 16px; font-family: Nunito, sans-serif; font-size: 15px; font-weight: 700; outline: none; cursor: pointer;">
+            <select id="theme-select" class="profile-select">
               <option value="light" selected>☀️ День</option>
               <option value="dark">🌙 Ночь</option>
             </select>
           </div>
 
-          <div style="font-size: 20px; font-weight: 900; margin: 8px 0 4px;">Доверенные лица</div>
-          <div style="font-size: 16px; color: var(--text-mid); line-height: 1.5; font-weight: 600;">Добавьте контакты близких. Когда возникает проблема, я могу отправить им описание ситуации.</div>
+          <div class="profile-section-title" style="margin-top: 8px;">Доверенные лица</div>
+          <div class="profile-trusted-desc">Добавьте контакты близких. Когда возникает проблема, я могу отправить им описание ситуации.</div>
 
           ${contactsHtml}
 
-          <button id="add-contact-btn" style="width: 100%; padding: 18px; background: #E8F5EE; border: 2px dashed #2A7D4F; border-radius: 20px; font-family: Nunito, sans-serif; font-size: 17px; font-weight: 800; color: #1A5C38; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <button id="add-contact-btn" class="big-action-btn">
             + Добавить доверенное лицо
           </button>
 
-          <button id="logout-btn" style="width: 100%; padding: 18px; background: transparent; border: 2px solid #D32F2F; border-radius: 20px; font-family: Nunito, sans-serif; font-size: 17px; font-weight: 800; color: #D32F2F; cursor: pointer; margin-top: 8px;">
+          <div class="profile-section-title" style="margin-top: 16px;">Подписка</div>
+
+          <div class="profile-item" id="subscription-btn">
+            <div class="profile-item-body">
+              <div class="profile-item-title">Управление подпиской</div>
+              <div class="profile-item-sub">Базовый · 299 ₽/мес</div>
+            </div>
+            <div class="profile-item-arrow">→</div>
+          </div>
+
+          <div class="profile-section-title" style="margin-top: 16px;">О приложении</div>
+
+          <a href="/terms.html" target="_blank" class="profile-item">
+            <div class="profile-item-body">
+              <div class="profile-item-title">Пользовательское соглашение</div>
+            </div>
+            <div class="profile-item-arrow">→</div>
+          </a>
+
+          <a href="/privacy.html" target="_blank" class="profile-item">
+            <div class="profile-item-body">
+              <div class="profile-item-title">Политика конфиденциальности</div>
+            </div>
+            <div class="profile-item-arrow">→</div>
+          </a>
+
+          <a href="/requisites.html" target="_blank" class="profile-item">
+            <div class="profile-item-body">
+              <div class="profile-item-title">Реквизиты</div>
+              <div class="profile-item-sub">ИП Коваленко Евгений Сергеевич</div>
+            </div>
+            <div class="profile-item-arrow">→</div>
+          </a>
+
+          <div class="profile-app-version">OkTolk v1.0 · oktolk.ru</div>
+
+          <button id="logout-btn" class="profile-logout-btn">
             Выйти
           </button>
 
