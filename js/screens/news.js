@@ -63,8 +63,8 @@ window.ScreenNews = {
           <div class="news-card-text">${item.content}</div>
           <div class="news-card-source">📍 ${item.source}</div>
           <div class="news-card-buttons">
-            <a href="${item.url || '#'}" target="_blank" rel="noopener">🔗 На источник</a>
-            <button class="explain-btn" data-news-index="${index}">💡 Объясни просто</button>
+            <a href="${item.url || '#'}" target="_blank" rel="noopener">🔗 Источник</a>
+            <button class="explain-btn" data-news-index="${index}">💡 Объясни</button>
           </div>
         </div>
       `;

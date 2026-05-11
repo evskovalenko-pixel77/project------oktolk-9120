@@ -413,15 +413,15 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 14px;
+  padding: 12px 8px;
   font-family: 'Nunito', sans-serif;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   border-radius: var(--radius);
   text-decoration: none;
   cursor: pointer;
   box-sizing: border-box;
-  line-height: 1.2;
+  white-space: nowrap;
   text-align: center;
   transition: all 0.15s;
 }
