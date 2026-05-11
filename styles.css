@@ -40,52 +40,20 @@ html, body { height: 100%; overflow: hidden; font-size: 18px; }
 
 body {
   font-family: 'Nunito', sans-serif;
-  background: #E8E8E8;
+  background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
 
-.app-wrapper {
-  width: 100vw;
-  height: 100dvh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.phone {
+#app {
   width: 100%;
-  max-width: 480px;
-  height: 100%;
-  max-height: 100dvh;
-  background: var(--bg);
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   position: relative;
-}
-
-@media (min-width: 500px) {
-  .phone { border-radius: 40px; max-height: 90dvh; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
-}
-
-.notch { display: none; }
-
-.status-bar {
-  height: 52px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 24px;
   background: var(--bg);
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
 }
-
-.status-bar .signals { display: flex; gap: 4px; align-items: center; }
-.signal-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text); opacity: 0.5; }
-.status-bar .time { font-size: 18px; font-weight: 800; }
-.status-bar .battery { font-size: 18px; }
 
 .app-content {
   flex: 1;
@@ -415,6 +383,53 @@ body {
 .news-card-text { font-size: 16px; color: var(--text-mid); line-height: 1.6; margin-bottom: 12px; font-weight: 600; }
 .news-card-source { font-size: 13px; color: var(--text-soft); font-weight: 700; }
 
+/* ── Пара кнопок в карточке новости ── */
+.news-card-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.news-card-buttons a,
+.news-card-buttons button {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 14px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  border-radius: var(--radius);
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  line-height: 1.2;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+/* "На источник" — outline */
+.news-card-buttons a {
+  background: transparent;
+  color: var(--green);
+  border: 2px solid var(--green);
+}
+.news-card-buttons a:active {
+  background: var(--green-light);
+}
+
+/* "Объясни просто" — filled */
+.news-card-buttons button {
+  background: var(--green);
+  color: white;
+  border: 2px solid var(--green);
+}
+.news-card-buttons button:active {
+  transform: scale(0.98);
+}
+
+/* Обратная совместимость с .explain-btn если где-то используется */
 .explain-btn {
   width: 100%; margin-top: 14px; padding: 14px;
   background: var(--green); color: white; border: none;
@@ -557,12 +572,24 @@ body {
 .logout-btn:active { background: var(--red); color: white; }
 
 .profile-select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
   background: var(--bg-input);
   border: 2px solid var(--border);
   border-radius: var(--radius);
-  padding: 10px 14px;
+  padding: 12px 40px 12px 16px;
   font-family: 'Nunito', sans-serif;
   font-size: 16px; font-weight: 700; color: var(--text); outline: none;
+  width: 100%;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%232A7D4F' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  transition: border-color 0.2s;
+}
+.profile-select:focus {
+  border-color: var(--green);
 }
 
 /* ════════════════ AUTH SCREEN ════════════════ */

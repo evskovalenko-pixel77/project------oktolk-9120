@@ -62,13 +62,9 @@ window.ScreenNews = {
           <div class="news-card-title">${item.title}</div>
           <div class="news-card-text">${item.content}</div>
           <div style="font-size: 11px; color: #777; font-style: italic;">📍 ${item.source}</div>
-          <div style="display: flex; gap: 10px; margin-top: 14px;">
-            <a href="${item.url || '#'}" target="_blank" rel="noopener" style="flex: 1 1 0; width: 0; padding: 14px 8px; background: white; border: 2px solid #2A7D4F; border-radius: 14px; font-family: Nunito, sans-serif; font-size: 15px; font-weight: 800; color: #2A7D4F; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; min-height: 50px; box-sizing: border-box;">
-              🔗 На источник
-            </a>
-            <button class="explain-btn" data-news-index="${index}" style="flex: 1 1 0; width: 0; padding: 14px 8px; background: #2A7D4F; color: white; border: 2px solid #2A7D4F; border-radius: 14px; font-family: Nunito, sans-serif; font-size: 15px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; min-height: 50px; box-sizing: border-box;">
-              💡 Объясни просто
-            </button>
+          <div class="news-card-buttons">
+            <a href="${item.url || '#'}" target="_blank" rel="noopener">🔗 На источник</a>
+            <button class="explain-btn" data-news-index="${index}">💡 Объясни просто</button>
           </div>
         </div>
       `;
