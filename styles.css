@@ -225,7 +225,7 @@ body {
 .input-bar:focus-within { border-color: var(--green); }
 
 .msg-input {
-  flex: 1; border: none; background: #FFF0F0; border-radius: 12px;
+  flex: 1; border: none; background: transparent;
   font-family: 'Nunito', sans-serif;
   font-size: 18px; color: var(--text);
   resize: none; outline: none;
@@ -556,7 +556,7 @@ a.profile-item { text-decoration: none; color: var(--text); }
 
 .logout-btn {
   width: 100%; padding: 18px;
-  background: #FFF0F0; border-radius: 12px;
+  background: transparent; border: none;
   border: none;
   border-radius: var(--radius-lg);
   font-family: 'Nunito', sans-serif;
@@ -686,7 +686,7 @@ a.profile-item { text-decoration: none; color: var(--text); }
 .text-input {
   flex: 1;
   border: none;
-  background: #FFF0F0; border-radius: 12px;
+  background: transparent;
   font-family: "Nunito", sans-serif;
   font-size: 18px;
   color: var(--text);
