@@ -8,7 +8,7 @@ window.ScreenHome = {
 
     let dialogHtml = '';
     let centerContent = '';
-    
+
     if (this.currentConversation.length > 0) {
       dialogHtml = '<div class="dialog-window">';
       this.currentConversation.forEach(msg => {
@@ -34,32 +34,23 @@ window.ScreenHome = {
 
     return `
       <div class="home-screen new-layout">
-<div class="logo-text">OkTolk</div>
-          </div>
-          <div class="icon-btn" id="notif-btn" title="Уведомления">
-            🔔
-          </div>
-        </div>
-
         ${centerContent}
         ${dialogHtml}
-
         <div class="input-section">
           <div class="input-row">
             <textarea id="text-input" class="text-input" placeholder="Напишите свой вопрос..." rows="1" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
-            <button class="send-btn" id="send-btn" title="Отправить">➤</button>
+            <button class="send-btn" id="send-btn">➤</button>
           </div>
-          
           <div class="input-buttons">
-            <button class="input-btn voice-btn" id="voice-input-btn" title="Диктовать">
+            <button class="input-btn voice-btn" id="voice-input-btn">
               <span class="btn-icon">🎤</span>
               <span class="btn-label">Голос</span>
             </button>
-            <button class="input-btn photo-btn" id="photo-input-btn" title="Фото">
+            <button class="input-btn photo-btn" id="photo-input-btn">
               <span class="btn-icon">📸</span>
               <span class="btn-label">Фото</span>
             </button>
-            <button class="input-btn file-btn" id="file-input-btn" title="Документ">
+            <button class="input-btn file-btn" id="file-input-btn">
               <span class="btn-icon">📄</span>
               <span class="btn-label">Документ</span>
             </button>
@@ -123,7 +114,6 @@ window.ScreenHome = {
 
   submitText: async function(text) {
     this.addMessage('user', text);
-    this.render();
     window.pomoshnikApp.showHome();
 
     try {
@@ -131,10 +121,9 @@ window.ScreenHome = {
       this.addMessage('ai', result.reply);
       window.pomoshnikApp.showHome();
     } catch (error) {
-      console.error('Error processing text:', error);
-      this.addMessage('ai', '❌ Ошибка обработки запроса');
+      console.error('Error:', error);
+      this.addMessage('ai', 'Ошибка обработки запроса');
       window.pomoshnikApp.showHome();
     }
   }
 };
-
