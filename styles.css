@@ -758,3 +758,153 @@ a.profile-item { text-decoration: none; color: var(--text); }
   .news-card-buttons button:hover { opacity: 0.9; }
   .input-btn:hover { border-color: var(--green); background: var(--green-light); }
 }
+
+/* ── App Header ── */
+.app-header {
+  height: 52px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.header-notif-btn,
+.header-profile-btn {
+  width: 38px; height: 38px;
+  border: none; background: var(--bg-soft);
+  border-radius: 12px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-soft); transition: all 0.15s; position: relative;
+}
+.header-notif-btn:active,
+.header-profile-btn:active { background: var(--green-light); color: var(--green); }
+
+.notif-badge {
+  width: 8px; height: 8px; background: var(--red);
+  border-radius: 50%; position: absolute; top: 6px; right: 6px;
+  border: 2px solid white;
+}
+
+.header-logo {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-size: 20px; font-weight: 900; color: var(--text); letter-spacing: -0.3px;
+}
+.header-logo span { color: var(--green); }
+
+/* ── Ok center button ── */
+.nav-ok {
+  width: 52px; height: 52px;
+  background: var(--green);
+  border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(42,125,79,0.4);
+  transition: all 0.15s;
+  flex-shrink: 0;
+  margin-bottom: 4px;
+}
+.nav-ok:active { transform: scale(0.95); box-shadow: 0 2px 8px rgba(42,125,79,0.3); }
+.nav-ok.active { box-shadow: 0 6px 20px rgba(42,125,79,0.5); }
+.nav-ok-text { font-size: 18px; font-weight: 900; color: white; }
+
+/* ── Finance screen ── */
+.finance-header {
+  background: linear-gradient(135deg, #0D47A1 0%, #1976D2 100%);
+  padding: 18px 20px 20px;
+}
+.finance-header-title { font-size: 22px; font-weight: 900; color: white; margin-bottom: 4px; }
+.finance-balance-label { font-size: 12px; color: rgba(255,255,255,0.7); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 10px; }
+.finance-balance { font-size: 34px; font-weight: 900; color: white; margin: 6px 0; }
+.finance-row { display: flex; gap: 10px; margin-top: 10px; }
+.finance-badge { background: rgba(255,255,255,0.15); border-radius: 10px; padding: 8px 14px; flex: 1; }
+.finance-badge-label { font-size: 10px; color: rgba(255,255,255,0.7); font-weight: 700; text-transform: uppercase; }
+.finance-badge-val { font-size: 15px; font-weight: 900; color: white; margin-top: 2px; }
+
+.finance-cats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px; }
+.finance-cat-card {
+  background: white; border-radius: var(--radius); padding: 14px;
+  border: 1.5px solid var(--border); cursor: pointer; transition: all 0.15s;
+}
+.finance-cat-card:active { background: var(--bg-soft); }
+.finance-cat-icon { font-size: 24px; margin-bottom: 6px; }
+.finance-cat-name { font-size: 13px; font-weight: 800; color: var(--text-soft); }
+.finance-cat-amount { font-size: 20px; font-weight: 900; color: var(--red); margin-top: 3px; }
+.finance-cat-count { font-size: 11px; color: var(--text-soft); font-weight: 600; margin-top: 2px; }
+.finance-cat-card.wide { grid-column: 1/-1; display: flex; align-items: center; gap: 14px; }
+.finance-cat-card.wide .finance-cat-amount { font-size: 18px; }
+
+.finance-voice-hint {
+  margin: 0 14px 14px; background: white; border-radius: var(--radius);
+  padding: 12px 14px; border: 1.5px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.finance-voice-hint-icon { font-size: 24px; }
+.finance-voice-hint-text { font-size: 13px; font-weight: 700; color: var(--text-soft); line-height: 1.4; }
+.finance-voice-hint-text strong { color: var(--text); }
+
+/* ── Health screen ── */
+.health-header {
+  background: linear-gradient(135deg, #1A5C38 0%, #2A7D4F 100%);
+  padding: 18px 20px 20px;
+}
+.health-header-title { font-size: 22px; font-weight: 900; color: white; margin-bottom: 3px; }
+.health-header-sub { font-size: 13px; color: rgba(255,255,255,0.75); font-weight: 600; }
+
+.health-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px; }
+.health-stat-card {
+  background: white; border-radius: var(--radius); padding: 14px;
+  border: 1.5px solid var(--border); cursor: pointer; transition: all 0.15s;
+}
+.health-stat-card:active { background: var(--green-light); }
+.health-stat-label { font-size: 11px; font-weight: 800; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.health-stat-value { font-size: 26px; font-weight: 900; color: var(--text); line-height: 1; }
+.health-stat-unit { font-size: 12px; font-weight: 700; color: var(--text-soft); margin-top: 2px; }
+.health-stat-badge { font-size: 11px; font-weight: 800; margin-top: 6px; padding: 3px 8px; border-radius: 6px; display: inline-block; }
+.health-stat-badge.ok { background: var(--green-light); color: var(--green-dark); }
+.health-stat-badge.warn { background: #FFF3E0; color: #E65100; }
+.health-stat-badge.high { background: #FFEBEE; color: var(--red); }
+
+.health-section-title { font-size: 16px; font-weight: 900; padding: 4px 14px 8px; color: var(--text); }
+
+.health-med-card {
+  margin: 0 14px 8px; background: white; border-radius: var(--radius);
+  padding: 12px 14px; border: 1.5px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+}
+.health-med-icon {
+  width: 40px; height: 40px; border-radius: 11px;
+  background: var(--green-light); display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.health-med-body { flex: 1; }
+.health-med-name { font-size: 14px; font-weight: 800; color: var(--text); }
+.health-med-dose { font-size: 12px; color: var(--text-soft); font-weight: 600; margin-top: 1px; }
+.health-med-time {
+  font-size: 12px; font-weight: 800; color: var(--green);
+  background: var(--green-light); padding: 4px 9px; border-radius: 8px; white-space: nowrap;
+}
+
+.health-coming-soon {
+  margin: 20px 14px;
+  background: var(--green-light); border: 2px dashed var(--green);
+  border-radius: var(--radius); padding: 24px;
+  text-align: center;
+}
+.health-coming-soon-icon { font-size: 40px; margin-bottom: 10px; }
+.health-coming-soon-title { font-size: 18px; font-weight: 900; color: var(--green-dark); margin-bottom: 6px; }
+.health-coming-soon-text { font-size: 14px; font-weight: 600; color: var(--text-soft); line-height: 1.5; }
+
+.finance-coming-soon {
+  margin: 20px 14px;
+  background: #E3F2FD; border: 2px dashed #1976D2;
+  border-radius: var(--radius); padding: 24px;
+  text-align: center;
+}
+.finance-coming-soon-icon { font-size: 40px; margin-bottom: 10px; }
+.finance-coming-soon-title { font-size: 18px; font-weight: 900; color: #0D47A1; margin-bottom: 6px; }
+.finance-coming-soon-text { font-size: 14px; font-weight: 600; color: var(--text-soft); line-height: 1.5; }
