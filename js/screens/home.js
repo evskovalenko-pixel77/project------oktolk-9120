@@ -34,10 +34,7 @@ window.ScreenHome = {
 
     return `
       <div class="home-screen new-layout">
-        <div class="page-top">
-          <div class="logo-mark">
-            <div class="logo-circle">О</div>
-            <div class="logo-text">OkTolk</div>
+<div class="logo-text">OkTolk</div>
           </div>
           <div class="icon-btn" id="notif-btn" title="Уведомления">
             🔔
