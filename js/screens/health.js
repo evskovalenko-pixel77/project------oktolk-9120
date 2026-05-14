@@ -2,15 +2,15 @@ window.ScreenHealth = {
   render: function() {
     return `
       <div class="health-screen">
-        <div class="health-header">
-          <div class="health-header-title">Моё здоровье</div>
-          <div class="health-header-sub">Контроль показателей и лекарств</div>
+        <div class="hero heart" style="margin:14px 18px 0;">
+          <div class="hero-eyebrow">МОЁ ЗДОРОВЬЕ</div><div class="hero-title">Контроль показателей</div>
+          <div class="hero-sub">и лекарств</div>
         </div>
 
-        <div class="health-coming-soon">
-          <div class="health-coming-soon-icon">❤️</div>
-          <div class="health-coming-soon-title">Скоро появится</div>
-          <div class="health-coming-soon-text">
+        <div class="placeholder" style="margin-top:14px;">
+          <div class="placeholder-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+          <div class="placeholder-title">Скоро появится</div>
+          <div class="placeholder-text">
             Контроль давления, пульса и сахара. Графики динамики.<br>
             Напоминания о лекарствах в Telegram и push.<br>
             Доступно в тарифе <strong>Про</strong> — 399 ₽/мес.

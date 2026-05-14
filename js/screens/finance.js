@@ -2,26 +2,26 @@ window.ScreenFinance = {
   render: function() {
     return `
       <div class="finance-screen">
-        <div class="finance-header">
-          <div class="finance-header-title">Мои финансы</div>
-          <div class="finance-balance-label">Расходы за май 2026</div>
-          <div class="finance-balance">0 ₽</div>
-          <div class="finance-row">
+        <div class="hero indigo" style="margin:14px 18px 0;">
+          <div class="hero-eyebrow">МОИ ФИНАНСЫ</div>
+          <div class="hero-title">Расходы за май 2026</div>
+          <div class="hero-amount">0 ₽</div>
+          <div class="stat-row">
             <div class="finance-badge">
-              <div class="finance-badge-label">Доход</div>
-              <div class="finance-badge-val">— ₽</div>
+              <div class="stat-label">Доход</div>
+              <div class="stat-val">— ₽</div>
             </div>
             <div class="finance-badge">
-              <div class="finance-badge-label">Остаток</div>
-              <div class="finance-badge-val">— ₽</div>
+              <div class="stat-label">Остаток</div>
+              <div class="stat-val">— ₽</div>
             </div>
           </div>
         </div>
 
-        <div class="finance-coming-soon">
-          <div class="finance-coming-soon-icon">💳</div>
-          <div class="finance-coming-soon-title">Скоро появится</div>
-          <div class="finance-coming-soon-text">
+        <div class="placeholder" style="margin-top:14px;">
+          <div class="placeholder-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
+          <div class="placeholder-title">Скоро появится</div>
+          <div class="placeholder-text">
             Учёт расходов: аптека, магазин, коммуналка, кредиты.<br>
             Разбор кредитов и платежей. Мониторинг бюджета.
           </div>
