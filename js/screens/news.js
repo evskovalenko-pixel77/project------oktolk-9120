@@ -5,10 +5,10 @@ window.ScreenNews = {
   render: function() {
     return `
       <div class="news-screen">
-        <div class="news-hero">
-          <div class="news-title">Что новое</div>
+        <div class="hero news" style="margin:14px 18px 0;">
+          <div class="hero-eyebrow">ЧТО НОВОГО</div><div class="hero-title">Лента за вас</div><div class="hero-sub">проверенные источники</div>
           <button class="listen-all-btn" id="listen-all-btn">
-            <div class="listen-icon">🎧</div>
+            <div class="listen-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3v5z"/><path d="M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3v5z"/></svg></div>
             <div class="listen-text">
               <div class="listen-title">Слушать все новости</div>
               <div class="listen-sub">Как утреннее радио</div>
@@ -17,20 +17,20 @@ window.ScreenNews = {
           </button>
         </div>
 
-        <div class="news-tabs" id="news-tabs">
-          <button class="news-tab active" data-tab="all">
+        <div class="news-filters" id="news-tabs">
+          <button class="news-filter active" data-tab="all">
             Все
             <span class="tab-count" id="count-all">0</span>
           </button>
-          <button class="news-tab" data-tab="danger">
+          <button class="news-filter" data-tab="danger">
             ⚠️ Опасное
             <span class="tab-count" id="count-danger">0</span>
           </button>
-          <button class="news-tab" data-tab="benefit">
+          <button class="news-filter" data-tab="benefit">
             ✓ Льготы
             <span class="tab-count" id="count-benefit">0</span>
           </button>
-          <button class="news-tab" data-tab="info">
+          <button class="news-filter" data-tab="info">
             ℹ️ Информация
             <span class="tab-count" id="count-info">0</span>
           </button>
@@ -111,13 +111,13 @@ window.ScreenNews = {
     if (listenAllBtn) {
       listenAllBtn.addEventListener('click', async () => {
         listenAllBtn.disabled = true;
-        listenAllBtn.innerHTML = '<div class="listen-icon">⏳</div><div class="listen-text"><div class="listen-title">Загружаю...</div></div>';
+        listenAllBtn.innerHTML = '<div class="listen-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="listen-text"><div class="listen-title">Загружаю...</div></div>';
         
         const newsText = this.news.map(n => `${n.title}. ${n.content}.`).join(' ');
         const result = await PomoshnikMultimedia.textToSpeech(newsText);
         
         listenAllBtn.disabled = false;
-        listenAllBtn.innerHTML = '<div class="listen-icon">🎧</div><div class="listen-text"><div class="listen-title">Слушать все новости</div><div class="listen-sub">Как утреннее радио</div></div><div class="listen-arrow">→</div>';
+        listenAllBtn.innerHTML = '<div class="listen-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3v5z"/><path d="M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3v5z"/></svg></div><div class="listen-text"><div class="listen-title">Слушать все новости</div><div class="listen-sub">Как утреннее радио</div></div><div class="listen-arrow">→</div>';
       });
     }
   },

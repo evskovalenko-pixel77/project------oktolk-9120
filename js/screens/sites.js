@@ -64,9 +64,9 @@ window.ScreenSites = {
   render: function() {
     return `
       <div class="sites-screen">
-        <div class="sites-header">
-          <div class="sites-header-title">Сайты</div>
-          <div class="sites-header-sub">Проверенные ресурсы по категориям</div>
+        <div class="hero sites" style="margin:14px 18px 0;">
+          <div class="hero-eyebrow">САЙТЫ</div><div class="hero-title">Проверенные ресурсы</div>
+          <div class="hero-sub">по категориям</div>
         </div>
         <div class="sites-grid" id="sites-grid">
           <div class="sites-tile" data-cat="gov">

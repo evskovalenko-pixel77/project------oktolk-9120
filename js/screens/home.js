@@ -37,16 +37,16 @@ window.ScreenHome = {
           <div class="home-greeting">${greeting},</div>
           <div class="home-name"><span class="accent">${name}</span></div>
           <div class="home-sub">Задайте вопрос, проверьте документ или сообщение на мошенничество</div>
-          <div class="home-quick-actions">
-            <button class="quick-action" data-q="Как защититься от мошенников по телефону?">
+          <div class="home-chips">
+            <button class="home-chip" data-q="Как защититься от мошенников по телефону?">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               Антискам
             </button>
-            <button class="quick-action" data-q="Объясни этот документ простыми словами: ">
+            <button class="home-chip" data-q="Объясни этот документ простыми словами: ">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               Документ
             </button>
-            <button class="quick-action" data-q="Дай пошаговую инструкцию: ">
+            <button class="home-chip" data-q="Дай пошаговую инструкцию: ">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
               Инструкция
             </button>
@@ -59,23 +59,23 @@ window.ScreenHome = {
       <div class="home-screen">
         ${centerContent}
         ${dialogHtml}
-        <div class="input-section">
-          <div class="input-row">
-            <textarea id="text-input" class="text-input" placeholder="Напишите свой вопрос..." rows="1" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
-            <button class="send-btn" id="send-btn">${this.icons.send}</button>
+        <div class="composer-wrap">
+          <div class="composer">
+            <textarea id="text-input" class="composer-input" placeholder="Напишите свой вопрос..." rows="1" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+            <button class="composer-send" id="send-btn">${this.icons.send}</button>
           </div>
-          <div class="input-buttons">
-            <button class="input-btn" id="voice-input-btn">
-              <span class="btn-icon-svg">${this.icons.mic}</span>
-              <span class="btn-label">Голос</span>
+          </div><div class="modes">
+            <button class="mode" id="voice-input-btn">
+              <span class="mode-icon">${this.icons.mic}</span>
+              <span class="mode-label">Голос</span>
             </button>
-            <button class="input-btn" id="photo-input-btn">
-              <span class="btn-icon-svg">${this.icons.camera}</span>
-              <span class="btn-label">Фото</span>
+            <button class="mode" id="photo-input-btn">
+              <span class="mode-icon">${this.icons.camera}</span>
+              <span class="mode-label">Фото</span>
             </button>
-            <button class="input-btn" id="file-input-btn">
-              <span class="btn-icon-svg">${this.icons.file}</span>
-              <span class="btn-label">Документ</span>
+            <button class="mode" id="file-input-btn">
+              <span class="mode-icon">${this.icons.file}</span>
+              <span class="mode-label">Документ</span>
             </button>
           </div>
         </div>
