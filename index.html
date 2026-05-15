@@ -2107,27 +2107,55 @@ function RecentCard({ onAsk }) {
 // Finance screen
 // ─────────────────────────────────────────────────────────────
 function FinanceScreen({ onAsk, onMode }) {
+  const [input, setInput] = React.useState('');
+  const cats = [
+    { icon: IconCart,     label: 'Магазины' },
+    { icon: IconPill,     label: 'Медицина' },
+    { icon: IconBuilding, label: 'Коммуналка' },
+    { icon: IconCreditCard, label: 'Кредиты' },
+    { icon: IconTrend,    label: 'Транспорт' },
+    { icon: IconStar,     label: 'Досуг' },
+  ];
   return (
     <div className="screen">
       <div style={{ padding: '4px 0' }}>
         <div className="hero indigo">
-          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>
-            Мои финансы
-          </div>
+          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>Мои финансы</div>
           <div className="hero-title">Расходы за май</div>
           <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>0 ₽ · доход — · остаток —</div>
           <button className="btn-primary" style={{ marginTop: 18, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
-            <IconCreditCard size={18}/>
-            Добавить расход
-            <IconArrowRight size={16}/>
+            <IconCreditCard size={18}/>Добавить расход<IconArrowRight size={16}/>
           </button>
         </div>
       </div>
 
-      <div className="section" style={{ paddingTop: 18 }}>
+      <div className="section">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+          {cats.map(c => {
+            const CI = c.icon;
+            return (
+              <button key={c.label} onClick={() => onAsk && onAsk(c.label)} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '14px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <span style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--primary-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CI size={18} color="var(--primary)"/>
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)' }}>{c.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="section" style={{ paddingTop: 12 }}>
         <div className="composer" style={{ margin: 0, width: '100%', boxSizing: 'border-box' }}>
-          <input placeholder="Напишите или надиктуйте расход…"/>
-          <button className="composer-send" aria-label="Отправить">
+          <textarea
+            placeholder="Напишите или надиктуйте расход…"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            rows={1}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', font: 'inherit', fontSize: 15, color: 'var(--text)', resize: 'none', minHeight: 22, maxHeight: 120, overflowY: 'auto', padding: '2px 0' }}
+            onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+          />
+          <button className="composer-send" aria-label="Отправить" onClick={() => { if(input.trim()) { onAsk && onAsk(input); setInput(''); }}}>
             <IconSend size={18} sw={2}/>
           </button>
         </div>
@@ -2149,17 +2177,6 @@ function FinanceScreen({ onAsk, onMode }) {
           </button>
         </div>
       </div>
-
-      <AskAICard
-        title="Спросите AI о финансах"
-        placeholder="Задайте вопрос о финансах…"
-        prompts={[
-          { icon: IconLightbulb, t: 'Как сэкономить на ЖКХ?' },
-          { icon: IconBuilding, t: 'Что такое рефинансирование?' },
-          { icon: IconTrend,    t: 'Как составить бюджет?' },
-        ]}
-        onAsk={onAsk}
-      />
     </div>
   );
 }
@@ -2168,27 +2185,31 @@ function FinanceScreen({ onAsk, onMode }) {
 // Health screen
 // ─────────────────────────────────────────────────────────────
 function HealthScreen({ onAsk, onMode }) {
+  const [input, setInput] = React.useState('');
   return (
     <div className="screen">
       <div style={{ padding: '4px 0' }}>
         <div className="hero heart">
-          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>
-            Моё здоровье
-          </div>
+          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>Моё здоровье</div>
           <div className="hero-title">Контроль показателей</div>
           <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>давление —/— · пульс —</div>
           <button className="btn-primary" style={{ marginTop: 18, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
-            <IconHeart size={18}/>
-            Внести показатели
-            <IconArrowRight size={16}/>
+            <IconHeart size={18}/>Внести показатели<IconArrowRight size={16}/>
           </button>
         </div>
       </div>
 
-      <div className="section" style={{ paddingTop: 18 }}>
+      <div className="section" style={{ paddingTop: 12 }}>
         <div className="composer" style={{ margin: 0, width: '100%', boxSizing: 'border-box' }}>
-          <input placeholder="Надиктуйте или введите показатель…"/>
-          <button className="composer-send" aria-label="Отправить">
+          <textarea
+            placeholder="Надиктуйте или введите показатель…"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            rows={1}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', font: 'inherit', fontSize: 15, color: 'var(--text)', resize: 'none', minHeight: 22, maxHeight: 120, overflowY: 'auto', padding: '2px 0' }}
+            onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+          />
+          <button className="composer-send" aria-label="Отправить" onClick={() => { if(input.trim()) { onAsk && onAsk(input); setInput(''); }}}>
             <IconSend size={18} sw={2}/>
           </button>
         </div>
@@ -2204,9 +2225,9 @@ function HealthScreen({ onAsk, onMode }) {
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Фото</span>
           </button>
-          <button className="mode" onClick={() => onMode && onMode('doc')}>
+          <button className="mode" onClick={() => onMode && onMode('analyze')}>
             <span className="mode-icon"><IconDoc size={22}/></span>
-            <span className="mode-label">Документ</span>
+            <span className="mode-label">Анализ</span>
           </button>
         </div>
       </div>
