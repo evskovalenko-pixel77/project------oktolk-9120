@@ -279,7 +279,7 @@ button { font-family: inherit; }
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  padding: 0 18px;
+  padding: 0;
   box-sizing: border-box;
   width: 100%;
 }
@@ -317,7 +317,7 @@ button { font-family: inherit; }
 
 /* AI composer */
 .composer {
-  margin: 0 18px;
+  margin: 0;
   background: var(--surface);
   border: 0.5px solid var(--border);
   border-radius: var(--r-lg);
@@ -359,6 +359,8 @@ button { font-family: inherit; }
 
 /* Выравнивание composer и modes по одной ширине */
 .section > .composer { margin: 0; width: 100%; }
+.section > .modes { padding: 0; width: 100%; }
+.section:has(> .composer) { padding-left: 18px; padding-right: 18px; }
 .chat-composer .composer { margin: 0; width: 100%; }
 .chat-composer .modes { padding: 0; }
 
@@ -2166,7 +2168,7 @@ function FinanceScreen({ onAsk, onMode }) {
         </div>
       </div>
 
-      <div style={{ padding: '4px 0 0' }}>
+      <div className="section" style={{ paddingTop: 10 }}>
         <div className="modes">
           <button className="mode" onClick={() => onMode && onMode('voice')}>
             <span className="mode-icon"><IconMic size={22}/></span>
@@ -2242,7 +2244,7 @@ function HealthScreen({ onAsk, onMode }) {
         </div>
       </div>
 
-      <div style={{ padding: '4px 0 0' }}>
+      <div className="section" style={{ paddingTop: 10 }}>
         <div className="modes">
           <button className="mode" onClick={() => onMode && onMode('voice')}>
             <span className="mode-icon"><IconMic size={22}/></span>
