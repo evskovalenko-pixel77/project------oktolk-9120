@@ -58,13 +58,15 @@ window.ScreenHome = {
     return `
       <div class="home-screen">
         ${centerContent}
-        ${dialogHtml}
         <div class="composer-wrap">
           <div class="composer">
             <textarea id="text-input" class="composer-input" placeholder="Напишите свой вопрос..." rows="1" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
             <button class="composer-send" id="send-btn">${this.icons.send}</button>
           </div>
-          </div><div class="modes">
+          </div>
+        </div>
+        ${dialogHtml}
+        <div class="modes">
             <button class="mode" id="voice-input-btn">
               <span class="mode-icon">${this.icons.mic}</span>
               <span class="mode-label">Голос</span>
