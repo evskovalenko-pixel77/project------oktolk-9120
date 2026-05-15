@@ -2044,7 +2044,14 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
     if (voiceText) {
       setQ(voiceText);
       if (onVoiceClear) onVoiceClear();
-      setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 100);
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.style.height = 'auto';
+          inputRef.current.style.height = inputRef.current.scrollHeight + 'px';
+          inputRef.current.setSelectionRange(voiceText.length, voiceText.length);
+        }
+      }, 50);
     }
   }, [voiceText]);
 
