@@ -2598,12 +2598,30 @@ function ChatOverlay({ initialMsg, onClose }) {
 
       <div className="chat-composer">
         <div className="composer" style={{ margin: 0 }}>
-          <input value={input}
+          <textarea value={input}
                  onChange={e => setInput(e.target.value)}
-                 onKeyDown={e => { if (e.key === 'Enter') send(); }}
-                 placeholder="Спросите что-нибудь…"/>
+                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }}}
+                 onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                 placeholder="Спросите что-нибудь…"
+                 rows={1}
+                 style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', font: 'inherit', fontSize: 15, color: 'var(--text)', resize: 'none', minHeight: 22, maxHeight: 120, overflowY: 'auto', padding: '2px 0' }}
+          />
           <button className="composer-send" disabled={!input.trim() || pending} onClick={send}>
             <IconSend size={18} sw={2}/>
+          </button>
+        </div>
+        <div className="modes" style={{ marginTop: 8 }}>
+          <button className="mode">
+            <span className="mode-icon"><IconMic size={22}/></span>
+            <span className="mode-label">Голос</span>
+          </button>
+          <button className="mode">
+            <span className="mode-icon"><IconCamera size={22}/></span>
+            <span className="mode-label">Фото</span>
+          </button>
+          <button className="mode">
+            <span className="mode-icon"><IconDoc size={22}/></span>
+            <span className="mode-label">Документ</span>
           </button>
         </div>
       </div>
