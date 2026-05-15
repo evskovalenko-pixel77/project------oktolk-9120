@@ -435,4 +435,42 @@ async def speech_to_text(req: STTRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка STT: {str(e)}")
 
+
+# ── TTS (Text-to-Speech) ─────────────────────────────────────────
+from fastapi.responses import StreamingResponse
+import io
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "alloy"  # alloy, echo, fable, onyx, nova, shimmer
+
+@app.post("/api/v1/tts")
+async def text_to_speech(req: TTSRequest):
+    if not AITUNNEL_API_KEY:
+        raise HTTPException(status_code=503, detail="AI недоступен")
+    try:
+        headers = {
+            "Authorization": f"Bearer {AITUNNEL_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "tts-1",
+            "input": req.text[:4096],
+            "voice": req.voice
+        }
+        response = requests.post(
+            f"{AITUNNEL_BASE_URL}audio/speech",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Ошибка TTS")
+        return StreamingResponse(
+            io.BytesIO(response.content),
+            media_type="audio/mpeg",
+            headers={"Content-Disposition": "inline; filename=speech.mp3"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка TTS: {str(e)}")
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
