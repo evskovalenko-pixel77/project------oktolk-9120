@@ -2106,39 +2106,42 @@ function RecentCard({ onAsk }) {
 // ─────────────────────────────────────────────────────────────
 // Finance screen
 // ─────────────────────────────────────────────────────────────
-function FinanceScreen({ onAsk }) {
+function FinanceScreen({ onAsk, onMode }) {
   return (
     <div className="screen">
       <div style={{ padding: '4px 0' }}>
-        <div className="hero indigo" style={{ marginTop: 4 }}>
+        <div className="hero indigo">
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>
             Мои финансы
           </div>
           <div className="hero-title">Расходы за май</div>
-          <div style={{ fontSize: 44, fontWeight: 700, letterSpacing: '-0.03em', margin: '14px 0 0', fontVariantNumeric: 'tabular-nums' }}>
-            0 <span style={{ fontSize: 28, opacity: 0.6 }}>₽</span>
-          </div>
-          <div className="stat-row">
-            <div className="stat-block">
-              <div className="stat-label">Доход</div>
-              <div className="stat-val">— ₽</div>
-            </div>
-            <div className="stat-block">
-              <div className="stat-label">Остаток</div>
-              <div className="stat-val">— ₽</div>
-            </div>
-          </div>
+          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>0 ₽ · доход — · остаток —</div>
         </div>
       </div>
 
-      <div className="section">
-        <div className="placeholder">
-          <div className="placeholder-icon"><IconCreditCard size={24}/></div>
-          <h3 className="placeholder-title">Скоро появится</h3>
-          <p className="placeholder-text">
-            Учёт расходов: аптека, магазин, коммуналка, кредиты.
-            Разбор кредитов и платежей. Мониторинг бюджета.
-          </p>
+      <div className="section" style={{ paddingTop: 18 }}>
+        <div className="composer" style={{ margin: 0, width: '100%', boxSizing: 'border-box' }}>
+          <input placeholder="Напишите или надиктуйте расход…"/>
+          <button className="composer-send" aria-label="Отправить">
+            <IconSend size={18} sw={2}/>
+          </button>
+        </div>
+      </div>
+
+      <div style={{ padding: '4px 0 0' }}>
+        <div className="modes">
+          <button className="mode" onClick={() => onMode && onMode('voice')}>
+            <span className="mode-icon"><IconMic size={22}/></span>
+            <span className="mode-label">Голос</span>
+          </button>
+          <button className="mode" onClick={() => onMode && onMode('photo')}>
+            <span className="mode-icon"><IconCamera size={22}/></span>
+            <span className="mode-label">Фото</span>
+          </button>
+          <button className="mode" onClick={() => onMode && onMode('doc')}>
+            <span className="mode-icon"><IconDoc size={22}/></span>
+            <span className="mode-label">Документ</span>
+          </button>
         </div>
       </div>
 
@@ -2159,7 +2162,7 @@ function FinanceScreen({ onAsk }) {
 // ─────────────────────────────────────────────────────────────
 // Health screen
 // ─────────────────────────────────────────────────────────────
-function HealthScreen({ onAsk }) {
+function HealthScreen({ onAsk, onMode }) {
   return (
     <div className="screen">
       <div style={{ padding: '4px 0' }}>
@@ -2168,23 +2171,33 @@ function HealthScreen({ onAsk }) {
             Моё здоровье
           </div>
           <div className="hero-title">Контроль показателей</div>
-          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>и лекарств</div>
-
-          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-            <MiniMetric label="Давление" value="—/—" unit="мм рт.ст."/>
-            <MiniMetric label="Пульс" value="—" unit="уд/мин"/>
-          </div>
+          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>давление —/— · пульс —</div>
         </div>
       </div>
 
-      <div className="section">
-        <div className="placeholder">
-          <div className="placeholder-icon"><IconHeart size={24}/></div>
-          <h3 className="placeholder-title">Скоро появится</h3>
-          <p className="placeholder-text">
-            Контроль давления, пульса и сахара с графиками динамики.
-            Напоминания о приёме лекарств. Тариф Про — 399 ₽/мес.
-          </p>
+      <div className="section" style={{ paddingTop: 18 }}>
+        <div className="composer" style={{ margin: 0, width: '100%', boxSizing: 'border-box' }}>
+          <input placeholder="Надиктуйте или введите показатель…"/>
+          <button className="composer-send" aria-label="Отправить">
+            <IconSend size={18} sw={2}/>
+          </button>
+        </div>
+      </div>
+
+      <div style={{ padding: '4px 0 0' }}>
+        <div className="modes">
+          <button className="mode" onClick={() => onMode && onMode('voice')}>
+            <span className="mode-icon"><IconMic size={22}/></span>
+            <span className="mode-label">Голос</span>
+          </button>
+          <button className="mode" onClick={() => onMode && onMode('photo')}>
+            <span className="mode-icon"><IconCamera size={22}/></span>
+            <span className="mode-label">Фото</span>
+          </button>
+          <button className="mode" onClick={() => onMode && onMode('doc')}>
+            <span className="mode-icon"><IconDoc size={22}/></span>
+            <span className="mode-label">Документ</span>
+          </button>
         </div>
       </div>
 
