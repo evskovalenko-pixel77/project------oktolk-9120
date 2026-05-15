@@ -2453,7 +2453,7 @@ function NewsCard({ n, onAsk }) {
                   const resp = await fetch('/api/v1/tts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text, voice: 'alloy' })
+                    body: JSON.stringify({ text, voice: 'onyx' })
                   });
                   const blob = await resp.blob();
                   const url = URL.createObjectURL(blob);
