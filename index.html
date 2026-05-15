@@ -116,7 +116,8 @@ button { font-family: inherit; }
 }
 
 .app-scroll {
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
@@ -974,11 +975,11 @@ button { font-family: inherit; }
   color: var(--text);
 }
 
-</style>
+@media(max-width:480px){body{padding:0!important}.app{border-radius:0!important;box-shadow:none!important}}</style>
 <style>
-body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 10%,rgba(70,90,160,0.16) 0%,transparent 50%),radial-gradient(circle at 80% 90%,rgba(140,90,200,0.10) 0%,transparent 50%),#0F0F12;padding:28px 16px;font-family:'Onest',system-ui,sans-serif}
-#root{display:flex;align-items:center;justify-content:center}
-</style>
+body{margin:0;height:100vh;max-height:100vh;overflow:hidden;box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 10%,rgba(70,90,160,0.16) 0%,transparent 50%),radial-gradient(circle at 80% 90%,rgba(140,90,200,0.10) 0%,transparent 50%),#0F0F12;padding:28px 16px;font-family:'Onest',system-ui,sans-serif}
+#root{height:100%;width:100%;max-width:430px;display:flex;flex-direction:column;align-items:stretch;justify-content:center}
+@media(max-width:480px){body{padding:0!important}.app{border-radius:0!important;box-shadow:none!important}}</style>
 <template id="__bundler_thumbnail"><svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" rx="44" fill="#3B4FE0"/><text x="100" y="125" text-anchor="middle" fill="white" font-family="Onest, sans-serif" font-size="64" font-weight="700" letter-spacing="-2">Ok</text></svg></template>
 </head>
 <body>
@@ -1599,7 +1600,7 @@ function TweaksPanel({ title = 'Tweaks', noDeckControls = false, children }) {
   if (!open) return null;
   return (
     <>
-      <style>{__TWEAKS_STYLE}</style>
+      <style>{__TWEAKS_STYLE}@media(max-width:480px){body{padding:0!important}.app{border-radius:0!important;box-shadow:none!important}}</style>
       <div ref={dragRef} className="twk-panel" data-noncommentable=""
            style={{ right: offsetRef.current.x, bottom: offsetRef.current.y }}>
         <div className="twk-hd" onMouseDown={onDragStart}>
