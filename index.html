@@ -2232,16 +2232,6 @@ function HealthScreen({ onAsk, onMode }) {
         </div>
       </div>
 
-      <AskAICard
-        title="Спросите AI о здоровье"
-        placeholder="Лекарство, диагноз или показатель…"
-        prompts={[
-          { icon: IconPill, t: 'Разбор лекарства' },
-          { icon: IconStethoscope, t: 'Что значит давление 140/90?' },
-          { icon: IconLightbulb, t: 'Что снижает давление?' },
-        ]}
-        onAsk={onAsk}
-      />
     </div>
   );
 }
