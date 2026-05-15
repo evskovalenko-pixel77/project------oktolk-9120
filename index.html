@@ -2684,13 +2684,52 @@ function ProfileSheet({ onClose, name = 'Евгений' }) {
   );
 }
 
-function VoiceModal({ onClose }) {
+function VoiceModal({ onClose, onResult }) {
+  const [status, setStatus] = React.useState('ready');
+  const [hint, setHint] = React.useState('Нажмите орб чтобы начать');
+
+  const startRec = async () => {
+    setStatus('recording');
+    setHint('Говорите... нажмите снова чтобы остановить');
+    await window.VoiceRecorder.start(
+      (text) => {
+        setStatus('done');
+        setHint('Готово!');
+        if (onResult) onResult(text);
+        setTimeout(onClose, 800);
+      },
+      (err) => {
+        setStatus('error');
+        setHint(err);
+      }
+    );
+  };
+
+  const stopRec = () => {
+    setStatus('processing');
+    setHint('Распознаю речь...');
+    window.VoiceRecorder.stop();
+  };
+
+  const handleOrb = () => {
+    if (status === 'ready' || status === 'error') startRec();
+    else if (status === 'recording') stopRec();
+  };
+
+  const orbColor = status === 'recording' ? 'var(--danger)' : status === 'processing' ? 'var(--warn)' : status === 'done' ? 'var(--success)' : 'var(--primary)';
+
   return (
     <div className="voice-modal">
-      <div className="voice-orb"/>
+      <div className="voice-orb" onClick={handleOrb} style={{ background: orbColor, cursor: 'pointer', transform: status === 'recording' ? 'scale(1.15)' : 'scale(1)', transition: 'all 0.3s' }}/>
       <div style={{ textAlign: 'center' }}>
-        <div className="voice-label">Слушаю вас…</div>
-        <div className="voice-hint" style={{ marginTop: 8 }}>Говорите, когда будете готовы</div>
+        <div className="voice-label">
+          {status === 'ready' && 'Голосовой ввод'}
+          {status === 'recording' && 'Слушаю вас...'}
+          {status === 'processing' && 'Распознаю...'}
+          {status === 'done' && 'Готово!'}
+          {status === 'error' && 'Ошибка'}
+        </div>
+        <div className="voice-hint" style={{ marginTop: 8 }}>{hint}</div>
       </div>
       <button className="voice-close" onClick={onClose} aria-label="Закрыть">
         <IconClose size={22} sw={2}/>
@@ -2698,6 +2737,7 @@ function VoiceModal({ onClose }) {
     </div>
   );
 }
+
 
 function NotifSheet({ onClose }) {
   const items = [
@@ -2812,10 +2852,15 @@ function App() {
   React.useLayoutEffect(() => { applyTheme(t); }, [t]);
 
   const onAsk = (text) => setChat(text || '');
+  const [voiceResult, setVoiceResult] = React.useState(null);
   const onMode = (m) => {
     if (m === 'voice') setOverlay('voice');
     else if (m === 'photo') setChat('Распознать текст с фото');
     else if (m === 'doc') setChat('Помочь разобрать документ');
+  };
+  const onVoiceResult = (text) => {
+    setOverlay(null);
+    setChat(text);
   };
 
   return (
@@ -2836,7 +2881,7 @@ function App() {
 
         {chat !== null && <ChatOverlay initialMsg={chat} onClose={() => setChat(null)}/>}
         {overlay === 'profile' && <ProfileSheet onClose={() => setOverlay(null)}/>}
-        {overlay === 'voice'   && <VoiceModal   onClose={() => setOverlay(null)}/>}
+        {overlay === 'voice'   && <VoiceModal   onClose={() => setOverlay(null)} onResult={onVoiceResult}/>}
         {overlay === 'notif'   && <NotifSheet   onClose={() => setOverlay(null)}/>}
       </div>
     </React.Fragment>
@@ -2846,4 +2891,64 @@ function App() {
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App/>);
 </script>
+
+<script>
+// ── Voice Recording Module ────────────────────────────────────
+window.VoiceRecorder = {
+  mediaRecorder: null,
+  chunks: [],
+  stream: null,
+
+  async start(onResult, onError) {
+    try {
+      this.chunks = [];
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.mediaRecorder = new MediaRecorder(this.stream, { mimeType: 'audio/webm' });
+
+      this.mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) this.chunks.push(e.data);
+      };
+
+      this.mediaRecorder.onstop = async () => {
+        const blob = new Blob(this.chunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64 = reader.result.split(',')[1];
+          try {
+            const resp = await fetch('/api/v1/stt', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audio_base64: base64, mime_type: 'audio/webm' })
+            });
+            const data = await resp.json();
+            if (data.text) onResult(data.text);
+            else onError('Не удалось распознать');
+          } catch(e) {
+            onError('Ошибка сервера');
+          }
+        };
+        reader.readAsDataURL(blob);
+        this.stop();
+      };
+
+      this.mediaRecorder.start();
+      return true;
+    } catch(e) {
+      onError('Нет доступа к микрофону');
+      return false;
+    }
+  },
+
+  stop() {
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      this.mediaRecorder.stop();
+    }
+    if (this.stream) {
+      this.stream.getTracks().forEach(t => t.stop());
+      this.stream = null;
+    }
+  }
+};
+</script>
+
 </body></html>
