@@ -2015,10 +2015,18 @@ function TabBar({ active, onChange }) {
 // ─────────────────────────────────────────────────────────────
 // Home screen
 // ─────────────────────────────────────────────────────────────
-function HomeScreen({ onAsk, onMode, name = 'Евгений' }) {
+function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoiceClear }) {
   const [q, setQ] = React.useState('');
+  const inputRef = React.useRef(null);
   const hour = new Date().getHours();
   const greet = hour < 6 ? 'Доброй ночи' : hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
+  React.useEffect(() => {
+    if (voiceText) {
+      setQ(voiceText);
+      if (onVoiceClear) onVoiceClear();
+      setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 100);
+    }
+  }, [voiceText]);
 
   return (
     <div className="screen">
@@ -2043,6 +2051,7 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений' }) {
       <div className="section" style={{ paddingTop: 18 }}>
         <div className="composer" style={{ margin: 0 }}>
           <input
+            ref={inputRef}
             value={q}
             onChange={e => setQ(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && q.trim()) { onAsk(q); setQ(''); } }}
@@ -2727,7 +2736,7 @@ function VoiceModal({ onClose, onResult }) {
       position: 'fixed', bottom: 100, left: '50%', transform: 'translateX(-50%)',
       background: 'white', borderRadius: 24, padding: '16px 24px',
       boxShadow: '0 8px 32px rgba(0,0,0,0.18)', display: 'flex',
-      alignItems: 'center', gap: 16, zIndex: 1000, minWidth: 280
+      alignItems: 'center', justifyContent: 'center', gap: 16, zIndex: 1000, minWidth: 280
     }}>
       <button onClick={handleMic} style={{
         width: 52, height: 52, borderRadius: '50%', border: 'none',
@@ -2883,9 +2892,10 @@ function App() {
     else if (m === 'photo') setChat('Распознать текст с фото');
     else if (m === 'doc') setChat('Помочь разобрать документ');
   };
+  const [voiceText, setVoiceText] = React.useState(null);
   const onVoiceResult = (text) => {
     setOverlay(null);
-    setChat(text);
+    setVoiceText(text);
   };
 
   return (
@@ -2896,7 +2906,7 @@ function App() {
             onProfile={() => setOverlay('profile')}
             onNotif={() => setOverlay('notif')}
           />
-          {tab === 'home'    && <HomeScreen onAsk={onAsk} onMode={onMode}/>}
+          {tab === 'home'    && <HomeScreen onAsk={onAsk} onMode={onMode} voiceText={voiceText} onVoiceClear={() => setVoiceText(null)}/>}
           {tab === 'finance' && <FinanceScreen onAsk={onAsk}/>}
           {tab === 'health'  && <HealthScreen onAsk={onAsk}/>}
           {tab === 'news'    && <NewsScreen onAsk={onAsk}/>}
