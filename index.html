@@ -340,6 +340,23 @@ button { font-family: inherit; }
   min-width: 0;
 }
 .composer input::placeholder { color: var(--text-subtle); }
+.composer textarea {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 15.5px;
+  color: var(--text);
+  padding: 14px 0;
+  min-width: 0;
+  resize: none;
+  overflow: hidden;
+  min-height: 24px;
+  max-height: 150px;
+  line-height: 1.5;
+}
+.composer textarea::placeholder { color: var(--text-subtle); }
 .composer-send {
   width: 44px; height: 44px;
   border-radius: 12px;
