@@ -122,7 +122,7 @@ button { font-family: inherit; }
   overflow-x: hidden;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 90px;
+  padding-bottom: calc(90px + env(safe-area-inset-bottom));
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -978,7 +978,7 @@ button { font-family: inherit; }
 @media(max-width:480px){body{padding:0}.app{border-radius:0;box-shadow:none}}
 </style>
 <style>
-body{margin:0;height:100vh;max-height:100vh;overflow:hidden;box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 10%,rgba(70,90,160,0.16) 0%,transparent 50%),radial-gradient(circle at 80% 90%,rgba(140,90,200,0.10) 0%,transparent 50%),#0F0F12;padding:28px 16px;font-family:'Onest',system-ui,sans-serif}
+body{margin:0;height:100dvh;max-height:100dvh;overflow:hidden;box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 10%,rgba(70,90,160,0.16) 0%,transparent 50%),radial-gradient(circle at 80% 90%,rgba(140,90,200,0.10) 0%,transparent 50%),#0F0F12;padding:28px 16px;font-family:'Onest',system-ui,sans-serif}
 #root{height:100%;width:100%;max-width:430px;display:flex;flex-direction:column;align-items:stretch;justify-content:center}
 </style>
 <template id="__bundler_thumbnail"><svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" rx="44" fill="#3B4FE0"/><text x="100" y="125" text-anchor="middle" fill="white" font-family="Onest, sans-serif" font-size="64" font-weight="700" letter-spacing="-2">Ok</text></svg></template>
