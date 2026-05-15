@@ -2200,6 +2200,26 @@ function HealthScreen({ onAsk, onMode }) {
       </div>
 
       <div className="section" style={{ paddingTop: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+          {[
+            { label: 'Давление', value: '—/—', unit: 'мм рт.ст.', icon: IconHeart },
+            { label: 'Пульс',    value: '—',   unit: 'уд/мин',    icon: IconTrend },
+            { label: 'Сахар',    value: '—',   unit: 'ммоль/л',   icon: IconSparkles },
+            { label: 'Вес',      value: '—',   unit: 'кг',        icon: IconLightbulb },
+          ].map(m => {
+            const MI = m.icon;
+            return (
+              <div key={m.label} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(31,138,91,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <MI size={16} color="#1F8A5B"/>
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginTop: 2 }}>{m.label}</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>{m.value}</span>
+                <span style={{ fontSize: 9, color: 'var(--text-subtle)' }}>{m.unit}</span>
+              </div>
+            );
+          })}
+        </div>
         <div className="composer" style={{ margin: 0, width: '100%', boxSizing: 'border-box' }}>
           <textarea
             placeholder="Надиктуйте или введите показатель…"
