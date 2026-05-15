@@ -384,4 +384,55 @@ async def get_sites():
         {"name": "ФНС", "url": "https://nalog.gov.ru", "description": "Федеральная налоговая служба"}
     ]
 
+
+import base64
+
+# ── STT (Speech-to-Text) ─────────────────────────────────────────
+class STTRequest(BaseModel):
+    audio_base64: str
+    mime_type: str = "audio/webm"
+
+@app.post("/api/v1/stt")
+async def speech_to_text(req: STTRequest):
+    if not AITUNNEL_API_KEY:
+        raise HTTPException(status_code=503, detail="AI недоступен")
+    try:
+        headers = {
+            "Authorization": f"Bearer {AITUNNEL_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "gemini-2.5-flash-lite",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": req.audio_base64,
+                                "format": "webm"
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "text": "Транскрибируй точно что сказано. Верни только текст, без комментариев."
+                        }
+                    ]
+                }
+            ],
+            "max_tokens": 500
+        }
+        response = requests.post(
+            f"{AITUNNEL_BASE_URL}chat/completions",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        result = response.json()
+        text = result["choices"][0]["message"]["content"].strip()
+        return {"text": text, "status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка STT: {str(e)}")
+
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
