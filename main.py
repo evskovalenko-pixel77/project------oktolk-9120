@@ -17,6 +17,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 # ── Env ──────────────────────────────────────────────────────────
 AITUNNEL_API_KEY  = os.getenv("AITUNNEL_API_KEY", "")
 AITUNNEL_BASE_URL = os.getenv("AITUNNEL_BASE_URL", "https://api.aitunnel.ru/v1/")
+YANDEX_API_KEY    = os.getenv("YANDEX_API_KEY", "")
 SECRET_KEY        = os.getenv("SECRET_KEY", "oktolk-super-secret-key-2026-production")
 
 DB_HOST = os.getenv("DB_HOST", "amvera-kes-cnpg-oktolk-db-rw")
@@ -436,36 +437,38 @@ async def speech_to_text(req: STTRequest):
         raise HTTPException(status_code=500, detail=f"Ошибка STT: {str(e)}")
 
 
-# ── TTS (Text-to-Speech) ─────────────────────────────────────────
+# ── TTS (Text-to-Speech) Yandex SpeechKit ───────────────────────
 from fastapi.responses import StreamingResponse
 import io
 
 class TTSRequest(BaseModel):
     text: str
-    voice: str = "alloy"  # alloy, echo, fable, onyx, nova, shimmer
+    voice: str = "zhanar"
 
 @app.post("/api/v1/tts")
 async def text_to_speech(req: TTSRequest):
-    if not AITUNNEL_API_KEY:
-        raise HTTPException(status_code=503, detail="AI недоступен")
+    if not YANDEX_API_KEY:
+        raise HTTPException(status_code=503, detail="Яндекс TTS недоступен")
     try:
-        headers = {
-            "Authorization": f"Bearer {AITUNNEL_API_KEY}",
-            "Content-Type": "application/json"
+        params = {
+            "text": req.text[:5000],
+            "lang": "ru-RU",
+            "voice": req.voice,
+            "speed": "1.0",
+            "format": "mp3",
+            "sampleRateHertz": "48000"
         }
-        data = {
-            "model": "tts-1",
-            "input": req.text[:4096],
-            "voice": req.voice
+        headers = {
+            "Authorization": f"Api-Key {YANDEX_API_KEY}"
         }
         response = requests.post(
-            f"{AITUNNEL_BASE_URL}audio/speech",
+            "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize",
             headers=headers,
-            json=data,
+            data=params,
             timeout=30
         )
         if response.status_code != 200:
-            raise HTTPException(status_code=500, detail="Ошибка TTS")
+            raise HTTPException(status_code=500, detail=f"Ошибка Яндекс TTS: {response.text}")
         return StreamingResponse(
             io.BytesIO(response.content),
             media_type="audio/mpeg",
