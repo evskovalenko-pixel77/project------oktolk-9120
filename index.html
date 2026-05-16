@@ -2717,7 +2717,12 @@ function ChatOverlay({ initialMsg, onClose }) {
           </button>
         </div>
         <div className="modes" style={{ marginTop: 8 }}>
-          <button className="mode">
+          <button className="mode" onClick={async () => {
+            const started = await window.VoiceRecorder.start(
+              (text) => { setInput(prev => prev + text); },
+              (err) => { console.error(err); }
+            );
+          }}>
             <span className="mode-icon"><IconMic size={22}/></span>
             <span className="mode-label">Голос</span>
           </button>
