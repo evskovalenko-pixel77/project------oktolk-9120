@@ -2621,7 +2621,7 @@ function ChatOverlay({ initialMsg, onClose }) {
   );
   const [pending, setPending] = React.useState(false);
   const [input, setInput] = React.useState('');
-  const [showVoice, setShowVoice] = React.useState(false);
+  const [voiceActive, setVoiceActive] = React.useState(false);
   const streamRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -2703,7 +2703,7 @@ function ChatOverlay({ initialMsg, onClose }) {
         )}
       </div>
 
-      {showVoice && <ChatVoiceModal onClose={() => setShowVoice(false)} onResult={(text) => { setInput(prev => (prev ? prev + ' ' : '') + text); setShowVoice(false); }}/>}
+  
       <div className="chat-composer">
         <div className="composer" style={{ margin: 0 }}>
           <textarea value={input}
@@ -2719,9 +2719,17 @@ function ChatOverlay({ initialMsg, onClose }) {
           </button>
         </div>
         <div className="modes" style={{ marginTop: 8 }}>
-          <button className="mode" onClick={() => setShowVoice(true)}>
-            <span className="mode-icon"><IconMic size={22}/></span>
-            <span className="mode-label">Голос</span>
+          <button className="mode" onClick={() => {
+            if (voiceActive) { window.VoiceRecorder.stop(); setVoiceActive(false); return; }
+            setVoiceActive(true);
+            window.VoiceRecorder.start(
+              (text) => { setInput(prev => (prev ? prev + ' ' : '') + text); setVoiceActive(false); },
+              (err) => { setVoiceActive(false); },
+              () => { setVoiceActive(false); }
+            );
+          }} style={{ background: voiceActive ? 'var(--danger-tint)' : undefined }}>
+            <span className="mode-icon" style={{ color: voiceActive ? 'var(--danger)' : undefined }}><IconMic size={22}/></span>
+            <span className="mode-label" style={{ color: voiceActive ? 'var(--danger)' : undefined }}>{voiceActive ? 'Стоп' : 'Голос'}</span>
           </button>
           <button className="mode">
             <span className="mode-icon"><IconCamera size={22}/></span>
