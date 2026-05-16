@@ -360,6 +360,10 @@ button { font-family: inherit; }
   line-height: 1.5;
 }
 .composer textarea::placeholder { color: var(--text-subtle); }
+@keyframes micPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.7; }
+}
 @keyframes sonar {
   0%   { transform: scale(1);   opacity: 0.6; }
   100% { transform: scale(2.2); opacity: 0; }
@@ -2728,7 +2732,7 @@ function ChatOverlay({ initialMsg, onClose }) {
               () => { setVoiceActive(false); }
             );
           }} style={{ background: voiceActive ? 'var(--danger-tint)' : undefined }}>
-            <span className="mode-icon" style={{ color: voiceActive ? 'var(--danger)' : undefined }}><IconMic size={22}/></span>
+            <span className="mode-icon" style={{ color: voiceActive ? 'var(--danger)' : undefined, animation: voiceActive ? 'micPulse 1s ease-in-out infinite' : 'none' }}><IconMic size={22}/></span>
             <span className="mode-label" style={{ color: voiceActive ? 'var(--danger)' : undefined }}>{voiceActive ? 'Стоп' : 'Голос'}</span>
           </button>
           <button className="mode">
