@@ -443,7 +443,7 @@ import io
 
 class TTSRequest(BaseModel):
     text: str
-    voice: str = "zhanar"
+    voice: str = "alena"
 
 @app.post("/api/v1/tts")
 async def text_to_speech(req: TTSRequest):
