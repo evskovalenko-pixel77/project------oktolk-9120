@@ -2717,10 +2717,16 @@ function ChatOverlay({ initialMsg, onClose }) {
           </button>
         </div>
         <div className="modes" style={{ marginTop: 8 }}>
-          <button className="mode" onClick={async () => {
-            const started = await window.VoiceRecorder.start(
-              (text) => { setInput(prev => prev + text); },
-              (err) => { console.error(err); }
+          <button className="mode" onClick={() => {
+            if (!window.VoiceRecorder) return;
+            if (window.VoiceRecorder.mediaRecorder && window.VoiceRecorder.mediaRecorder.state === 'recording') {
+              window.VoiceRecorder.stop();
+              return;
+            }
+            window.VoiceRecorder.start(
+              (text) => { setInput(prev => (prev ? prev + ' ' : '') + text); },
+              (err) => { alert('Ошибка: ' + err); },
+              () => {}
             );
           }}>
             <span className="mode-icon"><IconMic size={22}/></span>
