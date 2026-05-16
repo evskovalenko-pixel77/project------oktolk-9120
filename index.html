@@ -2657,6 +2657,22 @@ function ChatOverlay({ initialMsg, onClose }) {
     }
   };
 
+  const askClaudeWithImage = async (base64, mimeType) => {
+    setPending(true);
+    try {
+      const res = await fetch('/api/v1/chat/image', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ image_base64: base64, mime_type: mimeType })
+      });
+      const data = await res.json();
+      setMessages(m => [...m, { role: 'ai', text: data.reply, source: 'OkTolk AI' }]);
+    } catch(e) {
+      setMessages(m => [...m, { role: 'ai', text: 'Не удалось проанализировать файл.', source: 'OkTolk AI' }]);
+    } finally {
+      setPending(false);
+    }
+  };
   const send = () => {
     const t = input.trim();
     if (!t || pending) return;
@@ -2735,11 +2751,44 @@ function ChatOverlay({ initialMsg, onClose }) {
             <span className="mode-icon" style={{ color: voiceActive ? 'var(--danger)' : undefined, animation: voiceActive ? 'micPulse 1s ease-in-out infinite' : 'none' }}><IconMic size={22}/></span>
             <span className="mode-label" style={{ color: voiceActive ? 'var(--danger)' : undefined }}>{voiceActive ? 'Стоп' : 'Голос'}</span>
           </button>
-          <button className="mode">
+          <button className="mode" onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.capture = 'environment';
+            input.onchange = async (e) => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64 = reader.result.split(',')[1];
+                setMessages(m => [...m, { role: 'user', text: '📷 Фото отправлено на анализ' }]);
+                askClaudeWithImage(base64, file.type);
+              };
+              reader.readAsDataURL(file);
+            };
+            input.click();
+          }}>
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Фото</span>
           </button>
-          <button className="mode">
+          <button className="mode" onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.pdf,.doc,.docx,.txt,image/*';
+            input.onchange = async (e) => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64 = reader.result.split(',')[1];
+                setMessages(m => [...m, { role: 'user', text: '📄 Документ отправлен на анализ: ' + file.name }]);
+                askClaudeWithImage(base64, file.type);
+              };
+              reader.readAsDataURL(file);
+            };
+            input.click();
+          }}>
             <span className="mode-icon"><IconDoc size={22}/></span>
             <span className="mode-label">Документ</span>
           </button>

@@ -476,4 +476,51 @@ async def text_to_speech(req: TTSRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка TTS: {str(e)}")
+
+# ── Chat with Image ───────────────────────────────────────────────
+class ImageChatRequest(BaseModel):
+    image_base64: str
+    mime_type: str = "image/jpeg"
+
+@app.post("/api/v1/chat/image")
+async def chat_with_image(req: ImageChatRequest):
+    if not AITUNNEL_API_KEY:
+        raise HTTPException(status_code=503, detail="AI недоступен")
+    try:
+        headers = {
+            "Authorization": f"Bearer {AITUNNEL_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "gemini-2.5-flash-lite",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{req.mime_type};base64,{req.image_base64}"
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "text": "Опиши что на изображении простым языком. Если это документ — объясни его суть. Если это переписка или сообщение — проверь на мошенничество. Отвечай по-русски, просто и понятно."
+                        }
+                    ]
+                }
+            ],
+            "max_tokens": 500
+        }
+        response = requests.post(
+            f"{AITUNNEL_BASE_URL}chat/completions",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        result = response.json()
+        reply = result["choices"][0]["message"]["content"].strip()
+        return {"reply": reply}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
