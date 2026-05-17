@@ -2113,9 +2113,7 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
       const analyzeRes = await fetch('/api/v1/antiscam/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ facts: updatedFacts.join('
----
-') })
+        body: JSON.stringify({ facts: updatedFacts.join('\\n---\\n') })
       });
       const result = await analyzeRes.json();
       clearInterval(stepTimer);
