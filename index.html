@@ -2447,7 +2447,7 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
       </button>
       {showStop && <StopMoshennnikSheet onClose={() => setShowStop(false)} onAsk={onAsk}/>}
 
-      <div className="section" style={{ paddingTop: 18 }}>
+      <div className="section" style={{ paddingTop: 18, marginTop: 'auto' }}>
         <div className="composer" style={{ margin: 0 }}>
           <textarea
             ref={inputRef}
@@ -2503,7 +2503,7 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
         </div>
       </div>
 
-      <RecentCard onAsk={onAsk}/>
+
     </div>
   );
 }
