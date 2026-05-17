@@ -602,4 +602,148 @@ async def chat_with_image(req: ImageChatRequest):
         return {"reply": reply_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+# ══════════════════════════════════════════════════════
+# СТОП МОШЕННИК — антискам модуль
+# ══════════════════════════════════════════════════════
+
+class AntiscamExtractRequest(BaseModel):
+    """Извлечение фактов из материала"""
+    image_base64: Optional[str] = None
+    mime_type: str = "image/jpeg"
+    audio_base64: Optional[str] = None
+    audio_mime: str = "audio/webm"
+    url: Optional[str] = None
+    text: Optional[str] = None
+
+class AntiscamAnalyzeRequest(BaseModel):
+    """Анализ накопленного контекста"""
+    facts: str  # все извлечённые факты через \n---\n
+    question: Optional[str] = None  # уточняющий вопрос пользователя
+
+def call_gemini_vision(image_base64: str, mime_type: str, prompt: str) -> str:
+    """Вызов Gemini с изображением"""
+    headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+    data = {
+        "model": "gemini-2.5-flash-lite",
+        "messages": [{"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_base64}"}},
+            {"type": "text", "text": prompt}
+        ]}],
+        "max_tokens": 800
+    }
+    r = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
+    return r.json()["choices"][0]["message"]["content"].strip()
+
+def call_gemini_audio(audio_base64: str, mime_type: str) -> str:
+    """Транскрипция аудио через Gemini"""
+    headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+    data = {
+        "model": "gemini-2.5-flash-lite",
+        "messages": [{"role": "user", "content": [
+            {"type": "input_audio", "input_audio": {"data": audio_base64, "format": mime_type.split("/")[-1]}},
+            {"type": "text", "text": "Транскрибируй полностью. Раздели реплики по говорящим если их несколько. Верни только текст разговора."}
+        ]}],
+        "max_tokens": 1000
+    }
+    r = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=60)
+    return r.json()["choices"][0]["message"]["content"].strip()
+
+def call_gemini_text(prompt: str, max_tokens: int = 600) -> str:
+    """Вызов Gemini только с текстом"""
+    headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+    data = {
+        "model": "gemini-2.5-flash-lite",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens
+    }
+    r = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
+    return r.json()["choices"][0]["message"]["content"].strip()
+
+EXTRACT_PROMPT = """Извлеки ТОЛЬКО факты для анализа на мошенничество. Не описывай изображение.
+
+Извлеки:
+- Что предлагают или просят сделать
+- Какие суммы или ценности упоминаются
+- Какие обещания дают
+- Какие данные запрашивают
+- Признаки давления или срочности
+- Имена, ники, контакты если есть
+
+Формат: короткий список фактов. Без лишних слов."""
+
+@app.post("/api/v1/antiscam/extract")
+async def antiscam_extract(req: AntiscamExtractRequest):
+    """Этап 1 — извлечение фактов из любого материала"""
+    if not AITUNNEL_API_KEY:
+        raise HTTPException(status_code=503, detail="AI недоступен")
+    try:
+        facts = ""
+
+        if req.image_base64:
+            facts = call_gemini_vision(req.image_base64, req.mime_type, EXTRACT_PROMPT)
+
+        elif req.audio_base64:
+            transcript = call_gemini_audio(req.audio_base64, req.audio_mime)
+            facts = call_gemini_text(f"Из этой транскрипции извлеки факты для анализа на мошенничество:\n{transcript}\n\n{EXTRACT_PROMPT}")
+
+        elif req.url:
+            try:
+                resp = requests.get(req.url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                html = resp.text[:5000]
+                facts = call_gemini_text(f"Из этого HTML извлеки факты для анализа на мошенничество:\n{html}\n\n{EXTRACT_PROMPT}")
+            except:
+                facts = f"URL: {req.url} — не удалось загрузить страницу"
+
+        elif req.text:
+            facts = req.text
+
+        return {"facts": facts, "status": "ok"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка извлечения: {str(e)}")
+
+
+ANALYZE_PROMPT = """Ты — антискам система OkTolk. Проанализируй собранные факты и дай структурированный вердикт.
+
+НАКОПЛЕННЫЕ ФАКТЫ ИЗ ВСЕХ МАТЕРИАЛОВ:
+{facts}
+
+{question_block}
+
+Найди связи между фактами. Определи схему мошенничества если она есть.
+
+Ответь ТОЛЬКО валидным JSON:
+{{
+  "risk_level": 0,
+  "what_doing": "Коротко что делает/пытается сделать мошенник. 1-2 предложения.",
+  "risk_description": "Описание рисков. 1 предложение.",
+  "consequences": "Что произойдёт если продолжить общение. 1-2 предложения.",
+  "recommendation": "Конкретное действие прямо сейчас. 1 предложение.",
+  "scheme": "название схемы мошенничества или null",
+  "confidence": "высокая или средняя или низкая"
+}}
+
+ШКАЛА РИСКА: 0=безопасно 1=минимальный 2=подозрения 3=высокий 4=очень высокий 5=явное мошенничество
+Только JSON."""
+
+@app.post("/api/v1/antiscam/analyze")
+async def antiscam_analyze(req: AntiscamAnalyzeRequest):
+    """Этап 2 — анализ всего накопленного контекста"""
+    if not AITUNNEL_API_KEY:
+        raise HTTPException(status_code=503, detail="AI недоступен")
+    try:
+        question_block = f"ВОПРОС ПОЛЬЗОВАТЕЛЯ: {req.question}" if req.question else ""
+        prompt = ANALYZE_PROMPT.format(facts=req.facts, question_block=question_block)
+        result_text = call_gemini_text(prompt, max_tokens=600)
+
+        import re as re_mod
+        json_match = re_mod.search(r"\{.*\}", result_text, re_mod.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+        return {"error": "parse_error", "raw": result_text}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка анализа: {str(e)}")
+
 app.mount("/", StaticFiles(directory=".", html=True), name="static")

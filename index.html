@@ -2086,54 +2086,48 @@ function TabBar({ active, onChange }) {
 // ─────────────────────────────────────────────────────────────
 
 function StopMoshennnikSheet({ onClose, onAsk }) {
-  const [activeType, setActiveType] = React.useState('text');
-  const [input, setInput] = React.useState('');
+  const [facts, setFacts] = React.useState([]);
   const [messages, setMessages] = React.useState([]);
   const [pending, setPending] = React.useState(false);
+  const [input, setInput] = React.useState('');
   const chatRef = React.useRef(null);
 
   React.useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages, pending]);
 
-  const analyze = async (text, imageBase64, mimeType) => {
-    if (!text && !imageBase64) return;
-    const userMsg = imageBase64 ? '📷 Отправлено на проверку' : text;
-    setMessages(m => [...m, { role: 'user', text: userMsg }]);
-    setInput('');
+  const allFacts = facts.join('\n---\n');
+
+  const extractAndAnalyze = async (imageBase64, mimeType, audioBase64, audioMime, url, text, userLabel) => {
+    setMessages(m => [...m, { role: 'user', text: userLabel }]);
     setPending(true);
-
-    // Собираем контекст из предыдущих сообщений
-    const context = messages.slice(-6).map(m => {
-      if (m.role === 'user') return 'Пользователь: ' + m.text;
-      if (m.type === 'verdict' && m.data) return 'AI вердикт: риск ' + m.data.risk_level + '/5 - ' + m.data.summary;
-      if (m.text) return 'AI: ' + m.text;
-      return '';
-    }).filter(Boolean).join('\n');
-
     try {
-      let result;
-      if (imageBase64) {
-        const res = await fetch('/api/v1/chat/image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image_base64: imageBase64, mime_type: mimeType, context })
-        });
-        result = await res.json();
-        if (result.risk_level !== undefined) {
-          setMessages(m => [...m, { role: 'ai', type: 'verdict', data: result }]);
-        } else {
-          setMessages(m => [...m, { role: 'ai', text: result.reply || 'Анализ завершён', type: 'text' }]);
-        }
-      } else {
-        const res = await fetch('/api/v1/analyze/text', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, context })
-        });
-        result = await res.json();
-        setMessages(m => [...m, { role: 'ai', type: 'verdict', data: result }]);
-      }
+      // Этап 1 — извлечение фактов
+      const extractRes = await fetch('/api/v1/antiscam/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_base64: imageBase64 || null,
+          mime_type: mimeType || 'image/jpeg',
+          audio_base64: audioBase64 || null,
+          audio_mime: audioMime || 'audio/webm',
+          url: url || null,
+          text: text || null
+        })
+      });
+      const extractData = await extractRes.json();
+      const newFacts = extractData.facts || '';
+      const updatedFacts = [...facts, newFacts];
+      setFacts(updatedFacts);
+
+      // Этап 2 — анализ всего контекста
+      const analyzeRes = await fetch('/api/v1/antiscam/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ facts: updatedFacts.join('\n---\n') })
+      });
+      const result = await analyzeRes.json();
+      setMessages(m => [...m, { role: 'ai', type: 'verdict', data: result }]);
     } catch(e) {
       setMessages(m => [...m, { role: 'ai', text: 'Ошибка анализа. Попробуйте ещё раз.', type: 'text' }]);
     } finally {
@@ -2141,19 +2135,43 @@ function StopMoshennnikSheet({ onClose, onAsk }) {
     }
   };
 
+  const handleText = () => {
+    if (!input.trim()) return;
+    extractAndAnalyze(null, null, null, null, null, input.trim(), input.trim());
+    setInput('');
+  };
+
   const handlePhoto = () => {
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
-    input.onchange = (e) => {
-      const files = Array.from(e.target.files);
-      if (!files.length) return;
-      files.forEach(file => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
+    inp.onchange = (e) => {
+      Array.from(e.target.files).forEach(file => {
         const reader = new FileReader();
-        reader.onloadend = () => analyze(null, reader.result.split(',')[1], file.type);
+        reader.onloadend = () => extractAndAnalyze(reader.result.split(',')[1], file.type, null, null, null, null, '📷 Скриншот отправлен');
         reader.readAsDataURL(file);
       });
     };
-    input.click();
+    inp.click();
+  };
+
+  const handleAudio = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'audio/*,video/mp4';
+    inp.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onloadend = () => extractAndAnalyze(null, null, reader.result.split(',')[1], file.type, null, null, '🎵 Аудио отправлено');
+      reader.readAsDataURL(file);
+    };
+    inp.click();
+  };
+
+  const handleUrl = () => {
+    const url = input.trim();
+    if (!url) return;
+    extractAndAnalyze(null, null, null, null, url, null, '🔗 ' + url);
+    setInput('');
   };
 
   const handleVoice = () => {
@@ -2165,56 +2183,99 @@ function StopMoshennnikSheet({ onClose, onAsk }) {
     );
   };
 
-  const riskColors = { 0: '#1F8A5B', 1: '#D97706', 2: '#C0392B', 3: '#C0392B' };
-  const riskBg = { 0: '#D1FAE5', 1: '#FEF3C7', 2: '#FFE5E5', 3: '#FFE5E5' };
+  const askQuestion = async () => {
+    if (!input.trim() || facts.length === 0) return;
+    const q = input.trim();
+    setMessages(m => [...m, { role: 'user', text: q }]);
+    setInput('');
+    setPending(true);
+    try {
+      const res = await fetch('/api/v1/antiscam/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ facts: allFacts, question: q })
+      });
+      const result = await res.json();
+      setMessages(m => [...m, { role: 'ai', type: 'verdict', data: result }]);
+    } catch(e) {
+      setMessages(m => [...m, { role: 'ai', text: 'Ошибка. Попробуйте снова.', type: 'text' }]);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const riskColors = { 0: '#1F8A5B', 1: '#D97706', 2: '#D97706', 3: '#C0392B', 4: '#C0392B', 5: '#C0392B' };
+  const riskBg = { 0: '#D1FAE5', 1: '#FEF3C7', 2: '#FEF3C7', 3: '#FFE5E5', 4: '#FFE5E5', 5: '#FFE5E5' };
+  const riskEmoji = { 0: '✅', 1: '🔶', 2: '⚠️', 3: '🚨', 4: '🚨', 5: '🚨' };
 
   return (
     <>
       <div className="stop-sheet-overlay" onClick={onClose}/>
       <div className="stop-sheet">
         <div style={{ width: 40, height: 4, background: '#E0E0E8', borderRadius: 2, margin: '12px auto 0', flexShrink: 0 }}/>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 12px', borderBottom: '1px solid #F0F0EC', flexShrink: 0 }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #C0392B, #E74C3C)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <IconShield size={20} sw={2.5} color="white"/>
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.02em' }}>Стоп Мошенник</div>
-            <div style={{ fontSize: 11, color: '#9B9BA3', marginTop: 1 }}>AI проверка · задавайте вопросы</div>
+            <div style={{ fontSize: 11, color: '#9B9BA3', marginTop: 1 }}>
+              {facts.length > 0 ? `${facts.length} материал(ов) проанализировано` : 'AI проверка · задавайте вопросы'}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ background: '#FFF0F0', borderRadius: 10, padding: '5px 10px', textAlign: 'center' }}>
               <div style={{ fontSize: 13, fontWeight: 800, color: '#C0392B' }}>2 841</div>
               <div style={{ fontSize: 9, fontWeight: 600, color: '#9B9BA3' }}>угроз</div>
             </div>
-            <div style={{ background: '#FFF0F0', borderRadius: 10, padding: '5px 10px', textAlign: 'center' }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#C0392B' }}>₽12M</div>
-              <div style={{ fontSize: 9, fontWeight: 600, color: '#9B9BA3' }}>сохранено</div>
-            </div>
           </div>
         </div>
+
         <div ref={chatRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {messages.length === 0 && (
-            <div style={{ textAlign: 'center', color: '#9B9BA3', padding: '20px', fontSize: 13, lineHeight: 1.5 }}>
-              Отправьте текст, скриншот или ссылку — AI проверит на мошенничество
+            <div style={{ textAlign: 'center', padding: '20px 10px' }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>🛡️</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Отправьте материалы для проверки</div>
+              <div style={{ fontSize: 12, color: '#9B9BA3', lineHeight: 1.5 }}>Скриншот переписки, ссылку, аудиозапись звонка или опишите ситуацию текстом</div>
             </div>
           )}
           {messages.map((m, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, flexDirection: m.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-end' }}>
-              {m.role === 'ai' && <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#C0392B,#E74C3C)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>🛡️</div>}
+            <div key={i} style={{ display: 'flex', gap: 8, flexDirection: m.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-start' }}>
+              {m.role === 'ai' && (
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#C0392B,#E74C3C)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>🛡️</div>
+              )}
               {m.type === 'verdict' && m.data ? (
-                <div style={{ maxWidth: '88%' }}>
-                  <div style={{ background: riskBg[Math.min(m.data.risk_level, 3)] || '#FFF0F0', border: `1.5px solid ${riskColors[Math.min(m.data.risk_level, 3)]}33`, borderRadius: 16, padding: '14px 16px' }}>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: riskColors[Math.min(m.data.risk_level, 3)], marginBottom: 8 }}>
-                      {m.data.risk_level >= 4 ? '🚨' : m.data.risk_level === 3 ? '🚨' : m.data.risk_level === 2 ? '⚠️' : m.data.risk_level === 1 ? '🔶' : '✅'}
-                      {' '}Риск: {m.data.risk_level}/5
+                <div style={{ maxWidth: '88%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ background: riskBg[Math.min(m.data.risk_level || 0, 5)], border: `1.5px solid ${riskColors[Math.min(m.data.risk_level || 0, 5)]}44`, borderRadius: 16, padding: '14px 16px' }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, color: riskColors[Math.min(m.data.risk_level || 0, 5)], marginBottom: 10 }}>
+                      {riskEmoji[Math.min(m.data.risk_level || 0, 5)]} Риск: {m.data.risk_level}/5
+                      {m.data.scheme && <span style={{ fontSize: 11, fontWeight: 600, marginLeft: 8, opacity: 0.8 }}>· {m.data.scheme}</span>}
                     </div>
-                    {m.data.summary && <div style={{ fontSize: 13, color: '#16161A', lineHeight: 1.5, marginBottom: 8, fontWeight: 600 }}>{m.data.summary}</div>}
-                    {m.data.how_they_manipulate && <div style={{ fontSize: 12, color: '#6B6B72', marginBottom: 4 }}>🎭 {m.data.how_they_manipulate}</div>}
-                    {m.data.consequences && <div style={{ fontSize: 12, color: '#6B6B72', marginBottom: 4 }}>⚡ {m.data.consequences}</div>}
-                    {m.data.signs && m.data.signs.map((s, j) => (
-                      <div key={j} style={{ fontSize: 12, color: '#6B6B72', marginBottom: 3 }}>• {s}</div>
-                    ))}
-                    {(m.data.recommendation || m.data.action) && <div style={{ fontSize: 13, fontWeight: 700, color: riskColors[Math.min(m.data.risk_level, 3)], marginTop: 8 }}>👉 {m.data.recommendation || m.data.action}</div>}
+                    {m.data.what_doing && (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9BA3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Что делает мошенник</div>
+                        <div style={{ fontSize: 13, color: '#16161A', lineHeight: 1.5 }}>{m.data.what_doing}</div>
+                      </div>
+                    )}
+                    {m.data.risk_description && (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9BA3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Риски</div>
+                        <div style={{ fontSize: 13, color: '#16161A', lineHeight: 1.5 }}>{m.data.risk_description}</div>
+                      </div>
+                    )}
+                    {m.data.consequences && (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9BA3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Последствия</div>
+                        <div style={{ fontSize: 13, color: '#16161A', lineHeight: 1.5 }}>{m.data.consequences}</div>
+                      </div>
+                    )}
+                    {m.data.recommendation && (
+                      <div style={{ background: 'rgba(0,0,0,0.05)', borderRadius: 10, padding: '10px 12px', marginTop: 4 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9BA3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Рекомендация</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: riskColors[Math.min(m.data.risk_level || 0, 5)], lineHeight: 1.5 }}>👉 {m.data.recommendation}</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -2225,37 +2286,41 @@ function StopMoshennnikSheet({ onClose, onAsk }) {
             </div>
           ))}
           {pending && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#C0392B,#E74C3C)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🛡️</div>
-              <div style={{ padding: '10px 14px', background: '#F5F5F1', borderRadius: 18, borderBottomLeftRadius: 4 }}>
+              <div style={{ padding: '12px 16px', background: '#F5F5F1', borderRadius: 18, borderBottomLeftRadius: 4 }}>
                 <div className="typing"><i/><i/><i/></div>
               </div>
             </div>
           )}
         </div>
-        <div style={{ padding: '8px 16px 0', flexShrink: 0, display: 'flex', gap: 6 }}>
-          <button onClick={() => setActiveType('text')} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: '1.5px solid', borderColor: activeType==='text' ? '#FFCDD2' : 'transparent', background: activeType==='text' ? '#FFF0F0' : '#F5F5F1', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: activeType==='text' ? '#C0392B' : '#9B9BA3', fontFamily: 'inherit' }}>
-            Ссылка
+
+        <div style={{ padding: '8px 16px 0', flexShrink: 0, display: 'flex', gap: 6, overflowX: 'auto' }}>
+          <button onClick={handlePhoto} style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 20, border: 'none', background: '#F5F5F1', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B6B72', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
+            📷 Скриншот
           </button>
-          <button onClick={handlePhoto} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: '1.5px solid transparent', background: '#F5F5F1', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: '#9B9BA3', fontFamily: 'inherit' }}>
-            Скриншот
+          <button onClick={handleAudio} style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 20, border: 'none', background: '#F5F5F1', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B6B72', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
+            🎵 Аудио
           </button>
-          <button onClick={handleVoice} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: '1.5px solid transparent', background: '#F5F5F1', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: '#9B9BA3', fontFamily: 'inherit' }}>
-            Голос
+          <button onClick={handleVoice} style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 20, border: 'none', background: '#F5F5F1', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B6B72', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
+            🎤 Голос
           </button>
         </div>
+
         <div style={{ padding: '10px 16px 24px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, background: '#F5F5F1', borderRadius: 16, padding: '10px 10px 10px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, background: '#F5F5F1', borderRadius: 16, padding: '10px 10px 10px 14px' }}>
             <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
               onInput={e => { e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
-              onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();analyze(input);} }}
-              placeholder="Вставьте текст или ссылку…"
+              onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); input.startsWith('http') ? handleUrl() : (facts.length > 0 ? askQuestion() : handleText()); } }}
+              placeholder={facts.length > 0 ? "Задайте уточняющий вопрос…" : "Опишите ситуацию или вставьте ссылку…"}
               rows={1}
               style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:14, fontFamily:'inherit', color:'var(--text)', resize:'none', minHeight:22, maxHeight:100 }}
             />
-            <button onClick={() => analyze(input)} style={{ width:38, height:38, borderRadius:12, background:'#C0392B', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <button
+              onClick={() => input.startsWith('http') ? handleUrl() : (facts.length > 0 ? askQuestion() : handleText())}
+              style={{ width:38, height:38, borderRadius:12, background:'#C0392B', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
               <IconSend size={16} sw={2.5} color="white"/>
             </button>
           </div>
@@ -2264,6 +2329,7 @@ function StopMoshennnikSheet({ onClose, onAsk }) {
     </>
   );
 }
+
 
 function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoiceClear }) {
   const [q, setQ] = React.useState('');
