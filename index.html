@@ -2241,11 +2241,11 @@ function FinanceScreen({ onAsk, onMode }) {
 
       <div className="section" style={{ paddingTop: 10 }}>
         <div className="modes">
-          <button className="mode" onClick={() => onMode && onMode('doc')}>
+          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='.pdf,.doc,.docx,.txt,image/*'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f && onAsk) onAsk('Помогите разобрать документ: '+f.name); }; i.click(); }}>
             <span className="mode-icon"><IconDoc size={22}/></span>
             <span className="mode-label">Документ</span>
           </button>
-          <button className="mode" onClick={() => onMode && onMode('photo')}>
+          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f && onAsk) onAsk('Что на этом фото?'); }; i.click(); }}>
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Фото</span>
           </button>
@@ -2321,7 +2321,7 @@ function HealthScreen({ onAsk, onMode }) {
             <span className="mode-icon"><IconDoc size={22}/></span>
             <span className="mode-label">Анализ</span>
           </button>
-          <button className="mode" onClick={() => onMode && onMode('photo')}>
+          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f && onAsk) onAsk('Что на этом фото?'); }; i.click(); }}>
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Фото</span>
           </button>
