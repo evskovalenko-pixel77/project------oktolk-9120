@@ -2111,11 +2111,30 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
 
       <div className="section" style={{ paddingTop: 10 }}>
         <div className="modes">
-          <button className="mode" onClick={() => onMode('doc')}>
+          <button className="mode" onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.pdf,.doc,.docx,.txt,image/*';
+            input.onchange = (e) => {
+              const file = e.target.files[0];
+              if (file) onAsk('Помогите разобрать документ: ' + file.name);
+            };
+            input.click();
+          }}>
             <span className="mode-icon"><IconDoc size={22}/></span>
             <span className="mode-label">Документ</span>
           </button>
-          <button className="mode" onClick={() => onMode('photo')}>
+          <button className="mode" onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.capture = 'environment';
+            input.onchange = (e) => {
+              const file = e.target.files[0];
+              if (file) onAsk('Что на этом фото?');
+            };
+            input.click();
+          }}>
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Фото</span>
           </button>
