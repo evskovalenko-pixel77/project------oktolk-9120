@@ -18,6 +18,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 AITUNNEL_API_KEY  = os.getenv("AITUNNEL_API_KEY", "")
 AITUNNEL_BASE_URL = os.getenv("AITUNNEL_BASE_URL", "https://api.aitunnel.ru/v1/")
 YANDEX_API_KEY    = os.getenv("YANDEX_API_KEY", "")
+DEEPSEEK_API_KEY  = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1/"
 SECRET_KEY        = os.getenv("SECRET_KEY", "oktolk-super-secret-key-2026-production")
 
 DB_HOST = os.getenv("DB_HOST", "amvera-kes-cnpg-oktolk-db-rw")
@@ -735,7 +737,13 @@ async def antiscam_analyze(req: AntiscamAnalyzeRequest):
     try:
         question_block = f"ВОПРОС ПОЛЬЗОВАТЕЛЯ: {req.question}" if req.question else ""
         prompt = ANALYZE_PROMPT.format(facts=req.facts, question_block=question_block)
-        result_text = call_gemini_text(prompt, max_tokens=600)
+        ds_key = DEEPSEEK_API_KEY or AITUNNEL_API_KEY
+        ds_base = DEEPSEEK_BASE_URL if DEEPSEEK_API_KEY else AITUNNEL_BASE_URL
+        ds_model = "deepseek-reasoner" if DEEPSEEK_API_KEY else "deepseek-r1-0528"
+        ds_headers = {"Authorization": f"Bearer {ds_key}", "Content-Type": "application/json"}
+        ds_data = {"model": ds_model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 1000}
+        ds_resp = requests.post(f"{ds_base}chat/completions", headers=ds_headers, json=ds_data, timeout=60)
+        result_text = ds_resp.json()["choices"][0]["message"]["content"].strip()
 
         import re as re_mod
         json_match = re_mod.search(r"\{.*\}", result_text, re_mod.DOTALL)

@@ -2085,9 +2085,7 @@ function TabBar({ active, onChange }) {
 // Home screen
 // ─────────────────────────────────────────────────────────────
 
-function StopMoshennnikSheet({ onClose, onAsk }) {
-  const [facts, setFacts] = React.useState([]);
-  const [messages, setMessages] = React.useState([]);
+function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, setFacts }) {
   const [pending, setPending] = React.useState(false);
   const [input, setInput] = React.useState('');
   const chatRef = React.useRef(null);
@@ -2299,6 +2297,9 @@ function StopMoshennnikSheet({ onClose, onAsk }) {
           <button onClick={handlePhoto} style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 20, border: 'none', background: '#F5F5F1', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B6B72', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
             📷 Скриншот
           </button>
+          <button onClick={handleUrl} style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 20, border: 'none', background: '#F5F5F1', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B6B72', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
+            🔗 Ссылка
+          </button>
           <button onClick={handleAudio} style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 20, border: 'none', background: '#F5F5F1', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B6B72', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
             🎵 Аудио
           </button>
@@ -2360,7 +2361,7 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
         <p className="greet-sub">Задайте вопрос, проверьте документ или сообщение на мошенничество.</p>
       </div>
 
-      <button className="stop-chip" onClick={() => setShowStop(true)} style={{ display: 'inline-flex', width: 'auto' }}>
+      <button className="stop-chip" onClick={() => onMode('stop')} style={{ display: 'inline-flex', width: 'auto' }}>
         <div className="stop-chip-icon">
           <IconShield size={14} sw={2.5}/>
         </div>
@@ -3343,11 +3344,14 @@ function App() {
   const onAsk = (text) => setChat(text || '');
   const [voiceResult, setVoiceResult] = React.useState(null);
   const onMode = (m) => {
-    if (m === 'voice') setOverlay('voice');
+    if (m === 'stop') setOverlay('stop');
+    else if (m === 'voice') setOverlay('voice');
     else if (m === 'photo') setChat('Распознать текст с фото');
     else if (m === 'doc') setChat('Помочь разобрать документ');
   };
   const [voiceText, setVoiceText] = React.useState(null);
+  const [stopMessages, setStopMessages] = React.useState([]);
+  const [stopFacts, setStopFacts] = React.useState([]);
   const onVoiceResult = (text) => {
     setOverlay(null);
     setVoiceText(text);
@@ -3372,6 +3376,7 @@ function App() {
         {chat !== null && <ChatOverlay initialMsg={chat} onClose={() => setChat(null)}/>}
         {overlay === 'profile' && <ProfileSheet onClose={() => setOverlay(null)}/>}
         {overlay === 'voice'   && <VoiceModal   onClose={() => setOverlay(null)} onResult={onVoiceResult}/>}
+        {overlay === 'stop' && <StopMoshennnikSheet onClose={() => setOverlay(null)} onAsk={onAsk} messages={stopMessages} setMessages={setStopMessages} facts={stopFacts} setFacts={setStopFacts}/>}
         {overlay === 'notif'   && <NotifSheet   onClose={() => setOverlay(null)}/>}
       </div>
     </React.Fragment>
