@@ -2130,13 +2130,15 @@ function StopMoshennnikSheet({ onClose, onAsk }) {
 
   const handlePhoto = () => {
     const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*';
+    input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
     input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onloadend = () => analyze(null, reader.result.split(',')[1], file.type);
-      reader.readAsDataURL(file);
+      const files = Array.from(e.target.files);
+      if (!files.length) return;
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = () => analyze(null, reader.result.split(',')[1], file.type);
+        reader.readAsDataURL(file);
+      });
     };
     input.click();
   };
