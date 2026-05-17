@@ -2278,8 +2278,8 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
   return (
     <>
       <div className="stop-sheet-overlay" onClick={onClose}/>
-      <div className="stop-sheet">
-        <div style={{ width: 40, height: 4, background: '#E0E0E8', borderRadius: 2, margin: '12px auto 0', flexShrink: 0 }}/>
+      <div className="stop-sheet" onTouchStart={(e) => { window._touchY = e.touches[0].clientY; }} onTouchEnd={(e) => { if (e.changedTouches[0].clientY - window._touchY > 60) onClose(); }}>
+        <div onClick={onClose} style={{ width: 40, height: 4, background: '#E0E0E8', borderRadius: 2, margin: '12px auto 0', flexShrink: 0, cursor: 'pointer' }}/>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 12px', borderBottom: '1px solid #F0F0EC', flexShrink: 0 }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #C0392B, #E74C3C)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
