@@ -2111,17 +2111,17 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
 
       <div className="section" style={{ paddingTop: 10 }}>
         <div className="modes">
-          <button className="mode" onClick={() => onMode('voice')}>
-            <span className="mode-icon"><IconMic size={22}/></span>
-            <span className="mode-label">Голос</span>
+          <button className="mode" onClick={() => onMode('doc')}>
+            <span className="mode-icon"><IconDoc size={22}/></span>
+            <span className="mode-label">Документ</span>
           </button>
           <button className="mode" onClick={() => onMode('photo')}>
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Фото</span>
           </button>
-          <button className="mode" onClick={() => onMode('doc')}>
-            <span className="mode-icon"><IconDoc size={22}/></span>
-            <span className="mode-label">Документ</span>
+          <button className="mode" onClick={() => onMode('voice')}>
+            <span className="mode-icon"><IconMic size={22}/></span>
+            <span className="mode-label">Голос</span>
           </button>
         </div>
       </div>
@@ -2222,17 +2222,17 @@ function FinanceScreen({ onAsk, onMode }) {
 
       <div className="section" style={{ paddingTop: 10 }}>
         <div className="modes">
-          <button className="mode" onClick={() => onMode && onMode('voice')}>
-            <span className="mode-icon"><IconMic size={22}/></span>
-            <span className="mode-label">Голос</span>
+          <button className="mode" onClick={() => onMode && onMode('doc')}>
+            <span className="mode-icon"><IconDoc size={22}/></span>
+            <span className="mode-label">Документ</span>
           </button>
           <button className="mode" onClick={() => onMode && onMode('photo')}>
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Фото</span>
           </button>
-          <button className="mode" onClick={() => onMode && onMode('doc')}>
-            <span className="mode-icon"><IconDoc size={22}/></span>
-            <span className="mode-label">Документ</span>
+          <button className="mode" onClick={() => onMode && onMode('voice')}>
+            <span className="mode-icon"><IconMic size={22}/></span>
+            <span className="mode-label">Голос</span>
           </button>
         </div>
       </div>
@@ -2298,17 +2298,17 @@ function HealthScreen({ onAsk, onMode }) {
 
       <div className="section" style={{ paddingTop: 10 }}>
         <div className="modes">
-          <button className="mode" onClick={() => onMode && onMode('voice')}>
-            <span className="mode-icon"><IconMic size={22}/></span>
-            <span className="mode-label">Голос</span>
+          <button className="mode" onClick={() => onMode && onMode('analyze')}>
+            <span className="mode-icon"><IconDoc size={22}/></span>
+            <span className="mode-label">Анализ</span>
           </button>
           <button className="mode" onClick={() => onMode && onMode('photo')}>
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Фото</span>
           </button>
-          <button className="mode" onClick={() => onMode && onMode('analyze')}>
-            <span className="mode-icon"><IconDoc size={22}/></span>
-            <span className="mode-label">Анализ</span>
+          <button className="mode" onClick={() => onMode && onMode('voice')}>
+            <span className="mode-icon"><IconMic size={22}/></span>
+            <span className="mode-label">Голос</span>
           </button>
         </div>
       </div>
@@ -2740,16 +2740,24 @@ function ChatOverlay({ initialMsg, onClose }) {
         </div>
         <div className="modes" style={{ marginTop: 8 }}>
           <button className="mode" onClick={() => {
-            if (voiceActive) { window.VoiceRecorder.stop(); setVoiceActive(false); return; }
-            setVoiceActive(true);
-            window.VoiceRecorder.start(
-              (text) => { setInput(prev => (prev ? prev + ' ' : '') + text); setVoiceActive(false); },
-              (err) => { setVoiceActive(false); },
-              () => { setVoiceActive(false); }
-            );
-          }} style={{ background: voiceActive ? 'var(--danger-tint)' : undefined }}>
-            <span className="mode-icon" style={{ color: voiceActive ? 'var(--danger)' : undefined, animation: voiceActive ? 'micPulse 1s ease-in-out infinite' : 'none' }}><IconMic size={22}/></span>
-            <span className="mode-label" style={{ color: voiceActive ? 'var(--danger)' : undefined }}>{voiceActive ? 'Стоп' : 'Голос'}</span>
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.pdf,.doc,.docx,.txt,image/*';
+            input.onchange = async (e) => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64 = reader.result.split(',')[1];
+                setMessages(m => [...m, { role: 'user', text: '📄 Документ отправлен на анализ: ' + file.name }]);
+                askClaudeWithImage(base64, file.type);
+              };
+              reader.readAsDataURL(file);
+            };
+            input.click();
+          }}>
+            <span className="mode-icon"><IconDoc size={22}/></span>
+            <span className="mode-label">Документ</span>
           </button>
           <button className="mode" onClick={() => {
             const input = document.createElement('input');
@@ -2773,24 +2781,16 @@ function ChatOverlay({ initialMsg, onClose }) {
             <span className="mode-label">Фото</span>
           </button>
           <button className="mode" onClick={() => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.pdf,.doc,.docx,.txt,image/*';
-            input.onchange = async (e) => {
-              const file = e.target.files[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64 = reader.result.split(',')[1];
-                setMessages(m => [...m, { role: 'user', text: '📄 Документ отправлен на анализ: ' + file.name }]);
-                askClaudeWithImage(base64, file.type);
-              };
-              reader.readAsDataURL(file);
-            };
-            input.click();
-          }}>
-            <span className="mode-icon"><IconDoc size={22}/></span>
-            <span className="mode-label">Документ</span>
+            if (voiceActive) { window.VoiceRecorder.stop(); setVoiceActive(false); return; }
+            setVoiceActive(true);
+            window.VoiceRecorder.start(
+              (text) => { setInput(prev => (prev ? prev + ' ' : '') + text); setVoiceActive(false); },
+              (err) => { setVoiceActive(false); },
+              () => { setVoiceActive(false); }
+            );
+          }} style={{ background: voiceActive ? 'var(--danger-tint)' : undefined }}>
+            <span className="mode-icon" style={{ color: voiceActive ? 'var(--danger)' : undefined, animation: voiceActive ? 'micPulse 1s ease-in-out infinite' : 'none' }}><IconMic size={22}/></span>
+            <span className="mode-label" style={{ color: voiceActive ? 'var(--danger)' : undefined }}>{voiceActive ? 'Стоп' : 'Голос'}</span>
           </button>
         </div>
       </div>
