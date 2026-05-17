@@ -2102,13 +2102,22 @@ function StopMoshennnikSheet({ onClose, onAsk }) {
     setMessages(m => [...m, { role: 'user', text: userMsg }]);
     setInput('');
     setPending(true);
+
+    // Собираем контекст из предыдущих сообщений
+    const context = messages.slice(-6).map(m => {
+      if (m.role === 'user') return 'Пользователь: ' + m.text;
+      if (m.type === 'verdict' && m.data) return 'AI вердикт: риск ' + m.data.risk_level + '/5 - ' + m.data.summary;
+      if (m.text) return 'AI: ' + m.text;
+      return '';
+    }).filter(Boolean).join('\n');
+
     try {
       let result;
       if (imageBase64) {
         const res = await fetch('/api/v1/chat/image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image_base64: imageBase64, mime_type: mimeType })
+          body: JSON.stringify({ image_base64: imageBase64, mime_type: mimeType, context })
         });
         result = await res.json();
         if (result.risk_level !== undefined) {
@@ -2120,7 +2129,7 @@ function StopMoshennnikSheet({ onClose, onAsk }) {
         const res = await fetch('/api/v1/analyze/text', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
+          body: JSON.stringify({ text, context })
         });
         result = await res.json();
         setMessages(m => [...m, { role: 'ai', type: 'verdict', data: result }]);

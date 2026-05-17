@@ -162,6 +162,7 @@ class ChatRequest(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     text: str
+    context: Optional[str] = None
 
 class HealthRecordRequest(BaseModel):
     type: str        # pressure / pulse / sugar / note
@@ -276,7 +277,10 @@ async def analyze_v1(req: AnalyzeRequest):
 
 АНАЛИЗИРУЙ ВНУТРИ: тип схемы, психологические триггеры, технические признаки, логические противоречия
 
-ТЕКСТ:
+ПРЕДЫДУЩИЙ КОНТЕКСТ (учти при анализе):
+{req.context if req.context else "нет"}
+
+ТЕКСТ ДЛЯ АНАЛИЗА:
 {req.text}
 
 Ответь ТОЛЬКО JSON:
@@ -525,6 +529,7 @@ async def text_to_speech(req: TTSRequest):
 class ImageChatRequest(BaseModel):
     image_base64: str
     mime_type: str = "image/jpeg"
+    context: Optional[str] = None
 
 @app.post("/api/v1/chat/image")
 async def chat_with_image(req: ImageChatRequest):
