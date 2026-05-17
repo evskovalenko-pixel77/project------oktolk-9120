@@ -2275,7 +2275,7 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
         <p className="greet-sub">Задайте вопрос, проверьте документ или сообщение на мошенничество.</p>
       </div>
 
-      <button className="stop-chip" onClick={() => setShowStop(true)}>
+      <button className="stop-chip" onClick={() => setShowStop(true)} style={{ display: 'inline-flex', width: 'auto' }}>
         <div className="stop-chip-icon">
           <IconShield size={14} sw={2.5}/>
         </div>
