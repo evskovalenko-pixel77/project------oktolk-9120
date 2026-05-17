@@ -2278,8 +2278,8 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
   return (
     <>
       <div className="stop-sheet-overlay" onClick={onClose}/>
-      <div className="stop-sheet" onTouchStart={(e) => { window._touchY = e.touches[0].clientY; }} onTouchEnd={(e) => { if (e.changedTouches[0].clientY - window._touchY > 60) onClose(); }}>
-        <div onClick={onClose} style={{ width: 40, height: 4, background: '#E0E0E8', borderRadius: 2, margin: '12px auto 0', flexShrink: 0, cursor: 'pointer' }}/>
+      <div className="stop-sheet">
+        <div onClick={onClose} onTouchStart={(e) => { window._touchY = e.touches[0].clientY; }} onTouchEnd={(e) => { if (e.changedTouches[0].clientY - window._touchY > 40) onClose(); }} style={{ width: 40, height: 4, background: '#E0E0E8', borderRadius: 2, margin: '12px auto 0', flexShrink: 0, cursor: 'pointer', touchAction: 'none' }}/>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 12px', borderBottom: '1px solid #F0F0EC', flexShrink: 0 }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #C0392B, #E74C3C)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2352,8 +2352,9 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
                     {m.text}
                   </div>
                   {m.role === 'ai' && (
-                    <button onClick={() => navigator.clipboard.writeText(m.text)} style={{ position: 'absolute', top: 4, right: -28, width: 22, height: 22, borderRadius: 6, border: 'none', background: '#E8E8E4', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.7 }}>
+                    <button onClick={() => { navigator.clipboard.writeText(m.text); }} style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '3px 8px', borderRadius: 6, border: 'none', background: '#E8E8E4', cursor: 'pointer', fontSize: 11, color: '#6B6B72', fontFamily: 'inherit' }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B6B72" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      Копировать
                     </button>
                   )}
                 </div>
