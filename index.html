@@ -2544,6 +2544,22 @@ function RecentCard({ onAsk }) {
 // ─────────────────────────────────────────────────────────────
 function FinanceScreen({ onAsk, onMode }) {
   const [input, setInput] = React.useState('');
+  const [summary, setSummary] = React.useState({});
+  const [total, setTotal] = React.useState(0);
+  React.useEffect(() => {
+    const token = localStorage.getItem('oktolk_token');
+    if (!token) return;
+    fetch('/api/v1/finance/summary', { headers: { Authorization: 'Bearer ' + token } })
+      .then(r => r.json())
+      .then(data => {
+        const map = {};
+        let t = 0;
+        (data.categories || []).forEach(c => { map[c.category] = c.total; t += c.total; });
+        setSummary(map);
+        setTotal(t);
+      }).catch(() => {});
+  }, []);
+  const catMap = { 'Магазины': 'shop', 'Медицина': 'pharmacy', 'Коммуналка': 'utility', 'Кредиты': 'credit', 'Транспорт': 'transport', 'Досуг': 'leisure' };
   const cats = [
     { icon: IconCart,     label: 'Магазины' },
     { icon: IconPill,     label: 'Медицина' },
@@ -2574,7 +2590,8 @@ function FinanceScreen({ onAsk, onMode }) {
                 <span style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--primary-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <CI size={22} color="var(--primary)"/>
                 </span>
-                <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>{c.label}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{c.label}</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: summary[catMap[c.label]] ? 'var(--text)' : 'var(--text-subtle)' }}>{summary[catMap[c.label]] ? summary[catMap[c.label]].toLocaleString('ru') + ' ₽' : '— ₽'}</span>
               </button>
             );
           })}
