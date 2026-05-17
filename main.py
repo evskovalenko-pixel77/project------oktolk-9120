@@ -754,4 +754,55 @@ async def antiscam_analyze(req: AntiscamAnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка анализа: {str(e)}")
 
+
+class AntiscamChatRequest(BaseModel):
+    facts: str
+    question: str
+    history: Optional[list] = []
+
+@app.post("/api/v1/antiscam/chat")
+async def antiscam_chat(req: AntiscamChatRequest):
+    """Диалог в контексте антискам анализа"""
+    if not AITUNNEL_API_KEY:
+        raise HTTPException(status_code=503, detail="AI недоступен")
+    try:
+        system = """Ты консультант по защите от мошенников OkTolk.
+Ты уже проанализировал материалы пользователя и знаешь контекст ситуации.
+Действуй как опытный следователь и помощник одновременно.
+
+ПРАВИЛА:
+- Если вопрос простой — отвечай коротко и по делу
+- Если ситуация сложная — задай уточняющий вопрос чтобы дать точный совет
+- Если человек уже перевёл деньги или передал данные — дай пошаговый план действий прямо сейчас
+- Если человек спрашивает что делать — давай конкретные действия, не общие слова
+- Говори простым языком без терминов
+- Никогда не говори "я не могу помочь" — всегда давай конкретный совет или задай уточняющий вопрос
+
+ЕСЛИ ЧЕЛОВЕК УЖЕ ПОСТРАДАЛ:
+1. Сначала скажи что нужно сделать ПРЯМО СЕЙЧАС (заблокировать карту, сменить пароль и т.д.)
+2. Потом объясни следующие шаги (куда обратиться, как вернуть деньги)
+3. Предупреди о возможных дальнейших попытках мошенников"""
+
+        messages = [{"role": "system", "content": system}]
+        messages.append({"role": "user", "content": f"Контекст проверки:\n{req.facts}"})
+        messages.append({"role": "assistant", "content": "Понял, я изучил материалы. Задавайте вопросы."})
+        
+        for h in (req.history or [])[-6:]:
+            if h.get("role") and h.get("content"):
+                messages.append({"role": h["role"], "content": h["content"]})
+        
+        messages.append({"role": "user", "content": req.question})
+
+        headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+        data = {
+            "model": "gemini-2.5-flash-lite",
+            "messages": messages,
+            "max_tokens": 400
+        }
+        response = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
+        reply = response.json()["choices"][0]["message"]["content"].strip()
+        return {"reply": reply}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
 app.mount("/", StaticFiles(directory=".", html=True), name="static")

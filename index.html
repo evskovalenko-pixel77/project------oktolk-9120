@@ -2221,24 +2221,35 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
     );
   };
 
+  const chatHistory = React.useRef([]);
+
   const askQuestion = async () => {
-    if (!input.trim() || facts.length === 0) return;
+    if (!input.trim()) return;
     const q = input.trim();
     setMessages(m => [...m, { role: 'user', text: q }]);
+    chatHistory.current.push({ role: 'user', content: q });
     setInput('');
     setPending(true);
+    setAnalysisStep('Думаю…');
     try {
-      const res = await fetch('/api/v1/antiscam/analyze', {
+      const res = await fetch('/api/v1/antiscam/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ facts: allFacts, question: q })
+        body: JSON.stringify({
+          facts: allFacts || 'Контекст не задан',
+          question: q,
+          history: chatHistory.current.slice(-10)
+        })
       });
       const result = await res.json();
-      setMessages(m => [...m, { role: 'ai', type: 'verdict', data: result }]);
+      const reply = result.reply || 'Не удалось получить ответ';
+      chatHistory.current.push({ role: 'assistant', content: reply });
+      setMessages(m => [...m, { role: 'ai', type: 'text', text: reply }]);
     } catch(e) {
       setMessages(m => [...m, { role: 'ai', text: 'Ошибка. Попробуйте снова.', type: 'text' }]);
     } finally {
       setPending(false);
+      setAnalysisStep('');
     }
   };
 
