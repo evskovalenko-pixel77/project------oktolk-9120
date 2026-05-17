@@ -549,7 +549,7 @@ async def chat_with_image(req: ImageChatRequest):
                         },
                         {
                             "type": "text",
-                            "text": "Опиши что на изображении простым языком. Если это документ — объясни его суть. Если это переписка или сообщение — проверь на мошенничество. Отвечай по-русски, просто и понятно."
+                            "text": "Извлеки из изображения ТОЛЬКО факты для анализа на мошенничество: что предлагают, какие суммы упоминаются, что просят сделать, какие обещания дают. Не описывай изображение. Только факты списком."
                         }
                     ]
                 }
@@ -563,8 +563,38 @@ async def chat_with_image(req: ImageChatRequest):
             timeout=30
         )
         result = response.json()
-        reply = result["choices"][0]["message"]["content"].strip()
-        return {"reply": reply}
+        facts = result["choices"][0]["message"]["content"].strip()
+
+        # Шаг 2 — антискам анализ фактов
+        antiscam_data = {
+            "model": "gemini-2.5-flash-lite",
+            "messages": [{"role": "user", "content": f"""Ты антискам система. Проанализируй факты и дай краткий вердикт.
+
+ФАКТЫ:
+{facts}
+
+Ответь ТОЛЬКО JSON:
+{{"risk_level": 0, "summary": "1 предложение - есть угроза или нет", "how_they_manipulate": "как пытаются обмануть или null", "consequences": "к чему может привести или null", "recommendation": "одно конкретное действие"}}
+
+ШКАЛА: 0=безопасно 1=минимальный 2=подозрения 3=высокий 4=очень высокий 5=явное мошенничество
+Только JSON."""}],
+            "max_tokens": 300
+        }
+        antiscam_response = requests.post(
+            f"{AITUNNEL_BASE_URL}chat/completions",
+            headers=headers,
+            json=antiscam_data,
+            timeout=30
+        )
+        antiscam_result = antiscam_response.json()
+        reply_text = antiscam_result["choices"][0]["message"]["content"].strip()
+
+        import re as re2
+        json_match = re2.search(r'\{.*\}', reply_text, re2.DOTALL)
+        if json_match:
+            parsed = json.loads(json_match.group())
+            return parsed
+        return {"reply": reply_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
