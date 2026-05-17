@@ -263,18 +263,64 @@ async def chat_v1(req: ChatRequest):
 # Antiscam
 @app.post("/api/v1/analyze/text")
 async def analyze_v1(req: AnalyzeRequest):
-    scam_keywords = ["код из смс", "переведи деньги", "данные карты", "номер карты", "cvv", "пин-код", "срочно переведи", "выиграли", "одобрен кредит", "заблокирован счет"]
-    text_lower = req.text.lower()
-    risk_level = 0
-    signs = []
-    for kw in scam_keywords:
-        if kw in text_lower:
-            risk_level = 3
-            signs.append(f"Обнаружено: '{kw}'")
-    labels = ["Безопасно", "Подозрительно", "Опасно", "Мошенники!"]
-    return {"risk_level": risk_level, "risk_label": labels[min(risk_level, 3)], "signs": signs,
-            "summary": "СТОП! Мошенники!" if risk_level == 3 else "Проверьте ещё раз",
-            "action": "Заблокируйте отправителя" if risk_level == 3 else "Будьте осторожны"}
+    if not AITUNNEL_API_KEY:
+        raise HTTPException(status_code=503, detail="AI недоступен")
+    try:
+        prompt = f"""Ты эксперт по защите от мошенников. Проанализируй текст и определи риск мошенничества.
+
+Текст для анализа:
+{req.text}
+
+Ответь СТРОГО в формате JSON:
+{{
+  "risk_level": 0-3,
+  "risk_label": "Безопасно" или "Подозрительно" или "Опасно" или "Мошенники!",
+  "summary": "Краткий вывод простым языком (1-2 предложения)",
+  "signs": ["признак 1", "признак 2"],
+  "action": "Что делать пользователю"
+}}
+
+Уровни риска:
+0 - Безопасно
+1 - Подозрительно  
+2 - Опасно
+3 - Мошенники!
+
+Отвечай только JSON, без пояснений."""
+
+        headers = {{"Authorization": f"Bearer {{AITUNNEL_API_KEY}}", "Content-Type": "application/json"}}
+        data = {{
+            "model": "gemini-2.5-flash-lite",
+            "messages": [{{"role": "user", "content": prompt}}],
+            "max_tokens": 500
+        }}
+        response = requests.post(f"{{AITUNNEL_BASE_URL}}chat/completions", headers=headers, json=data, timeout=30)
+        result = response.json()
+        text = result["choices"][0]["message"]["content"].strip()
+        
+        # Чистим JSON
+        import re
+        json_match = re.search(r'\{{.*\}}', text, re.DOTALL)
+        if json_match:
+            parsed = json.loads(json_match.group())
+        else:
+            parsed = json.loads(text)
+        
+        return parsed
+    except Exception as e:
+        # Fallback на ключевые слова
+        scam_keywords = ["код из смс", "переведи деньги", "данные карты", "номер карты", "cvv", "пин-код", "срочно переведи", "выиграли", "одобрен кредит", "заблокирован счет"]
+        text_lower = req.text.lower()
+        risk_level = 0
+        signs = []
+        for kw in scam_keywords:
+            if kw in text_lower:
+                risk_level = 3
+                signs.append(f"Обнаружено: '{{kw}}'")
+        labels = ["Безопасно", "Подозрительно", "Опасно", "Мошенники!"]
+        return {{"risk_level": risk_level, "risk_label": labels[min(risk_level, 3)], "signs": signs,
+                "summary": "СТОП! Мошенники!" if risk_level == 3 else "Проверьте ещё раз",
+                "action": "Заблокируйте отправителя" if risk_level == 3 else "Будьте осторожны"}}
 
 # Health
 @app.get("/api/v1/health/records")
