@@ -389,7 +389,8 @@ button { font-family: inherit; }
   background: #fff; border-radius: 28px 28px 0 0;
   z-index: 500; box-shadow: 0 -8px 40px rgba(0,0,0,0.15);
   display: flex; flex-direction: column;
-  max-height: 88%;
+  max-height: 95%;
+  height: 95%;
 }
 .stop-sheet-overlay {
   position: fixed; inset: 0;
@@ -2251,6 +2252,25 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
     }
   };
 
+  // Цвета: зелёный=безопасно, жёлтый=мало данных/подозрительно, красный=опасно
+  const getRiskColor = (level, confidence) => {
+    if (confidence === 'низкая') return '#D97706';
+    if (level === 0) return '#1F8A5B';
+    if (level <= 2) return '#D97706';
+    return '#C0392B';
+  };
+  const getRiskBg = (level, confidence) => {
+    if (confidence === 'низкая') return '#FEF3C7';
+    if (level === 0) return '#D1FAE5';
+    if (level <= 2) return '#FEF3C7';
+    return '#FFE5E5';
+  };
+  const getRiskEmoji = (level, confidence) => {
+    if (confidence === 'низкая') return '🟡';
+    if (level === 0) return '✅';
+    if (level <= 2) return '⚠️';
+    return '🚨';
+  };
   const riskColors = { 0: '#1F8A5B', 1: '#D97706', 2: '#D97706', 3: '#C0392B', 4: '#C0392B', 5: '#C0392B' };
   const riskBg = { 0: '#D1FAE5', 1: '#FEF3C7', 2: '#FEF3C7', 3: '#FFE5E5', 4: '#FFE5E5', 5: '#FFE5E5' };
   const riskEmoji = { 0: '✅', 1: '🔶', 2: '⚠️', 3: '🚨', 4: '🚨', 5: '🚨' };
@@ -2294,9 +2314,10 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
               )}
               {m.type === 'verdict' && m.data ? (
                 <div style={{ maxWidth: '88%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ background: riskBg[Math.min(m.data.risk_level || 0, 5)], border: `1.5px solid ${riskColors[Math.min(m.data.risk_level || 0, 5)]}44`, borderRadius: 16, padding: '14px 16px' }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, color: riskColors[Math.min(m.data.risk_level || 0, 5)], marginBottom: 10 }}>
-                      {riskEmoji[Math.min(m.data.risk_level || 0, 5)]} Риск: {m.data.risk_level}/5
+                  <div style={{ background: getRiskBg(m.data.risk_level || 0, m.data.confidence), border: `1.5px solid ${getRiskColor(m.data.risk_level || 0, m.data.confidence)}44`, borderRadius: 16, padding: '14px 16px' }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, color: getRiskColor(m.data.risk_level || 0, m.data.confidence), marginBottom: 10 }}>
+                      {getRiskEmoji(m.data.risk_level || 0, m.data.confidence)} Риск: {m.data.risk_level}/5
+                      {m.data.confidence === 'низкая' && <span style={{ fontSize: 11, fontWeight: 600, marginLeft: 8, color: '#D97706' }}>· нужно больше данных</span>}
                       {m.data.scheme && <span style={{ fontSize: 11, fontWeight: 600, marginLeft: 8, opacity: 0.8 }}>· {m.data.scheme}</span>}
                     </div>
                     {m.data.what_doing && (
@@ -2320,14 +2341,21 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
                     {m.data.recommendation && (
                       <div style={{ background: 'rgba(0,0,0,0.05)', borderRadius: 10, padding: '10px 12px', marginTop: 4 }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9BA3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Рекомендация</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: riskColors[Math.min(m.data.risk_level || 0, 5)], lineHeight: 1.5 }}>👉 {m.data.recommendation}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: getRiskColor(m.data.risk_level || 0, m.data.confidence), lineHeight: 1.5 }}>👉 {m.data.recommendation}</div>
                       </div>
                     )}
                   </div>
                 </div>
               ) : (
-                <div style={{ maxWidth: '78%', padding: '10px 14px', borderRadius: 18, fontSize: 13, lineHeight: 1.5, background: m.role === 'user' ? '#3B4FE0' : '#F5F5F1', color: m.role === 'user' ? '#fff' : '#16161A', borderBottomRightRadius: m.role === 'user' ? 4 : 18, borderBottomLeftRadius: m.role === 'ai' ? 4 : 18 }}>
-                  {m.text}
+                <div style={{ maxWidth: '82%', position: 'relative' }}>
+                  <div style={{ padding: '10px 14px', borderRadius: 18, fontSize: 13, lineHeight: 1.7, background: m.role === 'user' ? '#3B4FE0' : '#F5F5F1', color: m.role === 'user' ? '#fff' : '#16161A', borderBottomRightRadius: m.role === 'user' ? 4 : 18, borderBottomLeftRadius: m.role === 'ai' ? 4 : 18, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {m.text}
+                  </div>
+                  {m.role === 'ai' && (
+                    <button onClick={() => navigator.clipboard.writeText(m.text)} style={{ position: 'absolute', top: 4, right: -28, width: 22, height: 22, borderRadius: 6, border: 'none', background: '#E8E8E4', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.7 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B6B72" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
