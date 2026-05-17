@@ -2129,7 +2129,7 @@ function StopMoshennnikSheet({ onClose, onAsk }) {
 
   const handlePhoto = () => {
     const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
+    input.type = 'file'; input.accept = 'image/*';
     input.onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -2216,7 +2216,7 @@ function StopMoshennnikSheet({ onClose, onAsk }) {
         </div>
         <div style={{ padding: '8px 16px 0', flexShrink: 0, display: 'flex', gap: 6 }}>
           <button onClick={() => setActiveType('text')} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: '1.5px solid', borderColor: activeType==='text' ? '#FFCDD2' : 'transparent', background: activeType==='text' ? '#FFF0F0' : '#F5F5F1', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: activeType==='text' ? '#C0392B' : '#9B9BA3', fontFamily: 'inherit' }}>
-            Текст / ссылка
+            Ссылка
           </button>
           <button onClick={handlePhoto} style={{ flex: 1, padding: '7px 4px', borderRadius: 10, border: '1.5px solid transparent', background: '#F5F5F1', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: '#9B9BA3', fontFamily: 'inherit' }}>
             Скриншот
