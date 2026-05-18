@@ -2649,7 +2649,7 @@ function FinanceScreen({ onAsk, onMode }) {
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', font: 'inherit', fontSize: 15, color: 'var(--text)', resize: 'none', minHeight: 22, maxHeight: 120, overflowY: 'auto', padding: '2px 0' }}
             onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
           />
-          <button className="composer-send" aria-label="Отправить" onClick={sendFinance}>
+          <button className="composer-send" aria-label="Отправить" onClick={() => sendFinance(null, null, null)}>
             <IconSend size={18} sw={2}/>
           </button>
         </div>
