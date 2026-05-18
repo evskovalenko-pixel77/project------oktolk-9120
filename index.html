@@ -2438,7 +2438,7 @@ function WeatherWidget() {
   }, []);
   if (!w) return null;
   return (
-    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:20, padding:'18px 20px', maxWidth:'68%', animation:'weatherIn 0.4s ease-out' }}>
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:20, padding:'16px 18px', width:'75%', alignSelf:'flex-start', animation:'weatherIn 0.4s ease-out' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:44, lineHeight:1 }}>{w.ti}</span>
