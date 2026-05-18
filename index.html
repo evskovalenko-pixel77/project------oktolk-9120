@@ -2793,9 +2793,9 @@ function FinanceScreen({ onAsk, onMode }) {
     { icon: IconSparkles, label: 'Досуг' },
   ];
   if (selectedCat) return <CategoryDetailScreen cat={selectedCat} summary={summary} onBack={() => setSelectedCat(null)} onAsk={onAsk}/>;
+  if (selectedCat) return <CategoryDetailScreen cat={selectedCat} summary={summary} onBack={() => setSelectedCat(null)} onAsk={onAsk}/>;
   return (
-    if (selectedCat) return <CategoryDetailScreen cat={selectedCat} summary={summary} onBack={() => setSelectedCat(null)} onAsk={onAsk}/>;
-    return <div className="screen">
+    <div className="screen">
       <div style={{ padding: '4px 0' }}>
         <div className="hero indigo">
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>Мои финансы</div>
