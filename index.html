@@ -2441,15 +2441,17 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
         <p className="greet-sub">Задайте вопрос, проверьте документ или сообщение на мошенничество.</p>
       </div>
 
-      <button className="stop-chip" onClick={() => onMode('stop')} style={{ display: 'inline-flex', width: 'auto' }}>
-        <div className="stop-chip-icon">
-          <IconShield size={14} sw={2.5}/>
-        </div>
-        Стоп Мошенник
-      </button>
       {showStop && <StopMoshennnikSheet onClose={() => setShowStop(false)} onAsk={onAsk}/>}
-
-      <div className="section" style={{ paddingTop: 18, marginTop: 'auto' }}>
+      <div style={{ marginTop: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 12 }}>
+          <button className="stop-chip" onClick={() => onMode('stop')} style={{ display: 'inline-flex', width: 'auto' }}>
+            <div className="stop-chip-icon">
+              <IconShield size={14} sw={2.5}/>
+            </div>
+            Стоп Мошенник
+          </button>
+        </div>
+        <div className="section" style={{ paddingTop: 0 }}>
         <div className="composer" style={{ margin: 0 }}>
           <textarea
             ref={inputRef}
@@ -2469,7 +2471,7 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
         </div>
       </div>
 
-      <div className="section" style={{ paddingTop: 10 }}>
+        <div className="section" style={{ paddingTop: 10 }}>
         <div className="modes">
           <button className="mode" onClick={() => {
             const input = document.createElement('input');
@@ -2504,7 +2506,7 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
           </button>
         </div>
       </div>
-
+      </div>
 
     </div>
   );
@@ -2656,7 +2658,7 @@ function FinanceScreen({ onAsk, onMode }) {
         </div>
       </div>
 
-      <div className="section" style={{ paddingTop: 10 }}>
+        <div className="section" style={{ paddingTop: 10 }}>
         <div className="modes">
           <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='.pdf,.doc,.docx,.txt,image/*'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f && onAsk) onAsk('Помогите разобрать документ: '+f.name); }; i.click(); }}>
             <span className="mode-icon"><IconDoc size={22}/></span>
@@ -2732,7 +2734,7 @@ function HealthScreen({ onAsk, onMode }) {
         </div>
       </div>
 
-      <div className="section" style={{ paddingTop: 10 }}>
+        <div className="section" style={{ paddingTop: 10 }}>
         <div className="modes">
           <button className="mode" onClick={() => onMode && onMode('analyze')}>
             <span className="mode-icon"><IconDoc size={22}/></span>
