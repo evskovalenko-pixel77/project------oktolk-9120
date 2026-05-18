@@ -2443,7 +2443,8 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
       </div>
 
       {showStop && <StopMoshennnikSheet onClose={() => setShowStop(false)} onAsk={onAsk}/>}
-      <div style={{ marginTop: 'auto' }}>
+      <div style={{ flex: 1 }}></div>
+      <div style={{ paddingBottom: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 12 }}>
           <button className="stop-chip" onClick={() => onMode('stop')} style={{ display: 'inline-flex', width: 'auto' }}>
             <div className="stop-chip-icon">
