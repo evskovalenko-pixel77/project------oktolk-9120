@@ -2566,9 +2566,8 @@ function FinanceScreen({ onAsk, onMode }) {
     const text = textOverride || input.trim();
     if (!text && !imageBase64) return;
     setInput('');
-    const token = localStorage.getItem('oktolk_token');
-    const userId = parseInt(localStorage.getItem('oktolk_user_id') || '0');
-    if (!token || !userId) { setNotification({ type: 'err', text: 'Войдите в аккаунт для сохранения' }); return; }
+    const token = localStorage.getItem('oktolk_token') || 'demo';
+    const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
     try {
       const body = { user_id: userId };
       if (imageBase64) { body.image_base64 = imageBase64; body.mime_type = mimeType; }
