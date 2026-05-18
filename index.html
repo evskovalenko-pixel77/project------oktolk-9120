@@ -121,6 +121,8 @@ button { font-family: inherit; }
 .app-scroll {
   flex: 1 1 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
@@ -835,6 +837,7 @@ button { font-family: inherit; }
   flex-direction: column;
   gap: 14px;
   animation: screenIn 0.25s ease-out;
+  flex: 1;
 }
 @keyframes screenIn {
   from { opacity: 0; transform: translateY(8px); }
@@ -2442,7 +2445,6 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
       </div>
 
       {showStop && <StopMoshennnikSheet onClose={() => setShowStop(false)} onAsk={onAsk}/>}
-      <div style={{ flex: 1 }}></div>
       <div style={{ paddingBottom: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 12 }}>
           <button className="stop-chip" onClick={() => onMode('stop')} style={{ display: 'inline-flex', width: 'auto' }}>
