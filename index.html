@@ -2607,7 +2607,7 @@ function FinanceScreen({ onAsk, onMode }) {
         <div className="hero indigo">
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>Мои финансы</div>
           <div className="hero-title">Расходы за май</div>
-          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>0 ₽ · доход — · остаток —</div>
+          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>{total > 0 ? total.toLocaleString('ru') + ' ₽' : '0 ₽'} · расходы за май</div>
           <button className="btn-primary" style={{ marginTop: 18, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
             <IconCreditCard size={18}/>Добавить расход<IconArrowRight size={16}/>
           </button>
