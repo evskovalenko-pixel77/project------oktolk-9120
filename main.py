@@ -812,4 +812,67 @@ async def antiscam_chat(req: AntiscamChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
+
+# ── Finance AI Parser ────────────────────────────────────────────
+class FinanceParseRequest(BaseModel):
+    text: Optional[str] = None
+    image_base64: Optional[str] = None
+    mime_type: str = "image/jpeg"
+    user_id: int
+
+@app.post("/api/v1/finance/parse")
+async def finance_parse(req: FinanceParseRequest):
+    """AI парсинг финансовых данных из текста, голоса или фото чека"""
+    if not AITUNNEL_API_KEY:
+        raise HTTPException(status_code=503, detail="AI недоступен")
+    try:
+        headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+        
+        FINANCE_PROMPT = """Ты финансовый помощник. Извлеки из текста или фото чека информацию о расходе.
+
+Категории: shop (магазины/продукты), pharmacy (медицина/аптека/врач), utility (ЖКУ/коммуналка/свет/газ/вода), credit (кредит/ипотека/займ), transport (транспорт/такси/бензин/проезд), leisure (досуг/кафе/ресторан/развлечения), other (прочее)
+
+Ответь ТОЛЬКО валидным JSON:
+{"amount": число, "category": "код категории", "comment": "краткое описание", "merchant": "название магазина если есть"}
+
+Если не удалось определить сумму — верни {"error": "no_amount"}"""
+
+        if req.image_base64:
+            messages = [{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": f"data:{req.mime_type};base64,{req.image_base64}"}},
+                {"type": "text", "text": FINANCE_PROMPT}
+            ]}]
+        else:
+            messages = [{"role": "user", "content": f"{FINANCE_PROMPT}\n\nТекст: {req.text}"}]
+
+        data = {"model": "gemini-2.5-flash-lite", "messages": messages, "max_tokens": 200}
+        response = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
+        result_text = response.json()["choices"][0]["message"]["content"].strip()
+
+        import re as re_mod
+        json_match = re_mod.search(r"\{.*\}", result_text, re_mod.DOTALL)
+        if not json_match:
+            raise HTTPException(status_code=400, detail="Не удалось распознать")
+        
+        parsed = json.loads(json_match.group())
+        if "error" in parsed:
+            raise HTTPException(status_code=400, detail="Сумма не найдена")
+
+        # Сохраняем в БД
+        if db_pool:
+            async with db_pool.acquire() as conn:
+                row_id = await conn.fetchval(
+                    "INSERT INTO finance_records (user_id, category, amount, comment) VALUES ($1,$2,$3,$4) RETURNING id",
+                    req.user_id, parsed.get("category", "other"), float(parsed["amount"]), 
+                    parsed.get("comment", "") + (" · " + parsed.get("merchant", "") if parsed.get("merchant") else "")
+                )
+                parsed["id"] = row_id
+                parsed["status"] = "saved"
+
+        return parsed
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
 app.mount("/", StaticFiles(directory=".", html=True), name="static")

@@ -2546,7 +2546,9 @@ function FinanceScreen({ onAsk, onMode }) {
   const [input, setInput] = React.useState('');
   const [summary, setSummary] = React.useState({});
   const [total, setTotal] = React.useState(0);
-  React.useEffect(() => {
+  const [notification, setNotification] = React.useState(null);
+
+  const loadSummary = () => {
     const token = localStorage.getItem('oktolk_token');
     if (!token) return;
     fetch('/api/v1/finance/summary', { headers: { Authorization: 'Bearer ' + token } })
@@ -2558,7 +2560,40 @@ function FinanceScreen({ onAsk, onMode }) {
         setSummary(map);
         setTotal(t);
       }).catch(() => {});
-  }, []);
+  };
+
+  const sendFinance = async (textOverride, imageBase64, mimeType) => {
+    const text = textOverride || input.trim();
+    if (!text && !imageBase64) return;
+    setInput('');
+    const token = localStorage.getItem('oktolk_token');
+    const userId = parseInt(localStorage.getItem('oktolk_user_id') || '0');
+    if (!token || !userId) { setNotification({ type: 'err', text: 'Войдите в аккаунт для сохранения' }); return; }
+    try {
+      const body = { user_id: userId };
+      if (imageBase64) { body.image_base64 = imageBase64; body.mime_type = mimeType; }
+      else { body.text = text; }
+      const res = await fetch('/api/v1/finance/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.status === 'saved') {
+        const catLabels = { shop: 'Магазины', pharmacy: 'Медицина', utility: 'ЖКУ', credit: 'Кредиты', transport: 'Транспорт', leisure: 'Досуг', other: 'Прочее' };
+        setNotification({ type: 'ok', text: '✅ ' + data.amount.toLocaleString('ru') + ' ₽ → ' + (catLabels[data.category] || data.category) });
+        loadSummary();
+        setTimeout(() => setNotification(null), 3000);
+      } else {
+        setNotification({ type: 'err', text: '❌ Не удалось распознать сумму' });
+        setTimeout(() => setNotification(null), 3000);
+      }
+    } catch(e) {
+      setNotification({ type: 'err', text: '❌ Ошибка. Попробуйте снова.' });
+      setTimeout(() => setNotification(null), 3000);
+    }
+  };
+  React.useEffect(() => { loadSummary(); }, []);
   const catMap = { 'Магазины': 'shop', 'Медицина': 'pharmacy', 'ЖКУ': 'utility', 'Кредиты': 'credit', 'Транспорт': 'transport', 'Досуг': 'leisure' };
   const cats = [
     { icon: IconCart,     label: 'Магазины' },
@@ -2601,6 +2636,11 @@ function FinanceScreen({ onAsk, onMode }) {
       </div>
 
       <div className="section" style={{ paddingTop: 12 }}>
+        {notification && (
+          <div style={{ background: notification.type === 'ok' ? 'var(--success-tint)' : '#FFE5E5', borderRadius: 12, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: notification.type === 'ok' ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>
+            {notification.text}
+          </div>
+        )}
         <div className="composer" style={{ margin: 0, width: '100%', boxSizing: 'border-box' }}>
           <textarea
             placeholder="Напишите или надиктуйте расход…"
@@ -2610,7 +2650,7 @@ function FinanceScreen({ onAsk, onMode }) {
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', font: 'inherit', fontSize: 15, color: 'var(--text)', resize: 'none', minHeight: 22, maxHeight: 120, overflowY: 'auto', padding: '2px 0' }}
             onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
           />
-          <button className="composer-send" aria-label="Отправить" onClick={() => { if(input.trim()) { onAsk && onAsk(input); setInput(''); }}}>
+          <button className="composer-send" aria-label="Отправить" onClick={sendFinance}>
             <IconSend size={18} sw={2}/>
           </button>
         </div>
@@ -2622,11 +2662,11 @@ function FinanceScreen({ onAsk, onMode }) {
             <span className="mode-icon"><IconDoc size={22}/></span>
             <span className="mode-label">Документ</span>
           </button>
-          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f && onAsk) onAsk('Что на этом фото?'); }; i.click(); }}>
+          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=(e)=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onloadend=()=>sendFinance(null,r.result.split(',')[1],f.type); r.readAsDataURL(f); }; i.click(); }}>
             <span className="mode-icon"><IconCamera size={22}/></span>
-            <span className="mode-label">Фото</span>
+            <span className="mode-label">Чек</span>
           </button>
-          <button className="mode" onClick={() => onMode && onMode('voice')}>
+          <button className="mode" onClick={() => { if(!window.VoiceRecorder) return; window.VoiceRecorder.start((text)=>sendFinance(text,null,null),(err)=>{},(()=>{})); }}>
             <span className="mode-icon"><IconMic size={22}/></span>
             <span className="mode-label">Голос</span>
           </button>
