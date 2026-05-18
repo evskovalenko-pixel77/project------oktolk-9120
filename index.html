@@ -2549,8 +2549,7 @@ function FinanceScreen({ onAsk, onMode }) {
   const [notification, setNotification] = React.useState(null);
 
   const loadSummary = () => {
-    const token = localStorage.getItem('oktolk_token');
-    if (!token) return;
+    const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
     fetch('/api/v1/finance/summary/public/' + userId)
       .then(r => r.json())
       .then(data => {
