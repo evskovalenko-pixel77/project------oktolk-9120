@@ -2604,11 +2604,140 @@ function RecentCard({ onAsk }) {
 // ─────────────────────────────────────────────────────────────
 // Finance screen
 // ─────────────────────────────────────────────────────────────
+function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
+  const [records, setRecords] = React.useState([]);
+  const [chatMsgs, setChatMsgs] = React.useState([]);
+  const [input, setInput] = React.useState("");
+  const [pending, setPending] = React.useState(false);
+  const catMap = { "Магазины": "shop", "Медицина": "pharmacy", "ЖКУ": "utility", "Кредиты": "credit", "Транспорт": "transport", "Досуг": "leisure", "Прочее": "other" };
+  const catKey = catMap[cat.label] || "other";
+  const amount = summary[catMap[cat.label]] || 0;
+  const CI = cat.icon;
+  React.useEffect(() => {
+    const userId = parseInt(localStorage.getItem("oktolk_user_id") || "1");
+    fetch("/api/v1/finance/records/public/" + userId + "/" + catKey)
+      .then(r => r.json())
+      .then(data => setRecords((data.records || []).slice(0, 5)))
+      .catch(() => {});
+    setChatMsgs([{ role: "ai", text: "Вижу расходы на " + cat.label + " за май — " + (amount > 0 ? amount.toLocaleString("ru") + " руб." : "0 руб.") + ". Спросите что угодно о ваших тратах." }]);
+  }, []);
+  const sendMsg = async () => {
+    if (input.trim() === "") return;
+    const txt = input.trim();
+    setInput("");
+    setChatMsgs(m => [...m, { role: "user", text: txt }]);
+    setPending(true);
+    try {
+      const res = await fetch("/api/v1/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "Категория: " + cat.label + ", сумма: " + amount + " руб. Вопрос: " + txt }) });
+      const data = await res.json();
+      setChatMsgs(m => [...m, { role: "ai", text: data.reply || "Не удалось получить ответ." }]);
+    } catch(e) {
+      setChatMsgs(m => [...m, { role: "ai", text: "Ошибка соединения." }]);
+    } finally {
+      setPending(false);
+    }
+  };
+  const handleVoice = () => {
+    if (window.VoiceRecorder) window.VoiceRecorder.start((text) => { setInput(text); }, () => {}, () => {});
+  };
+  const handlePhoto = () => {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "image/*"; inp.capture = "environment";
+    inp.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (file == null) return;
+      const base64 = await new Promise(res => { const r = new FileReader(); r.onloadend = () => res(r.result.split(",")[1]); r.readAsDataURL(file); });
+      const userId = parseInt(localStorage.getItem("oktolk_user_id") || "1");
+      const token = localStorage.getItem("oktolk_token") || "demo";
+      const res = await fetch("/api/v1/finance/parse", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ user_id: userId, image_base64: base64, mime_type: file.type }) });
+      const data = await res.json();
+      if (data.status === "saved") {
+        setChatMsgs(m => [...m, { role: "ai", text: "Записал: " + data.amount.toLocaleString("ru") + " руб." }]);
+        const r2 = await fetch("/api/v1/finance/records/public/" + userId + "/" + catKey);
+        const d2 = await r2.json();
+        setRecords((d2.records || []).slice(0, 5));
+      }
+    };
+    inp.click();
+  };
+  const fmt = (dt) => { try { const d = new Date(dt); return d.toLocaleDateString("ru", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" }); } catch(e) { return ""; } };
+  return (
+    <div className="screen">
+      <div style={{ display: "flex", alignItems: "center", padding: "14px 18px 8px", gap: 12, position: "sticky", top: 0, background: "var(--bg)", zIndex: 10 }}>
+        <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: "var(--surface-2)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <IconChevronLeft size={20} stroke="var(--text)"/>
+        </button>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)" }}>{cat.label}</div>
+      </div>
+      <div style={{ margin: "4px 18px 0" }}>
+        <div className="hero indigo" style={{ borderRadius: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+            <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <CI size={26} color="white"/>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.7 }}>Расходы за май</div>
+              <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em" }}>{amount > 0 ? amount.toLocaleString("ru") + " ₽" : "0 ₽"}</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 13, opacity: 0.75 }}>{records.length > 0 ? records.length + " операций" : "Нет операций за май"}</div>
+        </div>
+      </div>
+      {records.length > 0 && (
+        <div style={{ padding: "16px 18px 0" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 10 }}>Последние расходы</div>
+          <div className="card" style={{ padding: 6 }}>
+            {records.map((rec, i) => (
+              <div key={i} className="list-row" style={{ padding: "12px 14px", borderBottom: i < records.length - 1 ? undefined : "none" }}>
+                <div className="list-row-icon" style={{ background: "var(--primary-tint)", color: "var(--primary)" }}><CI size={18}/></div>
+                <div className="list-row-text">
+                  <div className="list-row-title">{rec.comment || cat.label}</div>
+                  <div className="list-row-sub">{fmt(rec.recorded_at)}</div>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", flexShrink: 0 }}>{rec.amount ? rec.amount.toLocaleString("ru") + " ₽" : ""}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div style={{ padding: "16px 18px 0" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 10 }}>Анализ расходов</div>
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)" }}/>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-muted)" }}>AI готов помочь</div>
+          </div>
+          <div style={{ maxHeight: 280, overflowY: "auto", padding: "8px 0" }}>
+            {chatMsgs.map((m, i) => (
+              <div key={i} style={ m.role === "user"
+                ? { margin: "6px 14px", background: "var(--primary)", borderRadius: 12, padding: "10px 14px", fontSize: 14, color: "white", lineHeight: 1.5 }
+                : { padding: "8px 14px", fontSize: 14, color: "var(--text)", lineHeight: 1.5, borderBottom: "1px solid var(--border)" }
+              }>{m.text}</div>
+            ))}
+            {pending && <div style={{ padding: "8px 14px", fontSize: 14, color: "var(--text-muted)" }}>Думаю…</div>}
+          </div>
+        </div>
+      </div>
+      <div style={{ padding: "12px 18px 0" }}>
+        <div className="modes" style={{ marginBottom: 8 }}>
+          <button className="mode" onClick={handlePhoto}><span className="mode-icon"><IconCamera size={22}/></span><span className="mode-label">Фото чека</span></button>
+          <button className="mode" onClick={handleVoice}><span className="mode-icon"><IconMic size={22}/></span><span className="mode-label">Голос</span></button>
+        </div>
+        <div className="composer" style={{ margin: 0 }}>
+          <textarea value={input} rows={1} onChange={e => { setInput(e.target.value); e.target.style.height="auto"; e.target.style.height=e.target.scrollHeight+"px"; }} onKeyDown={e => { if (e.key==="Enter" && e.shiftKey===false && input.trim() !== "") { e.preventDefault(); sendMsg(); } }} placeholder="Спросите про расходы…" style={{ resize:"none", overflow:"hidden", minHeight:24 }}/>
+          <button className="composer-send" disabled={input.trim() === "" || pending} onClick={sendMsg}><IconSend size={18} sw={2}/></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FinanceScreen({ onAsk, onMode }) {
   const [input, setInput] = React.useState('');
   const [summary, setSummary] = React.useState({});
   const [total, setTotal] = React.useState(0);
   const [notification, setNotification] = React.useState(null);
+  const [selectedCat, setSelectedCat] = React.useState(null);
 
   const loadSummary = () => {
     const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
@@ -2663,8 +2792,10 @@ function FinanceScreen({ onAsk, onMode }) {
     { icon: IconTrend,    label: 'Транспорт' },
     { icon: IconSparkles, label: 'Досуг' },
   ];
+  if (selectedCat) return <CategoryDetailScreen cat={selectedCat} summary={summary} onBack={() => setSelectedCat(null)} onAsk={onAsk}/>;
   return (
-    <div className="screen">
+    if (selectedCat) return <CategoryDetailScreen cat={selectedCat} summary={summary} onBack={() => setSelectedCat(null)} onAsk={onAsk}/>;
+    return <div className="screen">
       <div style={{ padding: '4px 0' }}>
         <div className="hero indigo">
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>Мои финансы</div>
@@ -2681,7 +2812,7 @@ function FinanceScreen({ onAsk, onMode }) {
           {cats.map(c => {
             const CI = c.icon;
             return (
-              <button key={c.label} onClick={() => onAsk && onAsk(c.label)} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 16, padding: '14px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+              <button key={c.label} onClick={() => setSelectedCat(c)} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 16, padding: '14px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
                 <span style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--primary-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <CI size={22} color="var(--primary)"/>
                 </span>
