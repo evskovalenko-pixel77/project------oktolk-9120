@@ -839,6 +839,10 @@ button { font-family: inherit; }
   animation: screenIn 0.25s ease-out;
   flex: 1;
 }
+@keyframes weatherIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 @keyframes screenIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -2434,7 +2438,7 @@ function WeatherWidget() {
   }, []);
   if (!w) return null;
   return (
-    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:20, padding:'18px 20px' }}>
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:20, padding:'18px 20px', maxWidth:'68%', animation:'weatherIn 0.4s ease-out' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:44, lineHeight:1 }}>{w.ti}</span>
