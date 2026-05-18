@@ -875,4 +875,20 @@ async def finance_parse(req: FinanceParseRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
+
+@app.get("/api/v1/finance/summary/public/{user_id}")
+async def get_finance_summary_public(user_id: int):
+    """Публичный summary для демо режима"""
+    if not db_pool:
+        return {"month": "", "categories": []}
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT category, SUM(amount) as total, COUNT(*) as count
+            FROM finance_records
+            WHERE user_id=$1
+            AND recorded_at >= date_trunc('month', NOW())
+            GROUP BY category
+        """, user_id)
+        return {"month": datetime.now().strftime("%Y-%m"), "categories": [dict(r) for r in rows]}
+
 app.mount("/", StaticFiles(directory=".", html=True), name="static")

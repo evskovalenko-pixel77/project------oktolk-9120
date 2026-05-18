@@ -2551,7 +2551,7 @@ function FinanceScreen({ onAsk, onMode }) {
   const loadSummary = () => {
     const token = localStorage.getItem('oktolk_token');
     if (!token) return;
-    fetch('/api/v1/finance/summary', { headers: { Authorization: 'Bearer ' + token } })
+    fetch('/api/v1/finance/summary/public/' + userId)
       .then(r => r.json())
       .then(data => {
         const map = {};
