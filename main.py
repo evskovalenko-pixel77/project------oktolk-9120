@@ -192,7 +192,7 @@ SYSTEM_PROMPT = """Ты помощник OkTolk. Говори просто, бе
 Если спрашивают про мошенников: СТОП! Это мошенники! Не отвечайте им!
 Заканчивай: Если не получилось - напишите мне снова!"""
 
-def call_ai(messages, model="deepseek-v3.2"):
+def call_ai(messages, model="deepseek-v4-flash"):
     # Используем прямой DeepSeek если есть ключ, иначе AItunnel
     if DEEPSEEK_API_KEY:
         api_key = DEEPSEEK_API_KEY
