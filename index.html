@@ -3569,12 +3569,12 @@ function SubscriptionScreen({ onClose }) {
       current: true
     },
     {
-      id: 'basic', name: 'Базовый', price: '299', period: 'мес',
+      id: 'basic', name: 'Стандарт', price: '390', period: 'мес',
       features: ['AI чат', 'Антискам', 'Новости', 'Проверенные сайты', 'TTS озвучка', 'Голосовой ввод', 'Доверенные лица'],
       recommended: true
     },
     {
-      id: 'pro', name: 'Про', price: '399', period: 'мес',
+      id: 'pro', name: 'Про', price: '590', period: 'мес',
       features: ['Всё из Базового', 'Моё здоровье', 'Анализ документов', 'Приоритетная поддержка'],
     }
   ];
@@ -3633,7 +3633,7 @@ function SubscriptionScreen({ onClose }) {
                   color: plan.recommended ? '#fff' : 'var(--text)',
                   border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer'
                 }}>
-                  {plan.recommended ? 'Подключить за 299 ₽/мес' : 'Подключить за 399 ₽/мес'}
+                  {plan.recommended ? 'Подключить за 390 ₽/мес' : 'Подключить за 590 ₽/мес'}
                 </button>
               )}
             </div>
