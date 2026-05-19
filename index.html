@@ -2469,6 +2469,56 @@ function WeatherWidget() {
 }
 
 
+function WeatherWidget() {
+  const [w, setW] = React.useState(null);
+  React.useEffect(() => {
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      try {
+        const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + pos.coords.latitude.toFixed(2) + '&longitude=' + pos.coords.longitude.toFixed(2) + '&daily=weathercode,temperature_2m_max,temperature_2m_min&current_weather=true&timezone=auto&forecast_days=2');
+        const d = await r.json();
+        const ico = (c) => c===0?'☀️':c<=2?'⛅':c<=3?'☁️':c<=48?'🌫️':c<=67?'🌧️':c<=77?'❄️':'⛈️';
+        const txt = (c) => c===0?'ясно':c<=2?'малооблачно':c<=3?'облачно':c<=48?'туман':c<=67?'дождь':c<=77?'снег':'гроза';
+        setW({
+          ti: ico(d.daily.weathercode[0]), tt: txt(d.daily.weathercode[0]),
+          tmax: Math.round(d.daily.temperature_2m_max[0]), tmin: Math.round(d.daily.temperature_2m_min[0]),
+          mi: ico(d.daily.weathercode[1]), mt: txt(d.daily.weathercode[1]),
+          mmax: Math.round(d.daily.temperature_2m_max[1]), mmin: Math.round(d.daily.temperature_2m_min[1])
+        });
+      } catch(e) {}
+    }, () => {});
+  }, []);
+  if (with open('index.html', 'w') as f:) return null;
+  return (
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:20, padding:'18px 20px' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <span style={{ fontSize:44, lineHeight:1 }}>{w.ti}</span>
+          <div>
+            <div style={{ fontSize:42, fontWeight:700, color:'var(--text)', lineHeight:1 }}>{w.tmax}°</div>
+            <div style={{ fontSize:14, color:'var(--text-muted)', marginTop:4 }}>{w.tt}</div>
+          </div>
+        </div>
+        <div style={{ textAlign:'right' }}>
+          <div style={{ fontSize:13, color:'var(--text-subtle)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>Сегодня</div>
+          <div style={{ fontSize:14, color:'var(--text-muted)', marginTop:4 }}>мин {w.tmin}° · макс {w.tmax}°</div>
+        </div>
+      </div>
+      <div style={{ height:1, background:'var(--border)', margin:'14px 0' }}/>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontSize:22 }}>{w.mi}</span>
+          <span style={{ fontSize:15, color:'var(--text-muted)' }}>{w.mt}</span>
+        </div>
+        <div style={{ fontSize:13, color:'var(--text-subtle)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>Завтра</div>
+        <div style={{ textAlign:'right' }}>
+          <div style={{ fontSize:18, fontWeight:600, color:'var(--text)' }}>{w.mmax}°</div>
+          <div style={{ fontSize:13, color:'var(--text-subtle)' }}>мин {w.mmin}°</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoiceClear }) {
   const [q, setQ] = React.useState('');
   const [showStop, setShowStop] = React.useState(false);
@@ -3425,14 +3475,149 @@ function ChatOverlay({ initialMsg, onClose }) {
   );
 }
 
-function ProfileSheet({ onClose, name = 'Евгений' }) {
+
+// ── Auth Screen ──────────────────────────────────────────────────
+function AuthScreen({ onAuth }) {
+  const [mode, setMode] = React.useState('login');
+  const [phone, setPhone] = React.useState('');
+  const [name, setName] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [error, setError] = React.useState('');
+  const [pending, setPending] = React.useState(false);
+
+  const formatPhone = (v) => {
+    const digits = v.replace(/\D/g, '');
+    if (digits.length <= 1) return digits ? '+7' : '';
+    const d = digits.startsWith('7') ? digits.slice(1) : digits;
+    let r = '+7';
+    if (d.length > 0) r += ' (' + d.slice(0, 3);
+    if (d.length >= 3) r += ') ' + d.slice(3, 6);
+    if (d.length >= 6) r += '-' + d.slice(6, 8);
+    if (d.length >= 8) r += '-' + d.slice(8, 10);
+    return r;
+  };
+
+  const getRawPhone = (v) => '+7' + v.replace(/\D/g, '').slice(1);
+
+  const submit = async () => {
+    setError('');
+    if (!phone || !password) { setError('Заполните все поля'); return; }
+    if (mode === 'register' && !name.trim()) { setError('Введите имя'); return; }
+    setPending(true);
+    try {
+      const endpoint = mode === 'login' ? '/api/v1/auth/login' : '/api/v1/auth/register';
+      const body = mode === 'login'
+        ? { phone: getRawPhone(phone), password }
+        : { phone: getRawPhone(phone), name: name.trim(), password };
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await resp.json();
+      if (!resp.ok) { setError(data.detail || 'Ошибка'); return; }
+      localStorage.setItem('oktolk_token', data.token);
+      localStorage.setItem('oktolk_user_id', String(data.user_id));
+      localStorage.setItem('oktolk_name', data.name);
+      localStorage.setItem('oktolk_tariff', data.tariff || 'demo');
+      onAuth({ token: data.token, user_id: data.user_id, name: data.name, tariff: data.tariff });
+    } catch(e) {
+      setError('Нет соединения с сервером');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div style={{
+      minHeight: '100dvh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      background: 'var(--bg)', padding: '24px 20px'
+    }}>
+      <div style={{ marginBottom: 32, textAlign: 'center' }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: 20,
+          background: 'var(--primary)', color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 28, fontWeight: 800, margin: '0 auto 16px'
+        }}>Ok</div>
+        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em' }}>OkTolk</div>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4 }}>
+          {mode === 'login' ? 'Войдите в свой аккаунт' : 'Создайте аккаунт'}
+        </div>
+      </div>
+      <div style={{
+        width: '100%', maxWidth: 360,
+        background: 'var(--surface)', borderRadius: 20,
+        padding: '24px 20px', boxShadow: 'var(--shadow-card)'
+      }}>
+        {mode === 'register' && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Ваше имя</div>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Евгений"
+              style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
+                border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
+                fontSize: 16, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}/>
+          </div>
+        )}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Телефон</div>
+          <input value={phone} onChange={e => setPhone(formatPhone(e.target.value))}
+            placeholder="+7 (999) 000-00-00" type="tel"
+            style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
+              border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
+              fontSize: 16, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}/>
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Пароль</div>
+          <input value={password} onChange={e => setPassword(e.target.value)}
+            placeholder="Минимум 6 символов" type="password"
+            onKeyDown={e => e.key === 'Enter' && submit()}
+            style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
+              border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
+              fontSize: 16, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}/>
+        </div>
+        {error && (
+          <div style={{ background: 'var(--danger-tint)', color: 'var(--danger)',
+            borderRadius: 10, padding: '10px 14px', fontSize: 14,
+            marginBottom: 16, textAlign: 'center' }}>{error}</div>
+        )}
+        <button onClick={submit} disabled={pending} style={{
+          width: '100%', padding: '14px', borderRadius: 14,
+          background: pending ? 'var(--text-subtle)' : 'var(--primary)',
+          color: '#fff', border: 'none', fontSize: 16, fontWeight: 700,
+          cursor: pending ? 'not-allowed' : 'pointer'
+        }}>
+          {pending ? 'Подождите...' : (mode === 'login' ? 'Войти' : 'Зарегистрироваться')}
+        </button>
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+            {mode === 'login' ? 'Нет аккаунта? ' : 'Уже есть аккаунт? '}
+          </span>
+          <span onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
+            style={{ fontSize: 14, color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>
+            {mode === 'login' ? 'Зарегистрироваться' : 'Войти'}
+          </span>
+        </div>
+      </div>
+      <div style={{ marginTop: 24, textAlign: 'center', fontSize: 12, color: 'var(--text-subtle)' }}>
+        Входя в приложение, вы соглашаетесь с{' '}
+        <a href="/terms.html" style={{ color: 'var(--primary)' }}>Условиями</a>
+        {' '}и{' '}
+        <a href="/privacy.html" style={{ color: 'var(--primary)' }}>Политикой конфиденциальности</a>
+      </div>
+    </div>
+  );
+}
+
+function ProfileSheet({ onClose, name = 'Евгений', onLogout }) {
   const rows = [
     { icon: IconUser, t: 'Личные данные', sub: 'Имя, телефон, email' },
     { icon: IconShield, t: 'Безопасность', sub: 'PIN-код, биометрия' },
     { icon: IconBell, t: 'Уведомления', sub: 'Push, SMS, Telegram' },
     { icon: IconSettings, t: 'Тариф', sub: 'Базовый · до 31 мая' },
     { icon: IconBookmark, t: 'Сохранённое' },
-    { icon: IconLogOut, t: 'Выйти', danger: true },
+    { icon: IconLogOut, t: 'Выйти', danger: true, action: 'logout' },
   ];
   return (
     <>
@@ -3455,7 +3640,7 @@ function ProfileSheet({ onClose, name = 'Евгений' }) {
           {rows.map((r, i) => {
             const I = r.icon;
             return (
-              <div key={i} className="list-row" onClick={onClose}>
+              <div key={i} className="list-row" onClick={() => r.action === 'logout' ? (onLogout && onLogout(), onClose()) : onClose()}>
                 <div className="list-row-icon" style={r.danger ? { background: 'var(--danger-tint)', color: 'var(--danger)' } : null}>
                   <I size={18}/>
                 </div>
@@ -3664,10 +3849,31 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [tab, setTab] = React.useState('home');
-  const [chat, setChat] = React.useState(null);    // null | string (initial msg, '' for empty)
-  const [overlay, setOverlay] = React.useState(null); // 'profile' | 'voice' | 'notif' | null
+  const [chat, setChat] = React.useState(null);
+  const [overlay, setOverlay] = React.useState(null);
+
+  const [user, setUser] = React.useState(() => {
+    const token = localStorage.getItem('oktolk_token');
+    const name = localStorage.getItem('oktolk_name');
+    const user_id = localStorage.getItem('oktolk_user_id');
+    const tariff = localStorage.getItem('oktolk_tariff');
+    if (token && name) return { token, name, user_id: parseInt(user_id), tariff };
+    return null;
+  });
 
   React.useLayoutEffect(() => { applyTheme(t); }, [t]);
+
+  const onAuth = (userData) => setUser(userData);
+
+  const onLogout = () => {
+    localStorage.removeItem('oktolk_token');
+    localStorage.removeItem('oktolk_user_id');
+    localStorage.removeItem('oktolk_name');
+    localStorage.removeItem('oktolk_tariff');
+    setUser(null);
+  };
+
+  if (!user) return <AuthScreen onAuth={onAuth} />;
 
   const onAsk = (text) => setChat(text || '');
   const [voiceResult, setVoiceResult] = React.useState(null);
@@ -3702,7 +3908,7 @@ function App() {
         <TabBar active={tab} onChange={setTab}/>
 
         {chat !== null && <ChatOverlay initialMsg={chat} onClose={() => setChat(null)}/>}
-        {overlay === 'profile' && <ProfileSheet onClose={() => setOverlay(null)}/>}
+        {overlay === 'profile' && <ProfileSheet onClose={() => setOverlay(null)} name={user.name} onLogout={onLogout}/>}
         {overlay === 'voice'   && <VoiceModal   onClose={() => setOverlay(null)} onResult={onVoiceResult}/>}
         {overlay === 'stop' && <StopMoshennnikSheet onClose={() => setOverlay(null)} onAsk={onAsk} messages={stopMessages} setMessages={setStopMessages} facts={stopFacts} setFacts={setStopFacts}/>}
         {overlay === 'notif'   && <NotifSheet   onClose={() => setOverlay(null)}/>}
