@@ -3695,6 +3695,7 @@ function ProfileSheet({ onClose, name = 'Евгений', onLogout }) {
           })}
         </div>
       </div>
+      {showSub && <SubscriptionScreen onClose={() => setShowSub(false)}/>}
     </>
   );
 }
