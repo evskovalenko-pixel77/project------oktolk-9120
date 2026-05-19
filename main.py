@@ -193,9 +193,16 @@ SYSTEM_PROMPT = """Ты помощник OkTolk. Говори просто, бе
 Заканчивай: Если не получилось - напишите мне снова!"""
 
 def call_ai(messages, model="deepseek-v3.2"):
-    headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+    # Используем прямой DeepSeek если есть ключ, иначе AItunnel
+    if DEEPSEEK_API_KEY:
+        api_key = DEEPSEEK_API_KEY
+        base_url = DEEPSEEK_BASE_URL
+    else:
+        api_key = AITUNNEL_API_KEY
+        base_url = AITUNNEL_BASE_URL
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     data = {"model": model, "messages": messages, "max_tokens": 500, "temperature": 0.7}
-    response = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
+    response = requests.post(f"{base_url}chat/completions", headers=headers, json=data, timeout=30)
     return response.json()["choices"][0]["message"]["content"]
 
 # ── API v1 ───────────────────────────────────────────────────────
