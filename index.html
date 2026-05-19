@@ -2469,56 +2469,6 @@ function WeatherWidget() {
 }
 
 
-function WeatherWidget() {
-  const [w, setW] = React.useState(null);
-  React.useEffect(() => {
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      try {
-        const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + pos.coords.latitude.toFixed(2) + '&longitude=' + pos.coords.longitude.toFixed(2) + '&daily=weathercode,temperature_2m_max,temperature_2m_min&current_weather=true&timezone=auto&forecast_days=2');
-        const d = await r.json();
-        const ico = (c) => c===0?'☀️':c<=2?'⛅':c<=3?'☁️':c<=48?'🌫️':c<=67?'🌧️':c<=77?'❄️':'⛈️';
-        const txt = (c) => c===0?'ясно':c<=2?'малооблачно':c<=3?'облачно':c<=48?'туман':c<=67?'дождь':c<=77?'снег':'гроза';
-        setW({
-          ti: ico(d.daily.weathercode[0]), tt: txt(d.daily.weathercode[0]),
-          tmax: Math.round(d.daily.temperature_2m_max[0]), tmin: Math.round(d.daily.temperature_2m_min[0]),
-          mi: ico(d.daily.weathercode[1]), mt: txt(d.daily.weathercode[1]),
-          mmax: Math.round(d.daily.temperature_2m_max[1]), mmin: Math.round(d.daily.temperature_2m_min[1])
-        });
-      } catch(e) {}
-    }, () => {});
-  }, []);
-  if (!w) return null;
-  return (
-    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:20, padding:'18px 20px' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <span style={{ fontSize:44, lineHeight:1 }}>{w.ti}</span>
-          <div>
-            <div style={{ fontSize:42, fontWeight:700, color:'var(--text)', lineHeight:1 }}>{w.tmax}°</div>
-            <div style={{ fontSize:14, color:'var(--text-muted)', marginTop:4 }}>{w.tt}</div>
-          </div>
-        </div>
-        <div style={{ textAlign:'right' }}>
-          <div style={{ fontSize:13, color:'var(--text-subtle)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>Сегодня</div>
-          <div style={{ fontSize:14, color:'var(--text-muted)', marginTop:4 }}>мин {w.tmin}° · макс {w.tmax}°</div>
-        </div>
-      </div>
-      <div style={{ height:1, background:'var(--border)', margin:'14px 0' }}/>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:22 }}>{w.mi}</span>
-          <span style={{ fontSize:15, color:'var(--text-muted)' }}>{w.mt}</span>
-        </div>
-        <div style={{ fontSize:13, color:'var(--text-subtle)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>Завтра</div>
-        <div style={{ textAlign:'right' }}>
-          <div style={{ fontSize:18, fontWeight:600, color:'var(--text)' }}>{w.mmax}°</div>
-          <div style={{ fontSize:13, color:'var(--text-subtle)' }}>мин {w.mmin}°</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoiceClear }) {
   const [q, setQ] = React.useState('');
   const [showStop, setShowStop] = React.useState(false);
