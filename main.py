@@ -153,6 +153,7 @@ class RegisterRequest(BaseModel):
     phone: str
     name: str
     password: str
+    marketing_consent: bool = False
 
 class LoginRequest(BaseModel):
     phone: str
@@ -217,8 +218,8 @@ async def register(req: RegisterRequest):
         if existing:
             raise HTTPException(status_code=400, detail="Телефон уже зарегистрирован")
         user_id = await conn.fetchval(
-            "INSERT INTO users (phone, name, password_hash) VALUES ($1,$2,$3) RETURNING id",
-            req.phone, req.name, hash_password(req.password)
+            "INSERT INTO users (phone, name, password_hash, marketing_consent) VALUES ($1,$2,$3,$4) RETURNING id",
+            req.phone, req.name, hash_password(req.password), req.marketing_consent
         )
         token = generate_token()
         expires = datetime.now() + timedelta(days=30)

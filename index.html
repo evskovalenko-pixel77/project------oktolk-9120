@@ -3461,7 +3461,7 @@ function AuthScreen({ onAuth }) {
       const endpoint = mode === 'login' ? '/api/v1/auth/login' : '/api/v1/auth/register';
       const body = mode === 'login'
         ? { phone: getRawPhone(phone), password }
-        : { phone: getRawPhone(phone), name: name.trim(), password };
+        : { phone: getRawPhone(phone), name: name.trim(), password, marketing_consent: agreeMarketing };
       const resp = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
