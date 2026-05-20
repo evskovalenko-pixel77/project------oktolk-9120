@@ -2721,7 +2721,7 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
       <div style={{ padding: "12px 18px 0" }}>
         <div className="modes" style={{ marginBottom: 8, display: "flex", gap: 8 }}>
           <button className="mode" onClick={handlePhoto}><span className="mode-icon"><IconCamera size={22}/></span><span className="mode-label">Фото чека</span></button>
-          <button className="mode" onClick={handleVoice}><span className="mode-icon"><IconMic size={22}/></span><span className="mode-label">Голос</span></button>
+          <VoiceButton onResult={(text) => { setInput(text); }} />
         </div>
         <div className="composer" style={{ margin: 0 }}>
           <textarea value={input} rows={1} onChange={e => { setInput(e.target.value); e.target.style.height="auto"; e.target.style.height=e.target.scrollHeight+"px"; }} onKeyDown={e => { if (e.key==="Enter" && e.shiftKey===false && input.trim() !== "") { e.preventDefault(); sendMsg(); } }} placeholder="Спросите про расходы…" style={{ resize:"none", overflow:"hidden", minHeight:24 }}/>
@@ -2956,10 +2956,7 @@ function HealthScreen({ onAsk, onMode }) {
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Фото</span>
           </button>
-          <button className="mode" onClick={() => onMode && onMode('voice')}>
-            <span className="mode-icon"><IconMic size={22}/></span>
-            <span className="mode-label">Голос</span>
-          </button>
+          <VoiceButton onResult={(text) => { setInput(text); }} />
         </div>
       </div>
 
@@ -3430,18 +3427,7 @@ function ChatOverlay({ initialMsg, onClose }) {
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Фото</span>
           </button>
-          <button className="mode" onClick={() => {
-            if (voiceActive) { window.VoiceRecorder.stop(); setVoiceActive(false); return; }
-            setVoiceActive(true);
-            window.VoiceRecorder.start(
-              (text) => { setInput(prev => (prev ? prev + ' ' : '') + text); setVoiceActive(false); },
-              (err) => { setVoiceActive(false); },
-              () => { setVoiceActive(false); }
-            );
-          }} style={{ background: voiceActive ? 'var(--danger-tint)' : undefined }}>
-            <span className="mode-icon" style={{ color: voiceActive ? 'var(--danger)' : undefined, animation: voiceActive ? 'micPulse 1s ease-in-out infinite' : 'none' }}><IconMic size={22}/></span>
-            <span className="mode-label" style={{ color: voiceActive ? 'var(--danger)' : undefined }}>{voiceActive ? 'Стоп' : 'Голос'}</span>
-          </button>
+          <VoiceButton onResult={(text) => { setInput(prev => (prev ? prev + " " : "") + text); }} />
         </div>
       </div>
     </div>
