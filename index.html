@@ -2738,6 +2738,9 @@ function FinanceScreen({ onAsk, onMode }) {
   const [total, setTotal] = React.useState(0);
   const [notification, setNotification] = React.useState(null);
   const [selectedCat, setSelectedCat] = React.useState(null);
+  const [voiceActive, setVoiceActive] = React.useState(false);
+  const [voiceActive, setVoiceActive] = React.useState(false);
+  const [voiceActive, setVoiceActive] = React.useState(false);
 
   const loadSummary = () => {
     const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
@@ -2857,9 +2860,9 @@ function FinanceScreen({ onAsk, onMode }) {
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Чек</span>
           </button>
-          <button className="mode" onClick={() => { if(!window.VoiceRecorder) return; window.VoiceRecorder.start((text)=>{ setInput(text); setTimeout(()=>sendFinance(text,null,null), 500); },(err)=>{},(()=>{})); }}>
-            <span className="mode-icon"><IconMic size={22}/></span>
-            <span className="mode-label">Голос</span>
+          <button className="mode" onClick={() => { if(!window.VoiceRecorder) return; setVoiceActive(true); window.VoiceRecorder.start((text)=>{ setVoiceActive(false); setInput(text); setTimeout(()=>sendFinance(text,null,null), 1000); },(err)=>{ setVoiceActive(false); },(()=>{ setVoiceActive(false); })); }}>
+            <span className="mode-icon" style={{ color: voiceActive ? "var(--danger)" : undefined, animation: voiceActive ? "micPulse 1s ease-in-out infinite" : "none" }}><IconMic size={22}/></span>
+            <span className="mode-label" style={{ color: voiceActive ? "var(--danger)" : undefined }}>{voiceActive ? "Стоп" : "Голос"}</span>
           </button>
         </div>
       </div>
@@ -3674,6 +3677,138 @@ function SubscriptionScreen({ onClose }) {
   );
 }
 
+
+// ── Auth Screen ──────────────────────────────────────────────────
+function AuthScreen({ onAuth }) {
+  const [mode, setMode] = React.useState('login');
+  const [phone, setPhone] = React.useState('');
+  const [name, setName] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [error, setError] = React.useState('');
+  const [pending, setPending] = React.useState(false);
+
+  const formatPhone = (v) => {
+    const digits = v.replace(/\D/g, '');
+    if (digits.length <= 1) return digits ? '+7' : '';
+    const d = digits.startsWith('7') ? digits.slice(1) : digits;
+    let r = '+7';
+    if (d.length > 0) r += ' (' + d.slice(0, 3);
+    if (d.length >= 3) r += ') ' + d.slice(3, 6);
+    if (d.length >= 6) r += '-' + d.slice(6, 8);
+    if (d.length >= 8) r += '-' + d.slice(8, 10);
+    return r;
+  };
+
+  const getRawPhone = (v) => '+7' + v.replace(/\D/g, '').slice(1);
+
+  const submit = async () => {
+    setError('');
+    setPending(true);
+    try {
+      const endpoint = mode === 'login' ? '/api/v1/auth/login' : '/api/v1/auth/register';
+      const body = mode === 'login'
+        ? { phone: getRawPhone(phone), password }
+        : { phone: getRawPhone(phone), name: name.trim(), password };
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await resp.json();
+      localStorage.setItem('oktolk_token', data.token);
+      localStorage.setItem('oktolk_user_id', String(data.user_id));
+      localStorage.setItem('oktolk_name', data.name);
+      localStorage.setItem('oktolk_tariff', data.tariff || 'demo');
+      onAuth({ token: data.token, user_id: data.user_id, name: data.name, tariff: data.tariff });
+    } catch(e) {
+      setError('Нет соединения с сервером');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div style={{
+      minHeight: '100dvh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      background: 'var(--bg)', padding: '24px 20px'
+    }}>
+      <div style={{ marginBottom: 32, textAlign: 'center' }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: 20,
+          background: 'var(--primary)', color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 28, fontWeight: 800, margin: '0 auto 16px'
+        }}>Ok</div>
+        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em' }}>OkTolk</div>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4 }}>
+          {mode === 'login' ? 'Войдите в свой аккаунт' : 'Создайте аккаунт'}
+        </div>
+      </div>
+      <div style={{
+        width: '100%', maxWidth: 360,
+        background: 'var(--surface)', borderRadius: 20,
+        padding: '24px 20px', boxShadow: 'var(--shadow-card)'
+      }}>
+        {mode === 'register' && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Ваше имя</div>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Евгений"
+              style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
+                border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
+                fontSize: 16, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}/>
+          </div>
+        )}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Телефон</div>
+          <input value={phone} onChange={e => setPhone(formatPhone(e.target.value))}
+            placeholder="+7 (999) 000-00-00" type="tel"
+            style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
+              border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
+              fontSize: 16, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}/>
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Пароль</div>
+          <input value={password} onChange={e => setPassword(e.target.value)}
+            placeholder="Минимум 6 символов" type="password"
+            onKeyDown={e => e.key === 'Enter' && submit()}
+            style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
+              border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
+              fontSize: 16, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}/>
+        </div>
+        {error && (
+          <div style={{ background: 'var(--danger-tint)', color: 'var(--danger)',
+            borderRadius: 10, padding: '10px 14px', fontSize: 14,
+            marginBottom: 16, textAlign: 'center' }}>{error}</div>
+        )}
+        <button onClick={submit} disabled={pending} style={{
+          width: '100%', padding: '14px', borderRadius: 14,
+          background: pending ? 'var(--text-subtle)' : 'var(--primary)',
+          color: '#fff', border: 'none', fontSize: 16, fontWeight: 700,
+          cursor: pending ? 'not-allowed' : 'pointer'
+        }}>
+          {pending ? 'Подождите...' : (mode === 'login' ? 'Войти' : 'Зарегистрироваться')}
+        </button>
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+            {mode === 'login' ? 'Нет аккаунта? ' : 'Уже есть аккаунт? '}
+          </span>
+          <span onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
+            style={{ fontSize: 14, color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>
+            {mode === 'login' ? 'Зарегистрироваться' : 'Войти'}
+          </span>
+        </div>
+      </div>
+      <div style={{ marginTop: 24, textAlign: 'center', fontSize: 12, color: 'var(--text-subtle)' }}>
+        Входя в приложение, вы соглашаетесь с{' '}
+        <a href="/terms.html" style={{ color: 'var(--primary)' }}>Условиями</a>
+        {' '}и{' '}
+        <a href="/privacy.html" style={{ color: 'var(--primary)' }}>Политикой конфиденциальности</a>
+      </div>
+    </div>
+  );
+}
+
 function ProfileSheet({ onClose, name = 'Евгений', onLogout }) {
   const [showSub, setShowSub] = React.useState(false);
   const rows = [
@@ -4055,7 +4190,7 @@ window.VoiceRecorder = {
       const avg = data.reduce((a, b) => a + b, 0) / data.length;
       if (avg < 8) {
         if (!silenceStart) silenceStart = Date.now();
-        else if (Date.now() - silenceStart > 5000) {
+        else if (Date.now() - silenceStart > 2000) {
           if (onSilence) onSilence();
           this.stop();
           return;
