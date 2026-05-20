@@ -2097,8 +2097,6 @@ function TabBar({ active, onChange }) {
 
 function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, setFacts }) {
   const [pending, setPending] = React.useState(false);
-  const [agreeTerms, setAgreeTerms] = React.useState(false);
-  const [agreeMarketing, setAgreeMarketing] = React.useState(false);
   const [input, setInput] = React.useState('');
   const chatRef = React.useRef(null);
 
@@ -3436,6 +3434,8 @@ function AuthScreen({ onAuth }) {
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState('');
   const [pending, setPending] = React.useState(false);
+  const [agreeTerms, setAgreeTerms] = React.useState(false);
+  const [agreeMarketing, setAgreeMarketing] = React.useState(false);
 
   const formatPhone = (v) => {
     const digits = v.replace(/\D/g, '');
