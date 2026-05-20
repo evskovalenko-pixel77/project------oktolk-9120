@@ -3939,19 +3939,21 @@ function App() {
     setUser(null);
   };
 
+  const [voiceResult, setVoiceResult] = React.useState(null);
+  const [voiceText, setVoiceText] = React.useState(null);
+  const [stopMessages, setStopMessages] = React.useState([]);
+  const [stopFacts, setStopFacts] = React.useState([]);
+
+
   if (!user) return <AuthScreen onAuth={onAuth} />;
 
   const onAsk = (text) => setChat(text || '');
-  const [voiceResult, setVoiceResult] = React.useState(null);
   const onMode = (m) => {
     if (m === 'stop') setOverlay('stop');
     else if (m === 'voice') setOverlay('voice');
     else if (m === 'photo') setChat('Распознать текст с фото');
     else if (m === 'doc') setChat('Помочь разобрать документ');
   };
-  const [voiceText, setVoiceText] = React.useState(null);
-  const [stopMessages, setStopMessages] = React.useState([]);
-  const [stopFacts, setStopFacts] = React.useState([]);
   const onVoiceResult = (text) => {
     setOverlay(null);
     setVoiceText(text);
