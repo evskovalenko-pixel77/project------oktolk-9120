@@ -2732,6 +2732,31 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
   );
 }
 
+
+function VoiceButton({ onResult, onError }) {
+  const [active, setActive] = React.useState(false);
+  const handle = () => {
+    if (active) {
+      window.VoiceRecorder.stop();
+      setActive(false);
+      return;
+    }
+    if (!window.VoiceRecorder) return;
+    setActive(true);
+    window.VoiceRecorder.start(
+      (text) => { setActive(false); if (onResult) onResult(text); },
+      (err) => { setActive(false); if (onError) onError(err); },
+      () => { setActive(false); }
+    );
+  };
+  return (
+    <button className="mode" onClick={handle} style={{ background: active ? 'var(--danger-tint)' : undefined }}>
+      <span className="mode-icon" style={{ color: active ? 'var(--danger)' : undefined, animation: active ? 'micPulse 1s ease-in-out infinite' : 'none' }}><IconMic size={22}/></span>
+      <span className="mode-label" style={{ color: active ? 'var(--danger)' : undefined }}>{active ? 'Стоп' : 'Голос'}</span>
+    </button>
+  );
+}
+
 function FinanceScreen({ onAsk, onMode }) {
   const [input, setInput] = React.useState('');
   const [summary, setSummary] = React.useState({});
@@ -2858,10 +2883,7 @@ function FinanceScreen({ onAsk, onMode }) {
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Чек</span>
           </button>
-          <button className="mode" onClick={() => { if(!window.VoiceRecorder) return; setVoiceActive(true); window.VoiceRecorder.start((text)=>{ setVoiceActive(false); setInput(text); setTimeout(()=>sendFinance(text,null,null), 1000); },(err)=>{ setVoiceActive(false); },(()=>{ setVoiceActive(false); })); }}>
-            <span className="mode-icon" style={{ color: voiceActive ? "var(--danger)" : undefined, animation: voiceActive ? "micPulse 1s ease-in-out infinite" : "none" }}><IconMic size={22}/></span>
-            <span className="mode-label" style={{ color: voiceActive ? "var(--danger)" : undefined }}>{voiceActive ? "Стоп" : "Голос"}</span>
-          </button>
+          <VoiceButton onResult={(text) => { setInput(text); setTimeout(()=>sendFinance(text,null,null), 1000); }} />
         </div>
       </div>
     </div>
@@ -3939,7 +3961,7 @@ window.VoiceRecorder = {
       const avg = data.reduce((a, b) => a + b, 0) / data.length;
       if (avg < 8) {
         if (!silenceStart) silenceStart = Date.now();
-        else if (Date.now() - silenceStart > 2000) {
+        else if (Date.now() - silenceStart > 3000) {
           if (onSilence) onSilence();
           this.stop();
           return;
