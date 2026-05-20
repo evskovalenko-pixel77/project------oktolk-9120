@@ -2857,7 +2857,7 @@ function FinanceScreen({ onAsk, onMode }) {
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Чек</span>
           </button>
-          <button className="mode" onClick={() => { if(!window.VoiceRecorder) return; window.VoiceRecorder.start((text)=>sendFinance(text,null,null),(err)=>{},(()=>{})); }}>
+          <button className="mode" onClick={() => { if(!window.VoiceRecorder) return; window.VoiceRecorder.start((text)=>{ setInput(text); setTimeout(()=>sendFinance(text,null,null), 500); },(err)=>{},(()=>{})); }}>
             <span className="mode-icon"><IconMic size={22}/></span>
             <span className="mode-label">Голос</span>
           </button>
