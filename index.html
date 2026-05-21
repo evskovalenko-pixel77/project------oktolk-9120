@@ -2558,10 +2558,7 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
             <span className="mode-icon"><IconCamera size={22}/></span>
             <span className="mode-label">Фото</span>
           </button>
-          <button className="mode" onClick={() => onMode('voice')}>
-            <span className="mode-icon"><IconMic size={22}/></span>
-            <span className="mode-label">Голос</span>
-          </button>
+          <VoiceButton onResult={(text) => { onAsk(text); }} />
         </div>
       </div>
       </div>
