@@ -306,7 +306,7 @@ button { font-family: inherit; }
 .mode:hover { transform: translateY(-2px); }
 .mode:active { transform: scale(0.98); }
 .mode-icon {
-  width: 22px; height: 22px;
+  width: 18px; height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -315,7 +315,7 @@ button { font-family: inherit; }
   border-radius: 0;
 }
 .mode-label {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -2843,7 +2843,7 @@ function FinanceScreen({ onAsk, onMode }) {
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>Мои финансы</div>
           <div className="hero-title">Расходы за май</div>
           <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>{total > 0 ? total.toLocaleString('ru') + ' ₽' : '0 ₽'} · расходы за май</div>
-          <button className="btn-primary" style={{ marginTop: 18, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
+          <button className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
             <IconCreditCard size={18}/>Добавить расход<IconArrowRight size={16}/>
           </button>
         </div>
@@ -2854,7 +2854,7 @@ function FinanceScreen({ onAsk, onMode }) {
           {cats.map(c => {
             const CI = c.icon;
             return (
-              <button key={c.label} onClick={() => setSelectedCat(c)} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '10px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+              <button key={c.label} onClick={() => setSelectedCat(c)} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '10px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                 <span style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--primary-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <CI size={18} color="var(--primary)"/>
                 </span>
@@ -2918,13 +2918,13 @@ function HealthScreen({ onAsk, onMode }) {
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>Моё здоровье</div>
           <div className="hero-title">Контроль показателей</div>
           <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>давление —/— · пульс —</div>
-          <button className="btn-primary" style={{ marginTop: 18, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
+          <button className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
             <IconHeart size={18}/>Внести показатели<IconArrowRight size={16}/>
           </button>
         </div>
       </div>
 
-      <div className="section" style={{ paddingTop: 28 }}>
+      <div className="section" style={{ paddingTop: 8 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
           {[
             { label: 'Давление', value: '—/—', unit: 'мм рт.ст.', icon: IconHeart },
@@ -2934,13 +2934,13 @@ function HealthScreen({ onAsk, onMode }) {
           ].map(m => {
             const MI = m.icon;
             return (
-              <div key={m.label} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 16, padding: '16px 14px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <span style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(31,138,91,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <MI size={22} color="#1F8A5B"/>
+              <div key={m.label} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 12, padding: '10px 10px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(31,138,91,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <MI size={18} color="#1F8A5B"/>
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>{m.label}</span>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>{m.value}</span>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>{m.value}</span>
                   <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>{m.unit}</span>
                 </div>
               </div>
@@ -3052,7 +3052,7 @@ function NewsScreen({ onAsk }) {
           <div className="hero-title">Лента за вас</div>
           <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>проверенные источники</div>
 
-          <button className="btn-primary" style={{ marginTop: 18, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
+          <button className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
             <IconHeadphones size={18}/>
             Слушать ленту как радио
             <IconArrowRight size={16}/>
