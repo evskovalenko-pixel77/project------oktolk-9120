@@ -3563,6 +3563,114 @@ function AuthScreen({ onAuth }) {
   );
 }
 
+function SubscriptionScreen({ onClose }) {
+  const tariff = localStorage.getItem('oktolk_tariff') || 'demo';
+  const plans = [
+    { id: 'demo', name: 'Демо', price: '0', features: ['AI чат', 'Антискам', 'Новости', 'Проверенные сайты'] },
+    { id: 'standard', name: 'Стандарт', price: '390', features: ['AI чат', 'Антискам', 'Новости', 'Голос', 'TTS'], recommended: true },
+    { id: 'pro', name: 'Про', price: '590', features: ['Всё из Стандарт', 'Здоровье', 'Документы'] }
+  ];
+  return (
+    <>
+      <div className="sheet-backdrop" onClick={onClose}/>
+      <div className="sheet" style={{ maxHeight: '90dvh', overflowY: 'auto' }}>
+        <div className="sheet-handle"/>
+        <div style={{ padding: '8px 20px 24px' }}>
+          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Тариф</div>
+          <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>Выберите подходящий план</div>
+          {plans.map(plan => (
+            <div key={plan.id} style={{ border: plan.recommended ? '2px solid var(--primary)' : '1px solid var(--border)', borderRadius: 16, padding: '16px 18px', marginBottom: 12, background: plan.recommended ? 'var(--primary-tint)' : 'var(--surface)', position: 'relative' }}>
+              {plan.recommended && <div style={{ position: 'absolute', top: -12, right: 16, background: 'var(--primary)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999 }}>ПОПУЛЯРНЫЙ</div>}
+              {tariff === plan.id && <div style={{ position: 'absolute', top: -12, left: 16, background: 'var(--success)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999 }}>ТЕКУЩИЙ</div>}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>{plan.name}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: plan.recommended ? 'var(--primary)' : 'var(--text)' }}>{plan.price === '0' ? 'Бесплатно' : plan.price + ' ₽/мес'}</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                {plan.features.map((f, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                    <span style={{ color: 'var(--success)' }}>✓</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{f}</span>
+                  </div>
+                ))}
+              </div>
+              {tariff !== plan.id && plan.price !== '0' && (
+                <button onClick={() => alert('Оплата через ЮKassa — скоро!')} style={{ width: '100%', padding: '12px', borderRadius: 12, background: plan.recommended ? 'var(--primary)' : 'var(--surface-2)', color: plan.recommended ? '#fff' : 'var(--text)', border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                  Подключить за {plan.price} ₽/мес
+                </button>
+              )}
+              {tariff === plan.id && plan.id !== 'demo' && (
+                <button onClick={() => { localStorage.setItem('oktolk_tariff','demo'); alert('Подписка отменена'); onClose(); }} style={{ width: '100%', padding: '12px', borderRadius: 12, background: 'var(--danger-tint)', color: 'var(--danger)', border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                  Отменить подписку
+                </button>
+              )}
+            </div>
+          ))}
+          <div style={{ marginTop: 16, textAlign: 'center', fontSize: 12, color: 'var(--text-subtle)' }}>
+            Оплата через ЮKassa. Отменить можно в любой момент.<br/>
+            <a href="/terms.html" style={{ color: 'var(--primary)' }}>Условия</a>{' · '}
+            <a href="/privacy.html" style={{ color: 'var(--primary)' }}>Политика</a>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SubscriptionScreen({ onClose }) {
+  const tariff = localStorage.getItem('oktolk_tariff') || 'demo';
+  const plans = [
+    { id: 'demo', name: 'Демо', price: '0', features: ['AI чат', 'Антискам', 'Новости', 'Проверенные сайты'] },
+    { id: 'standard', name: 'Стандарт', price: '390', features: ['AI чат', 'Антискам', 'Новости', 'Голос', 'TTS'], recommended: true },
+    { id: 'pro', name: 'Про', price: '590', features: ['Всё из Стандарт', 'Здоровье', 'Документы'] }
+  ];
+  return (
+    <>
+      <div className="sheet-backdrop" onClick={onClose}/>
+      <div className="sheet" style={{ maxHeight: '90dvh', overflowY: 'auto' }}>
+        <div className="sheet-handle"/>
+        <div style={{ padding: '8px 20px 24px' }}>
+          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Тариф</div>
+          <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>Выберите подходящий план</div>
+          {plans.map(plan => (
+            <div key={plan.id} style={{ border: plan.recommended ? '2px solid var(--primary)' : '1px solid var(--border)', borderRadius: 16, padding: '16px 18px', marginBottom: 12, background: plan.recommended ? 'var(--primary-tint)' : 'var(--surface)', position: 'relative' }}>
+              {plan.recommended && <div style={{ position: 'absolute', top: -12, right: 16, background: 'var(--primary)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999 }}>ПОПУЛЯРНЫЙ</div>}
+              {tariff === plan.id && <div style={{ position: 'absolute', top: -12, left: 16, background: 'var(--success)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999 }}>ТЕКУЩИЙ</div>}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>{plan.name}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: plan.recommended ? 'var(--primary)' : 'var(--text)' }}>{plan.price === '0' ? 'Бесплатно' : plan.price + ' ₽/мес'}</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+                {plan.features.map((f, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                    <span style={{ color: 'var(--success)' }}>✓</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{f}</span>
+                  </div>
+                ))}
+              </div>
+              {tariff !== plan.id && plan.price !== '0' && (
+                <button onClick={() => alert('Оплата через ЮKassa — скоро!')} style={{ width: '100%', padding: '12px', borderRadius: 12, background: plan.recommended ? 'var(--primary)' : 'var(--surface-2)', color: plan.recommended ? '#fff' : 'var(--text)', border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                  Подключить за {plan.price} ₽/мес
+                </button>
+              )}
+              {tariff === plan.id && plan.id !== 'demo' && (
+                <button onClick={() => { localStorage.setItem('oktolk_tariff','demo'); alert('Подписка отменена'); onClose(); }} style={{ width: '100%', padding: '12px', borderRadius: 12, background: 'var(--danger-tint)', color: 'var(--danger)', border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                  Отменить подписку
+                </button>
+              )}
+            </div>
+          ))}
+          <div style={{ marginTop: 16, textAlign: 'center', fontSize: 12, color: 'var(--text-subtle)' }}>
+            Оплата через ЮKassa. Отменить можно в любой момент.<br/>
+            <a href="/terms.html" style={{ color: 'var(--primary)' }}>Условия</a>{' · '}
+            <a href="/privacy.html" style={{ color: 'var(--primary)' }}>Политика</a>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ProfileSheet({ onClose, name = 'Евгений', onLogout }) {
   const [showSub, setShowSub] = React.useState(false);
   const rows = [
