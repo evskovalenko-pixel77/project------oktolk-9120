@@ -2548,7 +2548,7 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
         </div>
       </div>
 
-        <div className="section" style={{ paddingTop: 4, marginTop: 'auto', paddingBottom: 4 }}>
+        <div className="section" style={{ paddingTop: 6, marginTop: 'auto', paddingBottom: 4 }}>
         <div className="modes">
           <button className="mode" onClick={() => {
             const input = document.createElement('input');
@@ -2874,7 +2874,7 @@ function FinanceScreen({ onAsk, onMode }) {
             {notification.text}
           </div>
         )}
-        <div className="composer" style={{ margin: '8px 0 0', width: '100%', boxSizing: 'border-box' }}>
+        <div className="composer" style={{ margin: '0', width: '100%', boxSizing: 'border-box' }}>
           <textarea
             placeholder="Напишите или надиктуйте расход…"
             value={input}
@@ -2889,7 +2889,7 @@ function FinanceScreen({ onAsk, onMode }) {
         </div>
       </div>
 
-        <div className="section" style={{ paddingTop: 4, marginTop: 'auto', paddingBottom: 4 }}>
+        <div className="section" style={{ paddingTop: 6, marginTop: 'auto', paddingBottom: 4 }}>
         <div className="modes">
           <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='.pdf,.doc,.docx,.txt,image/*'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f && onAsk) onAsk('Помогите разобрать документ: '+f.name); }; i.click(); }}>
             <span className="mode-icon"><IconDoc size={22}/></span>
@@ -2924,7 +2924,7 @@ function HealthScreen({ onAsk, onMode }) {
         </div>
       </div>
 
-      <div className="section" style={{ paddingTop: 8 }}>
+      <div className="section" style={{ paddingTop: 8, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 }}>
           {[
             { label: 'Давление', value: '—/—', unit: 'мм рт.ст.', icon: IconHeart },
@@ -2962,7 +2962,7 @@ function HealthScreen({ onAsk, onMode }) {
         </div>
       </div>
 
-        <div className="section" style={{ paddingTop: 4, marginTop: 'auto', paddingBottom: 4 }}>
+        <div className="section" style={{ paddingTop: 6, marginTop: 'auto', paddingBottom: 4 }}>
         <div className="modes">
           <button className="mode" onClick={() => onMode && onMode('analyze')}>
             <span className="mode-icon"><IconDoc size={22}/></span>
