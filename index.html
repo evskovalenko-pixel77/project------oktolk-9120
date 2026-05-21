@@ -3916,6 +3916,16 @@ function App() {
           {tab === 'news'    && <NewsScreen onAsk={onAsk}/>}
           {tab === 'sites'   && <SitesScreen/>}
         </div>
+        <div style={{ textAlign: 'center', padding: '8px 16px 4px', borderTop: '0.5px solid var(--border)', background: 'var(--surface)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-subtle)', lineHeight: 1.6 }}>
+            ИП Коваленко Е.С. · ИНН 262901419034
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-subtle)', display: 'flex', justifyContent: 'center', gap: 12, marginTop: 2 }}>
+            <a href="/terms.html" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Оферта</a>
+            <a href="/privacy.html" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Политика</a>
+            <a href="/requisites.html" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Реквизиты</a>
+          </div>
+        </div>
         <TabBar active={tab} onChange={setTab}/>
 
         {chat !== null && <ChatOverlay initialMsg={chat} onClose={() => setChat(null)}/>}
