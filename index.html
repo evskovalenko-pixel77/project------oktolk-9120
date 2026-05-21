@@ -1068,6 +1068,25 @@ body{margin:0;height:100dvh;max-height:100dvh;overflow:hidden;box-sizing:border-
 #root{height:100%;width:100%;max-width:430px;display:flex;flex-direction:column;align-items:stretch;justify-content:center}
 </style>
 <template id="__bundler_thumbnail"><svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><rect width="200" height="200" rx="44" fill="#3B4FE0"/><text x="100" y="125" text-anchor="middle" fill="white" font-family="Onest, sans-serif" font-size="64" font-weight="700" letter-spacing="-2">Ok</text></svg></template>
+<style>
+/* === COMPACT LAYOUT FIX === */
+@media(max-width:768px){
+  body { padding: 0 !important; }
+  .app { border-radius: 0 !important; height: 100dvh !important; max-height: 100dvh !important; }
+}
+.hero { padding: 10px 14px !important; }
+.hero-title { font-size: 20px !important; margin-bottom: 2px !important; }
+.hero-sub { font-size: 13px !important; margin-bottom: 6px !important; }
+.hero-btn { padding: 8px 14px !important; font-size: 14px !important; }
+.section { padding: 8px 14px 0 !important; }
+.cat-grid { gap: 7px !important; }
+.cat-card { padding: 9px 12px !important; border-radius: 12px !important; }
+.cat-name { font-size: 13px !important; }
+.cat-amount { font-size: 14px !important; font-weight: 600 !important; }
+.modes { gap: 6px !important; margin-top: 4px !important; }
+.mode { height: 40px !important; font-size: 13px !important; }
+.composer { margin-top: 6px !important; }
+</style>
 </head>
 <body>
 <div id="root"></div>
