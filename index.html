@@ -2779,7 +2779,6 @@ function FinanceScreen({ onAsk, onMode }) {
   const [total, setTotal] = React.useState(0);
   const [notification, setNotification] = React.useState(null);
   const [selectedCat, setSelectedCat] = React.useState(null);
-  const [voiceActive, setVoiceActive] = React.useState(false);
 
   const loadSummary = () => {
     const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
@@ -2824,91 +2823,70 @@ function FinanceScreen({ onAsk, onMode }) {
       setTimeout(() => setNotification(null), 3000);
     }
   };
+
   React.useEffect(() => { loadSummary(); }, []);
+
   const catMap = { 'Магазины': 'shop', 'Медицина': 'pharmacy', 'ЖКУ': 'utility', 'Кредиты': 'credit', 'Транспорт': 'transport', 'Досуг': 'leisure' };
   const cats = [
-    { icon: IconCart,     label: 'Магазины' },
-    { icon: IconPill,     label: 'Медицина' },
-    { icon: IconBuilding, label: 'ЖКУ' },
+    { icon: IconCart,       label: 'Магазины' },
+    { icon: IconPill,       label: 'Медицина' },
+    { icon: IconBuilding,   label: 'ЖКУ' },
     { icon: IconCreditCard, label: 'Кредиты' },
-    { icon: IconTrend,    label: 'Транспорт' },
-    { icon: IconSparkles, label: 'Досуг' },
+    { icon: IconTrend,      label: 'Транспорт' },
+    { icon: IconSparkles,   label: 'Досуг' },
   ];
+
   if (selectedCat) return <CategoryDetailScreen cat={selectedCat} summary={summary} onBack={() => setSelectedCat(null)} onAsk={onAsk}/>;
-  if (selectedCat) return <CategoryDetailScreen cat={selectedCat} summary={summary} onBack={() => setSelectedCat(null)} onAsk={onAsk}/>;
+
   return (
-    <div className="screen">
-      <div style={{ padding: '0' }}>
-        <div className="hero indigo" style={{ padding: '14px 20px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>Мои финансы</div>
-          <div className="hero-title">Расходы за май</div>
-          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>{total > 0 ? total.toLocaleString('ru') + ' ₽' : '0 ₽'} · расходы за май</div>
-          <button className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
-            <IconCreditCard size={18}/>Добавить расход<IconArrowRight size={16}/>
-          </button>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
+      <div className="hero indigo" style={{ padding: '12px 18px 14px' }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4 }}>Мои финансы</div>
+        <div className="hero-title" style={{ fontSize: 20 }}>Расходы за май</div>
+        <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3 }}>{total > 0 ? total.toLocaleString('ru') + ' ₽' : '0 ₽'} · расходы за май</div>
+        <button className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
+          <IconCreditCard size={18}/>Добавить расход<IconArrowRight size={16}/>
+        </button>
       </div>
 
-      <div className="section">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {cats.map(c => {
-            const CI = c.icon;
-            return (
-              <button key={c.label} onClick={() => setSelectedCat(c)} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '10px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <span style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--primary-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <CI size={18} color="var(--primary)"/>
-                </span>
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 3, textAlign: 'left' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.2 }}>{c.label}</span>
-                  <span style={{ fontSize: 16, fontWeight: 800, color: summary[catMap[c.label]] ? 'var(--text)' : 'var(--text-subtle)', letterSpacing: '-0.02em' }}>{summary[catMap[c.label]] ? summary[catMap[c.label]].toLocaleString('ru') + ' ₽' : '— ₽'}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {cats.map(c => {
+          const CI = c.icon;
+          return (
+            <button key={c.label} onClick={() => setSelectedCat(c)} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 12, padding: '10px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <span style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--primary-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <CI size={18} color="var(--primary)"/>
+              </span>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.2 }}>{c.label}</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: summary[catMap[c.label]] ? 'var(--text)' : 'var(--text-subtle)' }}>{summary[catMap[c.label]] ? summary[catMap[c.label]].toLocaleString('ru') + ' ₽' : '— ₽'}</span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="section" style={{ paddingTop: 12 }}>
+      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {notification && (
-          <div style={{ background: notification.type === 'ok' ? 'var(--success-tint)' : '#FFE5E5', borderRadius: 12, padding: '10px 14px', marginBottom: 10, fontSize: 13, color: notification.type === 'ok' ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>
+          <div style={{ background: notification.type === 'ok' ? 'var(--success-tint)' : '#FFE5E5', borderRadius: 12, padding: '10px 14px', fontSize: 13, color: notification.type === 'ok' ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>
             {notification.text}
           </div>
         )}
-        <div className="composer" style={{ margin: '0', width: '100%', boxSizing: 'border-box' }}>
-          <textarea
-            placeholder="Напишите или надиктуйте расход…"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            rows={1}
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', font: 'inherit', fontSize: 15, color: 'var(--text)', resize: 'none', minHeight: 22, maxHeight: 120, overflowY: 'auto', padding: '2px 0' }}
-            onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
-          />
+        <div className="composer" style={{ margin: 0, width: '100%', boxSizing: 'border-box' }}>
+          <textarea placeholder="Напишите или надиктуйте расход…" value={input} onChange={e => setInput(e.target.value)} rows={1} style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', font: 'inherit', fontSize: 15, color: 'var(--text)', resize: 'none', minHeight: 22, maxHeight: 120, overflowY: 'auto', padding: '2px 0' }} onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}/>
           <button className="composer-send" aria-label="Отправить" onClick={() => sendFinance(null, null, null)}>
             <IconSend size={18} sw={2}/>
           </button>
         </div>
-      </div>
-
-        <div className="section" style={{ paddingTop: 6, marginTop: 'auto', paddingBottom: 4 }}>
         <div className="modes">
-          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='.pdf,.doc,.docx,.txt,image/*'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f && onAsk) onAsk('Помогите разобрать документ: '+f.name); }; i.click(); }}>
-            <span className="mode-icon"><IconDoc size={22}/></span>
-            <span className="mode-label">Документ</span>
-          </button>
-          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=(e)=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onloadend=()=>sendFinance(null,r.result.split(',')[1],f.type); r.readAsDataURL(f); }; i.click(); }}>
-            <span className="mode-icon"><IconCamera size={22}/></span>
-            <span className="mode-label">Чек</span>
-          </button>
+          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='.pdf,.doc,.docx,.txt,image/*'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f && onAsk) onAsk('Помогите разобрать документ: '+f.name); }; i.click(); }}><span className="mode-icon"><IconDoc size={22}/></span><span className="mode-label">Документ</span></button>
+          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=(e)=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onloadend=()=>sendFinance(null,r.result.split(',')[1],f.type); r.readAsDataURL(f); }; i.click(); }}><span className="mode-icon"><IconCamera size={22}/></span><span className="mode-label">Чек</span></button>
           <VoiceButton onResult={(text) => { setInput(text); setTimeout(()=>sendFinance(text,null,null), 1000); }} />
         </div>
       </div>
     </div>
   );
-}
-
-// ─────────────────────────────────────────────────────────────
-// Health screen
-// ─────────────────────────────────────────────────────────────
+}// ─────────────────────────────────────────────────────────────
 function HealthScreen({ onAsk, onMode }) {
   const [input, setInput] = React.useState('');
   return (
