@@ -2841,11 +2841,11 @@ function FinanceScreen({ onAsk, onMode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
       <div className="hero indigo" style={{ padding: '12px 18px 14px' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4 }}>Мои финансы</div>
-        <div className="hero-title" style={{ fontSize: 20 }}>Расходы за май</div>
-        <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3 }}>{total > 0 ? total.toLocaleString('ru') + ' ₽' : '0 ₽'} · расходы за май</div>
-        <button className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
-          <IconCreditCard size={18}/>Добавить расход<IconArrowRight size={16}/>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Мои финансы</div>
+        <div className="hero-title" style={{ fontSize: 20, textAlign: 'center' }}>Расходы за май</div>
+        <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>{total > 0 ? total.toLocaleString('ru') + ' ₽' : '0 ₽'} · расходы за май</div>
+        <button className="btn-primary" style={{ marginTop: 8, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff', fontSize: 13, padding: '8px 14px' }}>
+          <IconCreditCard size={16}/>Добавить расход<IconArrowRight size={14}/>
         </button>
       </div>
 
