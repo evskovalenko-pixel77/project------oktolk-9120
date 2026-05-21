@@ -2874,7 +2874,7 @@ function FinanceScreen({ onAsk, onMode }) {
             {notification.text}
           </div>
         )}
-        <div className="composer" style={{ margin: 0, width: '100%', boxSizing: 'border-box' }}>
+        <div className="composer" style={{ margin: 'auto 0 0', width: '100%', boxSizing: 'border-box' }}>
           <textarea
             placeholder="Напишите или надиктуйте расход…"
             value={input}
@@ -2924,8 +2924,8 @@ function HealthScreen({ onAsk, onMode }) {
         </div>
       </div>
 
-      <div className="section" style={{ paddingTop: 8 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+      <div className="section" style={{ paddingTop: 8, display: 'flex', flexDirection: 'column', flex: 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 0 }}>
           {[
             { label: 'Давление', value: '—/—', unit: 'мм рт.ст.', icon: IconHeart },
             { label: 'Пульс',    value: '—',   unit: 'уд/мин',    icon: IconTrend },
