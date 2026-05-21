@@ -2438,7 +2438,7 @@ function WeatherWidget() {
   }, []);
   if (!w) return null;
   return (
-    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:20, padding:'16px 18px', width:'75%', alignSelf:'flex-start', animation:'weatherIn 0.4s ease-out' }}>
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:20, padding:'16px 18px', width:'100%', animation:'weatherIn 0.4s ease-out' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:44, lineHeight:1 }}>{w.ti}</span>
@@ -2499,10 +2499,9 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
       </div>
 
       {showStop && <StopMoshennnikSheet onClose={() => setShowStop(false)} onAsk={onAsk}/>}
-      <WeatherWidget/>
-      <div style={{ marginTop: 'auto', paddingBottom: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 12 }}>
-          <button className="stop-chip" onClick={() => onMode('stop')} style={{ display: 'inline-flex', width: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '0 20px' }}>
+        <div style={{ width: '100%' }}><WeatherWidget/></div>
+        <button className="stop-chip" onClick={() => onMode('stop')} style={{ display: 'inline-flex', width: '100%', justifyContent: 'center' }}>
             <div className="stop-chip-icon">
               <IconShield size={14} sw={2.5}/>
             </div>
