@@ -2529,7 +2529,6 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
             style={{ resize:'none', overflow:'hidden', minHeight:24, flex:1, background:'transparent', border:'none', outline:'none', font:'inherit', fontSize:15, color:'var(--text)', padding:'2px 0' }}
           />
           <button className="composer-send" disabled={!q.trim()} onClick={() => { if (q.trim()) { onAsk(q); setQ(''); } }} aria-label="Отправить"><IconSend size={18} sw={2}/></button>
-          </button>
         </div>
         <div className="modes">
           <button className="mode" onClick={() => { const i=document.createElement('input'); i.type='file'; i.accept='.pdf,.doc,.docx,.txt,image/*'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f) onAsk('Помогите разобрать документ: '+f.name); }; i.click(); }}><span className="mode-icon"><IconDoc size={22}/></span><span className="mode-label">Документ</span></button>
