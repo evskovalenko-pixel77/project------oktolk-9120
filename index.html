@@ -2956,7 +2956,7 @@ function NewsScreen({ onAsk }) {
   const visible = filter === 'all' ? NEWS : NEWS.filter(n => n.cat === filter);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, boxSizing: 'border-box' }}>
-      <div className="hero news" style={{ padding: '12px 18px 14px' }}>
+      <div className="hero news" style={{ padding: '12px 18px 14px', margin: '0 14px' }}>
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Что нового</div>
         <div className="hero-title" style={{ fontSize: 20, textAlign: 'center' }}>Лента за вас</div>
         <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>проверенные источники</div>
