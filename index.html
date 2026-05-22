@@ -2528,7 +2528,7 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
             placeholder="Напишите свой вопрос…"
             style={{ resize:'none', overflow:'hidden', minHeight:24, flex:1, background:'transparent', border:'none', outline:'none', font:'inherit', fontSize:15, color:'var(--text)', padding:'2px 0' }}
           />
-            <IconSend size={18} sw={2}/>
+          <button className="composer-send" disabled={!q.trim()} onClick={() => { if (q.trim()) { onAsk(q); setQ(''); } }} aria-label="Отправить"><IconSend size={18} sw={2}/></button>
           </button>
         </div>
         <div className="modes">
