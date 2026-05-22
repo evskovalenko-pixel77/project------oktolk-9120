@@ -2332,7 +2332,7 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
           {messages.length === 0 && (
             <div style={{ textAlign: 'center', padding: '20px 10px' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>🛡️</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Отправьте материалы для проверки</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>Отправьте материалы для проверки</div>
               <div style={{ fontSize: 12, color: '#9B9BA3', lineHeight: 1.5 }}>Скриншот переписки, ссылку, аудиозапись звонка или опишите ситуацию текстом</div>
             </div>
           )}
@@ -2959,11 +2959,11 @@ function NewsScreen({ onAsk }) {
     <div className="screen">
       <div>
         <div className="hero news">
-          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4 }}>
             Что нового
           </div>
           <div className="hero-title">Лента за вас</div>
-          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>проверенные источники</div>
+          <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3 }}>проверенные источники</div>
 
           <button className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
             <IconHeadphones size={18}/>
@@ -3098,11 +3098,11 @@ function SitesScreen() {
     <div className="screen">
       <div style={{ padding: '4px 0' }}>
         <div className="hero sites">
-          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4 }}>
             Сайты
           </div>
           <div className="hero-title">Проверенные ресурсы</div>
-          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>{CATEGORIES.reduce((a, c) => a + c.count, 0)} сайтов в 6 категориях</div>
+          <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3 }}>{CATEGORIES.reduce((a, c) => a + c.count, 0)} сайтов в 6 категориях</div>
         </div>
       </div>
 
@@ -3438,7 +3438,7 @@ function AuthScreen({ onAuth }) {
       }}>
         {mode === 'register' && (
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Ваше имя</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Ваше имя</div>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Евгений"
               style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
                 border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
@@ -3446,7 +3446,7 @@ function AuthScreen({ onAuth }) {
           </div>
         )}
         <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Телефон</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Телефон</div>
           <input value={phone} onChange={e => setPhone(formatPhone(e.target.value))}
             placeholder="+7 (999) 000-00-00" type="tel"
             style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
@@ -3454,7 +3454,7 @@ function AuthScreen({ onAuth }) {
               fontSize: 16, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}/>
         </div>
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Пароль</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4 }}>Пароль</div>
           <input value={password} onChange={e => setPassword(e.target.value)}
             placeholder="Минимум 6 символов" type="password"
             onKeyDown={e => e.key === 'Enter' && submit()}
