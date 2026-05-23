@@ -382,6 +382,10 @@ button { font-family: inherit; }
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0; color: white;
 }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 @keyframes chipPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(192,57,43,0.3); }
   50% { box-shadow: 0 0 0 4px rgba(192,57,43,0); }
@@ -1075,16 +1079,14 @@ body{margin:0;height:100dvh;max-height:100dvh;overflow:hidden;box-sizing:border-
   body { padding: 0 !important; }
   .app { border-radius: 0 !important; height: 100dvh !important; max-height: 100dvh !important; }
 }
-.hero { padding: 12px 18px 14px !important; overflow: visible !important; }
+.hero { padding: 10px 14px !important; }
 .hero-title { font-size: 20px !important; margin-bottom: 2px !important; }
 .hero-sub { font-size: 13px !important; margin-bottom: 6px !important; }
 .hero-btn { padding: 8px 14px !important; font-size: 14px !important; }
 .section { padding: 8px 14px 0 !important; }
 .cat-grid { gap: 7px !important; }
-.cat-card { padding: 10px 12px !important; border-radius: 12px !important; min-height: 0 !important; flex-direction: row !important; align-items: center !important; gap: 10px !important; }
+.cat-card { padding: 9px 12px !important; border-radius: 12px !important; }
 .cat-name { font-size: 13px !important; }
-.cat-icon { width: 36px !important; height: 36px !important; border-radius: 10px !important; flex-shrink: 0 !important; }
-.cat-count { display: none !important; }
 .cat-amount { font-size: 14px !important; font-weight: 600 !important; }
 .modes { gap: 6px !important; margin-top: 4px !important; }
 .mode { height: 40px !important; font-size: 13px !important; }
@@ -2509,14 +2511,14 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
   }, [voiceText]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
-      <div className="hero" style={{ background: "linear-gradient(135deg, #B91C1C, #D14343, #EF4444)", flexShrink: 0 }}>
+      <div style={{ borderRadius: 20, padding: '14px 18px', background: 'linear-gradient(135deg, #B91C1C, #D14343, #EF4444)', color: 'white', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.8, marginBottom: 4, textAlign: 'center' }}>Защита от мошенников</div>
-        <div style={{ fontSize: 20, fontWeight: 800, textAlign: 'center', marginBottom: 4, letterSpacing: '-0.02em' }}>Стоп Мошенник</div>
+        <div style={{ fontSize: 22, fontWeight: 800, textAlign: 'center', marginBottom: 4, letterSpacing: '-0.02em' }}>Стоп Мошенник</div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, opacity: 0.85, marginBottom: 10 }}>
           Предотвращено угроз:
           <span style={{ background: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: '2px 10px', fontWeight: 600 }}>0</span>
         </div>
-        <button onClick={() => onMode('stop')} style={{ background: 'rgba(255,255,255,0.18)', border: '0.5px solid rgba(255,255,255,0.3)', borderRadius: 12, width: '100%', color: 'white', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}>
+        <button onClick={() => onMode('stop')} style={{ width: '100%', background: 'rgba(255,255,255,0.18)', border: '0.5px solid rgba(255,255,255,0.3)', borderRadius: 12, color: 'white', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}>
           <IconShield size={16} sw={2.5}/>Проверить сообщение →
         </button>
       </div>
@@ -2799,7 +2801,7 @@ function FinanceScreen({ onAsk, onMode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
       <div className="hero indigo" style={{ padding: '12px 18px 14px' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center', textAlign: 'center' }}>Мои финансы</div>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Мои финансы</div>
         <div className="hero-title" style={{ fontSize: 20, textAlign: 'center' }}>Расходы за май</div>
         <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>{total > 0 ? total.toLocaleString('ru') + ' ₽' : '0 ₽'} · расходы за май</div>
         <button className="btn-primary" style={{ marginTop: 8, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff', fontSize: 13, padding: '8px 14px' }}>
@@ -2845,51 +2847,555 @@ function FinanceScreen({ onAsk, onMode }) {
     </div>
   );
 }// ─────────────────────────────────────────────────────────────
-function HealthScreen({ onAsk, onMode }) {
+// ─────────────────────────────────────────────────────────────
+// Health Detail Screen — карусель из 5 слайдов
+// ─────────────────────────────────────────────────────────────
+function HealthDetailScreen({ metric, onBack }) {
+  const [slide, setSlide] = React.useState(0);
+  const [records, setRecords] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [period, setPeriod] = React.useState(30);
+  const [aiText, setAiText] = React.useState('');
+  const [aiLoading, setAiLoading] = React.useState(false);
   const [input, setInput] = React.useState('');
+  const startX = React.useRef(null);
+  const SLIDES = 5;
+
+  const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
+
+  React.useEffect(() => {
+    setLoading(true);
+    fetch('/api/v1/health/records?user_id=' + userId + '&type=' + metric.type + '&days=' + period)
+      .then(r => r.json())
+      .then(d => { setRecords(Array.isArray(d) ? d : (d.records || [])); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [period, metric.type]);
+
+  React.useEffect(() => {
+    if (slide === 4 && records.length > 0 && !aiText) loadAI();
+  }, [slide, records]);
+
+  const loadAI = async () => {
+    setAiLoading(true);
+    try {
+      const summary = records.slice(0, 30).map(r => {
+        const d = new Date(r.recorded_at);
+        const day = ['вс','пн','вт','ср','чт','пт','сб'][d.getDay()];
+        const comment = r.comment ? ', заметка: ' + r.comment : '';
+        return d.toLocaleDateString('ru-RU') + ' (' + day + '): ' + (r.value_2 ? r.value_1 + '/' + r.value_2 : r.value_1) + ' ' + metric.unit + comment;
+      }).join('\n');
+      const prompt = 'Ты — аналитик данных здоровья. Проанализируй показатели ' + metric.label + ' пользователя. Только анализ фактических данных — когда были отклонения, паттерны по дням недели/времени суток, как часто норма нарушалась. БЕЗ диагнозов, БЕЗ рекомендаций по лекарствам, БЕЗ советов по лечению. Если в заметках есть упоминания причин (стресс, физнагрузка и т.д.) — учитывай их в анализе. Ответ лаконичный, 3-5 предложений, понятным языком.\n\nДанные:\n' + summary;
+      const res = await fetch('/api/v1/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('oktolk_token') || 'demo') },
+        body: JSON.stringify({ message: prompt })
+      });
+      const data = await res.json();
+      setAiText(data.reply || data.message || 'Недостаточно данных для анализа.');
+    } catch(e) { setAiText('Не удалось загрузить анализ. Попробуйте позже.'); }
+    setAiLoading(false);
+  };
+
+  const sendHealthInput = async (text) => {
+    if (!text.trim()) return;
+    try {
+      const token = localStorage.getItem('oktolk_token') || 'demo';
+      const res = await fetch('/api/v1/health/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ user_id: userId, type: metric.type, text: text })
+      });
+      const data = await res.json();
+      if (data && data.value_1) {
+        const r2 = await fetch('/api/v1/health/records?user_id=' + userId + '&type=' + metric.type + '&days=' + period);
+        const d2 = await r2.json();
+        setRecords(Array.isArray(d2) ? d2 : (d2.records || []));
+        setAiText('');
+        setInput('');
+      }
+    } catch(e) {}
+  };
+
+  const sendPhotoHealth = (file) => {
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const base64 = ev.target.result.split(',')[1];
+      const token = localStorage.getItem('oktolk_token') || 'demo';
+      try {
+        const res = await fetch('/api/v1/health/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ user_id: userId, type: metric.type, image_base64: base64, mime_type: file.type })
+        });
+        const d = await res.json();
+        if (d.value_1) {
+          const r2 = await fetch('/api/v1/health/records?user_id=' + userId + '&type=' + metric.type + '&days=' + period);
+          const d2 = await r2.json();
+          setRecords(Array.isArray(d2) ? d2 : (d2.records || []));
+          setAiText('');
+        }
+      } catch(e) {}
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Нормы по типу
+  const norms = {
+    pressure: { label: 'Норма', min1: 90, max1: 130, min2: 60, max2: 85, high1: 140, high2: 90 },
+    pulse:    { label: 'Норма', min: 60, max: 100, high: 100 },
+    sugar:    { label: 'Норма', min: 3.9, max: 5.6, high: 6.1 },
+    weight:   { label: 'Индивидуально', min: null, max: null }
+  };
+  const norm = norms[metric.type] || {};
+
+  const isHigh = (r) => {
+    if (metric.type === 'pressure') return parseFloat(r.value_1) > (norm.high1 || 140) || parseFloat(r.value_2) > (norm.high2 || 90);
+    if (metric.type === 'pulse') return parseFloat(r.value_1) > (norm.high || 100);
+    if (metric.type === 'sugar') return parseFloat(r.value_1) > (norm.high || 6.1);
+    return false;
+  };
+  const isLow = (r) => {
+    if (metric.type === 'pressure') return parseFloat(r.value_1) < (norm.min1 || 90);
+    if (metric.type === 'pulse') return parseFloat(r.value_1) < (norm.min || 60);
+    if (metric.type === 'sugar') return parseFloat(r.value_1) < (norm.min || 3.9);
+    return false;
+  };
+
+  const periodRecords = records.filter(r => {
+    const days = period;
+    const ago = new Date(); ago.setDate(ago.getDate() - days);
+    return new Date(r.recorded_at) >= ago;
+  });
+
+  const highCount = periodRecords.filter(isHigh).length;
+  const lowCount = periodRecords.filter(isLow).length;
+  const normCount = periodRecords.length - highCount - lowCount;
+  const total = periodRecords.length;
+
+  // Последнее значение
+  const lastRec = records[0];
+  const lastVal = lastRec ? (lastRec.value_2 ? lastRec.value_1 + '/' + lastRec.value_2 : lastRec.value_1) : '—';
+
+  const onTouchStart = (e) => { startX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e) => {
+    if (startX.current === null) return;
+    const diff = startX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0 && slide < SLIDES - 1) setSlide(s => s + 1);
+      if (diff < 0 && slide > 0) setSlide(s => s - 1);
+    }
+    startX.current = null;
+  };
+
+  const slideStyle = { display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', flex: 1, minHeight: 0 };
+
+  // Слайд 0 — Ключевые метрики
+  const Slide0 = () => (
+    <div style={slideStyle}>
+      <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>Последнее измерение</div>
+        <div style={{ fontSize: 40, fontWeight: 800, color: isHigh(lastRec || {}) ? 'var(--danger)' : isLow(lastRec || {}) ? '#C77A20' : 'var(--success)', lineHeight: 1.1 }}>{lastVal}</div>
+        <div style={{ fontSize: 13, color: 'var(--text-subtle)', marginTop: 4 }}>{metric.unit}</div>
+        {lastRec && <div style={{ fontSize: 12, color: 'var(--text-subtle)', marginTop: 6 }}>{new Date(lastRec.recorded_at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</div>}
+      </div>
+      {total > 0 && (
+        <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '14px 16px', border: '0.5px solid var(--border)' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, fontWeight: 600 }}>За {period} дней — {total} измерений</div>
+          <div style={{ display: 'flex', gap: 6, height: 8, borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
+            {normCount > 0 && <div style={{ flex: normCount, background: '#1F8A5B' }}/>}
+            {lowCount > 0  && <div style={{ flex: lowCount,  background: '#C77A20' }}/>}
+            {highCount > 0 && <div style={{ flex: highCount, background: 'var(--danger)' }}/>}
+          </div>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 10, height: 10, borderRadius: 3, background: '#1F8A5B' }}/><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Норма: {normCount}</span></div>
+            {lowCount > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 10, height: 10, borderRadius: 3, background: '#C77A20' }}/><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Низко: {lowCount}</span></div>}
+            {highCount > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}><div style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--danger)' }}/><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Высоко: {highCount}</span></div>}
+          </div>
+        </div>
+      )}
+      {total === 0 && !loading && (
+        <div style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--text-muted)', fontSize: 14 }}>
+          Нет измерений. Внесите первый показатель ниже.
+        </div>
+      )}
+    </div>
+  );
+
+  // Слайд 1 — Шкала нормы
+  const Slide1 = () => {
+    const val1 = lastRec ? parseFloat(lastRec.value_1) : null;
+    const val2 = lastRec ? parseFloat(lastRec.value_2) : null;
+    const getPosition = (val, min, max, absMin, absMax) => {
+      if (val === null || isNaN(val)) return 50;
+      const clamp = Math.max(absMin, Math.min(absMax, val));
+      return ((clamp - absMin) / (absMax - absMin)) * 100;
+    };
+    const renderGauge = (label, val, minNorm, maxNorm, absMin, absMax, unitLabel) => {
+      const pos = getPosition(val, minNorm, maxNorm, absMin, absMax);
+      const normStart = ((minNorm - absMin) / (absMax - absMin)) * 100;
+      const normEnd = ((maxNorm - absMin) / (absMax - absMin)) * 100;
+      const isN = val !== null && val >= minNorm && val <= maxNorm;
+      const isH = val !== null && val > maxNorm;
+      return (
+        <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '14px 16px', border: '0.5px solid var(--border)', marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{label}</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: isH ? 'var(--danger)' : !isN && val !== null ? '#C77A20' : 'var(--success)' }}>
+              {val !== null ? val : '—'} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-subtle)' }}>{unitLabel}</span>
+            </span>
+          </div>
+          <div style={{ position: 'relative', height: 12, borderRadius: 99, overflow: 'hidden', background: 'linear-gradient(to right, #3B8BF0 ' + normStart + '%, #1F8A5B ' + normStart + '%, #1F8A5B ' + normEnd + '%, var(--danger) ' + normEnd + '%)' }}>
+            {val !== null && <div style={{ position: 'absolute', left: 'calc(' + pos + '% - 6px)', top: -2, width: 16, height: 16, borderRadius: '50%', background: '#fff', border: '3px solid ' + (isH ? 'var(--danger)' : !isN ? '#C77A20' : 'var(--success)'), boxShadow: '0 2px 6px rgba(0,0,0,0.2)', zIndex: 2 }}/>}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
+            <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>{absMin}</span>
+            <span style={{ fontSize: 10, color: 'var(--success)' }}>Норма {minNorm}–{maxNorm}</span>
+            <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>{absMax}</span>
+          </div>
+        </div>
+      );
+    };
+    return (
+      <div style={slideStyle}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 4, paddingBottom: 4 }}>Шкала нормы — последнее измерение</div>
+        {metric.type === 'pressure' && <>
+          {renderGauge('Систолическое (верхнее)', val1, 90, 130, 60, 200, 'мм рт.ст.')}
+          {renderGauge('Диастолическое (нижнее)', val2, 60, 85, 40, 130, 'мм рт.ст.')}
+        </>}
+        {metric.type === 'pulse' && renderGauge('Пульс', val1, 60, 100, 30, 180, 'уд/мин')}
+        {metric.type === 'sugar' && renderGauge('Сахар крови', val1, 3.9, 5.6, 1.0, 15.0, 'ммоль/л')}
+        {metric.type === 'weight' && (
+          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)', fontSize: 14 }}>
+            Норма веса индивидуальна и зависит от роста и возраста.
+            <br/><br/>
+            <span style={{ fontSize: 32, fontWeight: 800, color: 'var(--text)' }}>{val1 || '—'}</span>
+            <span style={{ fontSize: 14, color: 'var(--text-subtle)', marginLeft: 6 }}>кг</span>
+          </div>
+        )}
+        <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          {metric.type === 'pressure' && '📋 Нормальное давление: 90–130 / 60–85 мм рт.ст. Повышенное (гипертония): от 140/90.'}
+          {metric.type === 'pulse' && '📋 Нормальный пульс в покое: 60–100 уд/мин. Спортсмены — от 40–60.'}
+          {metric.type === 'sugar' && '📋 Норма сахара натощак: 3.9–5.6 ммоль/л. Нарушение: 5.7–6.0. Диабет: от 6.1.'}
+          {metric.type === 'weight' && '📋 Индекс массы тела (ИМТ) рассчитывается индивидуально. Проконсультируйтесь с врачом.'}
+        </div>
+      </div>
+    );
+  };
+
+  // Слайд 2 — График
+  const Slide2 = () => {
+    const [chartPeriod, setChartPeriod] = React.useState(period);
+    const filtered = records.filter(r => {
+      const ago = new Date(); ago.setDate(ago.getDate() - chartPeriod);
+      return new Date(r.recorded_at) >= ago;
+    }).slice().reverse();
+    const maxVal = Math.max(...filtered.map(r => parseFloat(r.value_1) || 0), 1);
+    const minVal = Math.min(...filtered.map(r => parseFloat(r.value_1) || 0), 0);
+    const range = maxVal - minVal || 1;
+    const w = 280, h = 100;
+    const pts = filtered.map((r, i) => {
+      const x = filtered.length === 1 ? w/2 : (i / (filtered.length - 1)) * w;
+      const y = h - ((parseFloat(r.value_1) - minVal) / range) * (h - 10) - 5;
+      return { x, y, r };
+    });
+    const pathD = pts.length > 1 ? pts.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ') : '';
+    return (
+      <div style={slideStyle}>
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', paddingTop: 4 }}>
+          {[7, 14, 30].map(d => (
+            <button key={d} onClick={() => { setChartPeriod(d); setPeriod(d); }}
+              style={{ padding: '5px 14px', borderRadius: 99, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                background: chartPeriod === d ? 'var(--primary)' : 'var(--surface-2)', color: chartPeriod === d ? '#fff' : 'var(--text-muted)' }}>
+              {d} дней
+            </button>
+          ))}
+        </div>
+        {filtered.length > 0 ? (
+          <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '14px', border: '0.5px solid var(--border)', overflowX: 'auto' }}>
+            <svg width="100%" viewBox={'0 0 ' + w + ' ' + h} style={{ display: 'block' }}>
+              <defs>
+                <linearGradient id="hgGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#1F8A5B" stopOpacity="0.3"/>
+                  <stop offset="100%" stopColor="#1F8A5B" stopOpacity="0"/>
+                </linearGradient>
+              </defs>
+              {pathD && <>
+                <path d={pathD + ' L' + pts[pts.length-1].x + ',' + h + ' L' + pts[0].x + ',' + h + ' Z'} fill="url(#hgGrad)"/>
+                <path d={pathD} fill="none" stroke="#1F8A5B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </>}
+              {pts.map((p, i) => {
+                const hi = isHigh(p.r); const lo = isLow(p.r);
+                return <circle key={i} cx={p.x} cy={p.y} r="4" fill={hi ? 'var(--danger)' : lo ? '#C77A20' : '#1F8A5B'} stroke="#fff" strokeWidth="1.5"/>;
+              })}
+            </svg>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTop: '0.5px solid var(--border)' }}>
+              <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>{filtered.length > 0 ? new Date(filtered[0].recorded_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : ''}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{filtered.length} измерений</span>
+              <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>{filtered.length > 0 ? new Date(filtered[filtered.length-1].recorded_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : ''}</span>
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)', fontSize: 14 }}>Нет данных за {chartPeriod} дней</div>
+        )}
+        {filtered.length > 0 && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 10, padding: '10px', textAlign: 'center', border: '0.5px solid var(--border)' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Среднее</div>
+              <div style={{ fontSize: 17, fontWeight: 700 }}>{(filtered.reduce((s,r) => s + parseFloat(r.value_1), 0) / filtered.length).toFixed(1)}</div>
+            </div>
+            <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 10, padding: '10px', textAlign: 'center', border: '0.5px solid var(--border)' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Макс</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--danger)' }}>{Math.max(...filtered.map(r => parseFloat(r.value_1))).toFixed(1)}</div>
+            </div>
+            <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 10, padding: '10px', textAlign: 'center', border: '0.5px solid var(--border)' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Мин</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: '#1F8A5B' }}>{Math.min(...filtered.map(r => parseFloat(r.value_1))).toFixed(1)}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Слайд 3 — История
+  const Slide3 = () => (
+    <div style={slideStyle}>
+      <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 4 }}>История измерений</div>
+      {loading && <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-subtle)' }}>Загружаю…</div>}
+      {!loading && records.length === 0 && <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)', fontSize: 14 }}>Нет измерений. Внесите первый показатель.</div>}
+      {records.map((r, i) => {
+        const hi = isHigh(r); const lo = isLow(r);
+        const color = hi ? 'var(--danger)' : lo ? '#C77A20' : 'var(--success)';
+        const d = new Date(r.recorded_at);
+        const dayNames = ['вс','пн','вт','ср','чт','пт','сб'];
+        return (
+          <div key={r.id || i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface)', borderRadius: 12, padding: '10px 12px', border: '0.5px solid var(--border)' }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: hi ? 'var(--danger-tint)' : lo ? 'var(--warn-tint)' : 'var(--success-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, flexDirection: 'column' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color }}>{dayNames[d.getDay()]}</span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color }}>{r.value_2 ? r.value_1 + '/' + r.value_2 : r.value_1} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-subtle)' }}>{metric.unit}</span></span>
+                <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>{d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} {d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              {r.comment && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>{r.comment}</div>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  // Слайд 4 — AI анализ
+  const Slide4 = () => (
+    <div style={slideStyle}>
+      <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 4 }}>AI-анализ ваших данных</div>
+      {aiLoading && (
+        <div style={{ textAlign: 'center', padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid var(--primary-tint)', borderTopColor: 'var(--primary)', animation: 'spin 1s linear infinite' }}/>
+          <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>Анализирую данные…</div>
+        </div>
+      )}
+      {!aiLoading && records.length === 0 && <div style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)', fontSize: 14 }}>Нет данных для анализа. Внесите несколько измерений.</div>}
+      {!aiLoading && aiText && (
+        <div style={{ background: 'linear-gradient(135deg, #15493A, #1F6E54)', borderRadius: 16, padding: '18px 16px', color: '#fff' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+            <IconSparkles size={18} color="#7EFFD4"/>
+            <span style={{ fontSize: 13, fontWeight: 700, opacity: 0.9 }}>Анализ на основе ваших данных</span>
+          </div>
+          <div style={{ fontSize: 14, lineHeight: 1.65, opacity: 0.95 }}>{aiText}</div>
+        </div>
+      )}
+      {!aiLoading && !aiText && records.length > 0 && (
+        <button onClick={loadAI} style={{ padding: '12px', borderRadius: 12, background: 'var(--primary-tint)', color: 'var(--primary)', border: 'none', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
+          <IconSparkles size={16}/> Загрузить анализ
+        </button>
+      )}
+      {!aiLoading && aiText && (
+        <button onClick={() => { setAiText(''); loadAI(); }} style={{ padding: '10px', borderRadius: 12, background: 'var(--surface-2)', color: 'var(--text-muted)', border: 'none', fontSize: 13, cursor: 'pointer' }}>
+          Обновить анализ
+        </button>
+      )}
+      <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+        ℹ️ AI анализирует только ваши данные. Не является медицинской консультацией.
+      </div>
+    </div>
+  );
+
+  const slideNames = ['Показатели', 'Шкала', 'График', 'История', 'AI анализ'];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
-      <div className="hero heart">
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center', textAlign: 'center' }}>Моё здоровье</div>
-        <div className="hero-title" style={{ fontSize: 18, textAlign: 'center' }}>Контроль показателей</div>
-        <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>давление —/— · пульс —</div>
-        <button className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
-          <IconHeart size={18}/>Внести показатели<IconArrowRight size={16}/>
+      {/* Шапка */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 2 }}>
+        <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--surface-2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
+        <span style={{ fontSize: 17, fontWeight: 700, flex: 1 }}>{metric.label}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-subtle)' }}>{metric.unit}</span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-        {[
-          { label: 'Давление', value: '—/—', unit: 'мм рт.ст.', icon: IconHeart },
-          { label: 'Пульс',    value: '—',   unit: 'уд/мин',    icon: IconTrend },
-          { label: 'Сахар',    value: '—',   unit: 'ммоль/л',   icon: IconSparkles },
-          { label: 'Вес',      value: '—',   unit: 'кг',        icon: IconLightbulb },
-        ].map(m => {
-          const MI = m.icon;
-          return (
-            <div key={m.label} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 12, padding: '10px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(31,138,91,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <MI size={18} color="#1F8A5B"/>
-              </span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)' }}>{m.label}</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>{m.value}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-subtle)' }}>{m.unit}</span>
-              </div>
-            </div>
-          );
-        })}
+
+      {/* Точки-индикаторы */}
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', paddingBottom: 2 }}>
+        {slideNames.map((name, i) => (
+          <button key={i} onClick={() => setSlide(i)}
+            style={{ height: i === slide ? 8 : 6, width: i === slide ? 24 : 8, borderRadius: 99, border: 'none', cursor: 'pointer',
+              background: i === slide ? 'var(--success)' : 'var(--border-strong)', transition: 'all 0.2s', padding: 0 }}/>
+        ))}
       </div>
-      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-subtle)', marginTop: -4, marginBottom: 2 }}>
+        {slideNames[slide]} · свайп для переключения
+      </div>
+
+      {/* Контент слайда */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', touchAction: 'pan-y' }}
+        onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        {slide === 0 && <Slide0/>}
+        {slide === 1 && <Slide1/>}
+        {slide === 2 && <Slide2/>}
+        {slide === 3 && <Slide3/>}
+        {slide === 4 && <Slide4/>}
+      </div>
+
+      {/* Ввод данных — всегда внизу */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div className="composer" style={{ margin: 0, width: '100%', boxSizing: 'border-box' }}>
-          <textarea placeholder="Надиктуйте или введите показатель…" value={input} onChange={e => setInput(e.target.value)} rows={1} style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', font: 'inherit', fontSize: 15, color: 'var(--text)', resize: 'none', minHeight: 22, maxHeight: 120, overflowY: 'auto', padding: '2px 0' }} onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}/>
-          <button className="composer-send" aria-label="Отправить" onClick={() => { if(input.trim()) { onAsk && onAsk(input); setInput(''); }}}>
+          <textarea
+            placeholder={'Введите ' + metric.label.toLowerCase() + '…'}
+            value={input} onChange={e => setInput(e.target.value)} rows={1}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', font: 'inherit', fontSize: 15, color: 'var(--text)', resize: 'none', minHeight: 22, maxHeight: 80, overflowY: 'auto', padding: '2px 0' }}
+            onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); sendHealthInput(input); }}}
+          />
+          <button className="composer-send" onClick={() => sendHealthInput(input)} disabled={!input.trim()}>
             <IconSend size={18} sw={2}/>
           </button>
         </div>
         <div className="modes">
-          <button className="mode" onClick={() => onMode && onMode('analyze')}><span className="mode-icon"><IconDoc size={22}/></span><span className="mode-label">Анализ</span></button>
-          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f && onAsk) onAsk('Что на этом фото?'); }; i.click(); }}><span className="mode-icon"><IconCamera size={22}/></span><span className="mode-label">Фото</span></button>
-          <VoiceButton onResult={(text) => { setInput(text); }} />
+          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f) sendPhotoHealth(f); }; i.click(); }}>
+            <span className="mode-icon"><IconCamera size={22}/></span><span className="mode-label">Фото</span>
+          </button>
+          <VoiceButton onResult={(text) => { setInput(text); setTimeout(() => sendHealthInput(text), 800); }}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Health Screen (главный)
+// ─────────────────────────────────────────────────────────────
+function HealthScreen({ onAsk, onMode }) {
+  const [input, setInput] = React.useState('');
+  const [selectedMetric, setSelectedMetric] = React.useState(null);
+  const [latestData, setLatestData] = React.useState({});
+  const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
+
+  const METRICS = [
+    { label: 'Давление', type: 'pressure', unit: 'мм рт.ст.', icon: IconHeart,      emptyVal: '—/—' },
+    { label: 'Пульс',    type: 'pulse',    unit: 'уд/мин',    icon: IconTrend,       emptyVal: '—'   },
+    { label: 'Сахар',    type: 'sugar',    unit: 'ммоль/л',   icon: IconSparkles,    emptyVal: '—'   },
+    { label: 'Вес',      type: 'weight',   unit: 'кг',        icon: IconLightbulb,   emptyVal: '—'   },
+  ];
+
+  React.useEffect(() => {
+    Promise.all(METRICS.map(m =>
+      fetch('/api/v1/health/records?user_id=' + userId + '&type=' + m.type + '&days=30&limit=1')
+        .then(r => r.json())
+        .then(d => {
+          const arr = Array.isArray(d) ? d : (d.records || []);
+          const last = arr[0];
+          return [m.type, last ? (last.value_2 ? last.value_1 + '/' + last.value_2 : String(last.value_1)) : null];
+        })
+        .catch(() => [m.type, null])
+    )).then(results => {
+      const obj = {};
+      results.forEach(([type, val]) => { obj[type] = val; });
+      setLatestData(obj);
+    });
+  }, []);
+
+  if (selectedMetric) {
+    return <HealthDetailScreen metric={selectedMetric} onBack={() => setSelectedMetric(null)}/>;
+  }
+
+  const pressureVal = latestData['pressure'] || '—/—';
+  const pulseVal = latestData['pulse'] || '—';
+
+  const sendHealthChat = async (text) => {
+    if (!text.trim()) return;
+    const prompt = 'Ты — помощник по здоровью OkTolk. Отвечай коротко и понятно (2-4 предложения). Не давай рекомендаций по лекарствам и лечению. Только объяснение и общая информация из проверенных источников. Вопрос: ' + text;
+    onAsk && onAsk(prompt);
+    setInput('');
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
+      {/* Hero */}
+      <div className="hero heart">
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Моё здоровье</div>
+        <div className="hero-title" style={{ fontSize: 18, textAlign: 'center' }}>Контроль показателей</div>
+        <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>
+          давление {pressureVal} · пульс {pulseVal}
+        </div>
+        <button className="btn-primary"
+          onClick={() => setSelectedMetric(METRICS[0])}
+          style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
+          <IconHeart size={18}/>Внести показатели<IconArrowRight size={16}/>
+        </button>
+      </div>
+
+      {/* 4 карточки метрик */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {METRICS.map(m => {
+          const MI = m.icon;
+          const val = latestData[m.type] || m.emptyVal;
+          const hasData = !!latestData[m.type];
+          return (
+            <div key={m.label}
+              onClick={() => setSelectedMetric(m)}
+              style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 12, padding: '10px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, cursor: 'pointer', transition: 'transform 0.1s', WebkitTapHighlightColor: 'transparent' }}
+              onTouchStart={e => e.currentTarget.style.transform = 'scale(0.97)'}
+              onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}>
+              <span style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(31,138,91,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <MI size={18} color="#1F8A5B"/>
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>{m.label}</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: hasData ? 'var(--text)' : 'var(--text-subtle)', lineHeight: 1.1 }}>{val}</span>
+                <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>{m.unit}</span>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-subtle)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* AI чат по здоровью */}
+      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-subtle)', textAlign: 'center' }}>
+          Спросите про ваши показатели или здоровье в целом
+        </div>
+        <div className="composer" style={{ margin: 0, width: '100%', boxSizing: 'border-box' }}>
+          <textarea
+            placeholder="Надиктуйте или введите вопрос…"
+            value={input} onChange={e => setInput(e.target.value)} rows={1}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', font: 'inherit', fontSize: 15, color: 'var(--text)', resize: 'none', minHeight: 22, maxHeight: 120, overflowY: 'auto', padding: '2px 0' }}
+            onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); sendHealthChat(input); }}}
+          />
+          <button className="composer-send" disabled={!input.trim()} onClick={() => sendHealthChat(input)}>
+            <IconSend size={18} sw={2}/>
+          </button>
+        </div>
+        <div className="modes">
+          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='.pdf,.doc,.docx,.txt,image/*'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f && onAsk) onAsk('Помогите разобрать медицинский документ: '+f.name); }; i.click(); }}>
+            <span className="mode-icon"><IconDoc size={22}/></span><span className="mode-label">Анализ</span>
+          </button>
+          <button className="mode" onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*'; i.capture='environment'; i.onchange=(e)=>{ const f=e.target.files[0]; if(f && onAsk) onAsk('Расшифруй медицинский снимок или результат анализа'); }; i.click(); }}>
+            <span className="mode-icon"><IconCamera size={22}/></span><span className="mode-label">Фото</span>
+          </button>
+          <VoiceButton onResult={(text) => { sendHealthChat(text); }}/>
         </div>
       </div>
     </div>
@@ -2957,9 +3463,9 @@ function NewsScreen({ onAsk }) {
   ];
   const visible = filter === 'all' ? NEWS : NEWS.filter(n => n.cat === filter);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', boxSizing: 'border-box' }}>
-      <div className="hero news" style={{ padding: '12px 18px 14px' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center', textAlign: 'center' }}>Что нового</div>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, boxSizing: 'border-box' }}>
+      <div className="hero news" style={{ margin: '4px 14px 0', padding: '12px 18px 14px' }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Что нового</div>
         <div className="hero-title" style={{ fontSize: 20, textAlign: 'center' }}>Лента за вас</div>
         <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>проверенные источники</div>
         <button className="btn-primary" style={{ marginTop: 8, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff', fontSize: 13, padding: '8px 14px' }}>
@@ -3085,18 +3591,17 @@ const CATEGORIES = [
 ];
 
 function SitesScreen() {
-  const [toast, setToast] = React.useState(false);
-  const showToast = () => { setToast(true); setTimeout(() => setToast(false), 3000); };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', boxSizing: 'border-box' }}>
-      <div className="hero sites" style={{ padding: "12px 18px 14px" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>
+    <div className="screen">
+      <div style={{ padding: '4px 0' }}>
+        <div className="hero sites">
+          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>
             Сайты
           </div>
-          <div className="hero-title" style={{ fontSize: 20, textAlign: 'center' }}>Проверенные ресурсы</div>
-          <button onClick={showToast} style={{ marginTop: 8, marginBottom: 8, width: '100%', background: 'rgba(255,255,255,0.18)', border: '0.5px solid rgba(255,255,255,0.3)', borderRadius: 12, color: 'white', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}>Поиск товаров</button>
-          <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2, textAlign: 'center' }}>{CATEGORIES.reduce((a, c) => a + c.count, 0)} сайтов в 6 категориях</div>
+          <div className="hero-title">Проверенные ресурсы</div>
+          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>{CATEGORIES.reduce((a, c) => a + c.count, 0)} сайтов в 6 категориях</div>
         </div>
+      </div>
 
       <div className="cat-grid">
         {CATEGORIES.map(c => {

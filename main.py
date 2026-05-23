@@ -61,7 +61,8 @@ async def init_db():
                 password_hash VARCHAR(200),
                 created_at  TIMESTAMP DEFAULT NOW(),
                 tariff      VARCHAR(20) DEFAULT 'demo',
-                tariff_until TIMESTAMP
+                tariff_until TIMESTAMP,
+                marketing_consent BOOLEAN DEFAULT FALSE
             );
 
             CREATE TABLE IF NOT EXISTS sessions (
@@ -114,6 +115,11 @@ async def init_db():
             );
         """)
 
+        # Миграции для существующих таблиц (CREATE IF NOT EXISTS не добавляет колонки)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_consent BOOLEAN DEFAULT FALSE;
+        """)
+
         # Insert default feature flags
         await conn.execute("""
             INSERT INTO features (name, enabled, description) VALUES
@@ -153,8 +159,6 @@ class RegisterRequest(BaseModel):
     phone: str
     name: str
     password: str
-    marketing_consent: bool = False
-    marketing_consent: bool = False
     marketing_consent: bool = False
 
 class LoginRequest(BaseModel):
@@ -221,7 +225,7 @@ async def register(req: RegisterRequest):
             raise HTTPException(status_code=400, detail="Телефон уже зарегистрирован")
         user_id = await conn.fetchval(
             "INSERT INTO users (phone, name, password_hash, marketing_consent) VALUES ($1,$2,$3,$4) RETURNING id",
-            req.phone, req.name, hash_password(req.password), req.marketing_consent, req.marketing_consent, req.marketing_consent
+            req.phone, req.name, hash_password(req.password), req.marketing_consent
         )
         token = generate_token()
         expires = datetime.now() + timedelta(days=30)
@@ -302,24 +306,23 @@ async def analyze_v1(req: AnalyzeRequest):
 Только JSON, никакого текста до или после.
 """
 
-        headers = {{"Authorization": f"Bearer {{AITUNNEL_API_KEY}}", "Content-Type": "application/json"}}
-        data = {{
+        headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+        data = {
             "model": "gemini-2.5-flash-lite",
-            "messages": [{{"role": "user", "content": prompt}}],
+            "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 500
-        }}
-        response = requests.post(f"{{AITUNNEL_BASE_URL}}chat/completions", headers=headers, json=data, timeout=30)
+        }
+        response = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
         result = response.json()
         text = result["choices"][0]["message"]["content"].strip()
-        
+
         # Чистим JSON
-        import re
-        json_match = re.search(r'\{{.*\}}', text, re.DOTALL)
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
         if json_match:
             parsed = json.loads(json_match.group())
         else:
             parsed = json.loads(text)
-        
+
         return parsed
     except Exception as e:
         # Fallback на ключевые слова
@@ -330,30 +333,143 @@ async def analyze_v1(req: AnalyzeRequest):
         for kw in scam_keywords:
             if kw in text_lower:
                 risk_level = 3
-                signs.append(f"Обнаружено: '{{kw}}'")
+                signs.append(f"Обнаружено: '{kw}'")
         labels = ["Безопасно", "Подозрительно", "Опасно", "Мошенники!"]
-        return {{"risk_level": risk_level, "risk_label": labels[min(risk_level, 3)], "signs": signs,
+        return {"risk_level": risk_level, "risk_label": labels[min(risk_level, 3)], "signs": signs,
                 "summary": "СТОП! Мошенники!" if risk_level == 3 else "Проверьте ещё раз",
-                "action": "Заблокируйте отправителя" if risk_level == 3 else "Будьте осторожны"}}
+                "action": "Заблокируйте отправителя" if risk_level == 3 else "Будьте осторожны"}
 
-# Health
+# ── Health ───────────────────────────────────────────────────────
+
+class HealthParseRequest(BaseModel):
+    user_id: int
+    type: str
+    image_base64: Optional[str] = None
+    mime_type: str = "image/jpeg"
+    text: Optional[str] = None
+
+class HealthRecordCreateRequest(BaseModel):
+    user_id: int
+    type: str
+    value_1: float
+    value_2: Optional[float] = None
+    comment: Optional[str] = None
+
 @app.get("/api/v1/health/records")
-async def get_health_records(user=Depends(get_current_user)):
+async def get_health_records(
+    user_id: int,
+    type: Optional[str] = None,
+    days: int = 30,
+    limit: int = 100
+):
+    """Публичный эндпоинт — получить записи здоровья по user_id с фильтрацией"""
+    if not db_pool:
+        return []
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT * FROM health_records WHERE user_id=$1 ORDER BY recorded_at DESC LIMIT 50",
-            user["id"]
-        )
+        if type:
+            rows = await conn.fetch("""
+                SELECT id, user_id, type, value_1, value_2, comment, recorded_at
+                FROM health_records
+                WHERE user_id=$1
+                  AND type=$2
+                  AND recorded_at >= NOW() - make_interval(days => $3)
+                ORDER BY recorded_at DESC
+                LIMIT $4
+            """, user_id, type, days, limit)
+        else:
+            rows = await conn.fetch("""
+                SELECT id, user_id, type, value_1, value_2, comment, recorded_at
+                FROM health_records
+                WHERE user_id=$1
+                  AND recorded_at >= NOW() - make_interval(days => $2)
+                ORDER BY recorded_at DESC
+                LIMIT $3
+            """, user_id, days, limit)
         return [dict(r) for r in rows]
 
 @app.post("/api/v1/health/records")
-async def add_health_record(req: HealthRecordRequest, user=Depends(get_current_user)):
+async def add_health_record_public(req: HealthRecordCreateRequest):
+    """Публичный эндпоинт — добавить показатель здоровья"""
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
     async with db_pool.acquire() as conn:
-        row_id = await conn.fetchval(
-            "INSERT INTO health_records (user_id, type, value_1, value_2, comment) VALUES ($1,$2,$3,$4,$5) RETURNING id",
-            user["id"], req.type, req.value_1, req.value_2, req.comment
+        row = await conn.fetchrow(
+            """INSERT INTO health_records (user_id, type, value_1, value_2, comment)
+               VALUES ($1,$2,$3,$4,$5) RETURNING id, recorded_at""",
+            req.user_id, req.type, req.value_1, req.value_2, req.comment
         )
-        return {"id": row_id, "status": "ok"}
+        return {"id": row["id"], "recorded_at": str(row["recorded_at"]), "status": "ok"}
+
+@app.post("/api/v1/health/parse")
+async def parse_health_photo(req: HealthParseRequest):
+    """AI распознавание показателя из фото (тонометр, весы, глюкометр) или текста"""
+    if not AITUNNEL_API_KEY:
+        raise HTTPException(status_code=503, detail="AI недоступен")
+
+    # Описание что извлекаем — работает и для фото, и для текста
+    type_desc = {
+        "pressure": 'показатели артериального давления. value_1 = верхнее (систолическое), value_2 = нижнее (диастолическое)',
+        "pulse":    'частоту пульса. value_1 = пульс в уд/мин, value_2 = null',
+        "sugar":    'уровень сахара в крови. value_1 = ммоль/л, value_2 = null',
+        "weight":   'вес тела. value_1 = вес в кг, value_2 = null',
+    }
+    desc = type_desc.get(req.type, type_desc["pressure"])
+
+    source = "на фото (тонометр/весы/глюкометр/прибор)" if req.image_base64 else "из текста пользователя"
+    prompt = (
+        f'Извлеки {source} {desc}. '
+        f'Если пользователь описал самочувствие или причину (стресс, нагрузка, после еды и т.п.) — добавь это в comment, иначе comment = краткое описание. '
+        f'Верни ТОЛЬКО валидный JSON без пояснений: '
+        f'{{"value_1": число, "value_2": число или null, "comment": "текст"}}'
+    )
+
+    try:
+        headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+
+        if req.image_base64:
+            messages = [{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": f"data:{req.mime_type};base64,{req.image_base64}"}},
+                {"type": "text", "text": prompt}
+            ]}]
+        else:
+            messages = [{"role": "user", "content": f"{prompt}\n\nТекст пользователя: {req.text}"}]
+
+        data = {"model": "gemini-2.5-flash-lite", "messages": messages, "max_tokens": 200}
+        response = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
+        result_text = response.json()["choices"][0]["message"]["content"].strip()
+
+        json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+        if not json_match:
+            raise HTTPException(status_code=422, detail="Не удалось распознать показатель")
+
+        parsed = json.loads(json_match.group())
+        if parsed.get("value_1") is None:
+            raise HTTPException(status_code=422, detail="Значение не найдено")
+
+        # Дефолтный комментарий — исходный текст пользователя (если был)
+        default_comment = req.text if req.text else "с фото"
+
+        # Сохраняем в БД
+        if db_pool:
+            async with db_pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """INSERT INTO health_records (user_id, type, value_1, value_2, comment)
+                       VALUES ($1,$2,$3,$4,$5) RETURNING id, recorded_at""",
+                    req.user_id, req.type,
+                    float(parsed["value_1"]),
+                    float(parsed["value_2"]) if parsed.get("value_2") is not None else None,
+                    parsed.get("comment") or default_comment
+                )
+                parsed["id"] = row["id"]
+                parsed["recorded_at"] = str(row["recorded_at"])
+                parsed["status"] = "ok"
+
+        return parsed
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка распознавания: {str(e)}")
 
 @app.get("/api/v1/health/meds")
 async def get_medications(user=Depends(get_current_user)):
