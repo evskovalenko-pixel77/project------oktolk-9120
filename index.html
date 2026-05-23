@@ -3084,16 +3084,14 @@ const CATEGORIES = [
 
 function SitesScreen() {
   return (
-    <div className="screen">
-      <div style={{ padding: '4px 0' }}>
-        <div className="hero sites">
-          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', boxSizing: 'border-box' }}>
+      <div className="hero sites">
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4 }}>
             Сайты
           </div>
           <div className="hero-title">Проверенные ресурсы</div>
           <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>{CATEGORIES.reduce((a, c) => a + c.count, 0)} сайтов в 6 категориях</div>
         </div>
-      </div>
 
       <div className="cat-grid">
         {CATEGORIES.map(c => {
