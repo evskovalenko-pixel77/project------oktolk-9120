@@ -2797,7 +2797,7 @@ function FinanceScreen({ onAsk, onMode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
       <div className="hero indigo" style={{ padding: '12px 18px 14px' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Мои финансы</div>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center', textAlign: 'center' }}>Мои финансы</div>
         <div className="hero-title" style={{ fontSize: 20, textAlign: 'center' }}>Расходы за май</div>
         <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>{total > 0 ? total.toLocaleString('ru') + ' ₽' : '0 ₽'} · расходы за май</div>
         <button className="btn-primary" style={{ marginTop: 8, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff', fontSize: 13, padding: '8px 14px' }}>
@@ -2848,7 +2848,7 @@ function HealthScreen({ onAsk, onMode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
       <div className="hero heart">
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Моё здоровье</div>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center', textAlign: 'center' }}>Моё здоровье</div>
         <div className="hero-title" style={{ fontSize: 18, textAlign: 'center' }}>Контроль показателей</div>
         <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>давление —/— · пульс —</div>
         <button className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
@@ -2957,7 +2957,7 @@ function NewsScreen({ onAsk }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', boxSizing: 'border-box' }}>
       <div className="hero news" style={{ padding: '12px 18px 14px' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Что нового</div>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center', textAlign: 'center' }}>Что нового</div>
         <div className="hero-title" style={{ fontSize: 20, textAlign: 'center' }}>Лента за вас</div>
         <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>проверенные источники</div>
         <button className="btn-primary" style={{ marginTop: 8, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff', fontSize: 13, padding: '8px 14px' }}>
@@ -3086,11 +3086,11 @@ function SitesScreen() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', boxSizing: 'border-box' }}>
       <div className="hero sites" style={{ padding: "12px 18px 14px" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>
             Сайты
           </div>
-          <div className="hero-title">Проверенные ресурсы</div>
-          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>{CATEGORIES.reduce((a, c) => a + c.count, 0)} сайтов в 6 категориях</div>
+          <div className="hero-title" style={{ fontSize: 20, textAlign: 'center' }}>Проверенные ресурсы</div>
+          <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>{CATEGORIES.reduce((a, c) => a + c.count, 0)} сайтов в 6 категориях</div>
         </div>
 
       <div className="cat-grid">
