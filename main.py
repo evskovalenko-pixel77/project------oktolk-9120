@@ -145,6 +145,16 @@ async def init_db():
                 notes       TEXT,
                 created_at  TIMESTAMP DEFAULT NOW()
             );
+
+            CREATE TABLE IF NOT EXISTS loans (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER NOT NULL,
+                name        TEXT,
+                amount      REAL,
+                due_date    TEXT,
+                notes       TEXT,
+                created_at  TIMESTAMP DEFAULT NOW()
+            );
         """)
 
         # Миграции для существующих таблиц (CREATE IF NOT EXISTS не добавляет колонки)
@@ -438,6 +448,91 @@ async def save_profile(req: ProfileRequest):
         """, req.user_id, req.gender, req.age, req.height, req.weight, req.profession,
             req.hobbies, req.work_pressure_1, req.work_pressure_2, req.work_pulse,
             req.base_sugar, req.habits, req.activity, req.heredity, req.chronic, req.income)
+        return {"status": "ok"}
+
+# ── Credits & Loans ──────────────────────────────────────────────
+
+class CreditRequest(BaseModel):
+    id: Optional[int] = None
+    user_id: int
+    name: Optional[str] = None
+    amount: Optional[float] = None
+    rate: Optional[float] = None
+    term_months: Optional[int] = None
+    monthly_payment: Optional[float] = None
+    notes: Optional[str] = None
+
+class LoanRequest(BaseModel):
+    id: Optional[int] = None
+    user_id: int
+    name: Optional[str] = None
+    amount: Optional[float] = None
+    due_date: Optional[str] = None
+    notes: Optional[str] = None
+
+@app.get("/api/v1/credits")
+async def get_credits(user_id: int):
+    if not db_pool:
+        return []
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT * FROM credits WHERE user_id=$1 ORDER BY created_at DESC", user_id)
+        return [dict(r) for r in rows]
+
+@app.post("/api/v1/credits")
+async def add_credit(req: CreditRequest):
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        if req.id:
+            await conn.execute("""
+                UPDATE credits SET name=$2, amount=$3, rate=$4, term_months=$5, monthly_payment=$6, notes=$7
+                WHERE id=$1
+            """, req.id, req.name, req.amount, req.rate, req.term_months, req.monthly_payment, req.notes)
+            return {"id": req.id, "status": "ok"}
+        row = await conn.fetchrow("""
+            INSERT INTO credits (user_id, name, amount, rate, term_months, monthly_payment, notes)
+            VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
+        """, req.user_id, req.name, req.amount, req.rate, req.term_months, req.monthly_payment, req.notes)
+        return {"id": row["id"], "status": "ok"}
+
+@app.delete("/api/v1/credits/{credit_id}")
+async def delete_credit(credit_id: int):
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        await conn.execute("DELETE FROM credits WHERE id=$1", credit_id)
+        return {"status": "ok"}
+
+@app.get("/api/v1/loans")
+async def get_loans(user_id: int):
+    if not db_pool:
+        return []
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT * FROM loans WHERE user_id=$1 ORDER BY created_at DESC", user_id)
+        return [dict(r) for r in rows]
+
+@app.post("/api/v1/loans")
+async def add_loan(req: LoanRequest):
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        if req.id:
+            await conn.execute("""
+                UPDATE loans SET name=$2, amount=$3, due_date=$4, notes=$5 WHERE id=$1
+            """, req.id, req.name, req.amount, req.due_date, req.notes)
+            return {"id": req.id, "status": "ok"}
+        row = await conn.fetchrow("""
+            INSERT INTO loans (user_id, name, amount, due_date, notes)
+            VALUES ($1,$2,$3,$4,$5) RETURNING id
+        """, req.user_id, req.name, req.amount, req.due_date, req.notes)
+        return {"id": row["id"], "status": "ok"}
+
+@app.delete("/api/v1/loans/{loan_id}")
+async def delete_loan(loan_id: int):
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        await conn.execute("DELETE FROM loans WHERE id=$1", loan_id)
         return {"status": "ok"}
 
 # ── Health ───────────────────────────────────────────────────────

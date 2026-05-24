@@ -4059,13 +4059,33 @@ function ProfileSettingsSheet({ onClose }) {
   const [p, setP] = React.useState({});
   const [saved, setSaved] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
+  const [credits, setCredits] = React.useState([]);
+  const [loans, setLoans] = React.useState([]);
 
   React.useEffect(() => {
     fetch('/api/v1/profile?user_id=' + userId)
       .then(r => r.json())
       .then(d => { setP(d || {}); setLoading(false); })
       .catch(() => setLoading(false));
+    fetch('/api/v1/credits?user_id=' + userId).then(r => r.json()).then(d => setCredits(Array.isArray(d) ? d : [])).catch(() => {});
+    fetch('/api/v1/loans?user_id=' + userId).then(r => r.json()).then(d => setLoans(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
+
+  const addCredit = async () => {
+    const res = await fetch('/api/v1/credits', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ user_id: userId, name: '', amount: null }) });
+    const d = await res.json();
+    setCredits(c => [{ id: d.id, name: '', amount: null }, ...c]);
+  };
+  const updCredit = (id, k, v) => setCredits(c => c.map(x => x.id === id ? { ...x, [k]: v } : x));
+  const delCredit = async (id) => { await fetch('/api/v1/credits/' + id, { method:'DELETE' }); setCredits(c => c.filter(x => x.id !== id)); };
+
+  const addLoan = async () => {
+    const res = await fetch('/api/v1/loans', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ user_id: userId, name: '', amount: null }) });
+    const d = await res.json();
+    setLoans(l => [{ id: d.id, name: '', amount: null, due_date: '' }, ...l]);
+  };
+  const updLoan = (id, k, v) => setLoans(l => l.map(x => x.id === id ? { ...x, [k]: v } : x));
+  const delLoan = async (id) => { await fetch('/api/v1/loans/' + id, { method:'DELETE' }); setLoans(l => l.filter(x => x.id !== id)); };
 
   const upd = (k, v) => { setP(prev => ({ ...prev, [k]: v })); setSaved(false); };
 
@@ -4076,6 +4096,11 @@ function ProfileSettingsSheet({ onClose }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId, ...p })
       });
+      // Сохраняем все кредиты и займы
+      await Promise.all([
+        ...credits.map(cr => fetch('/api/v1/credits', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user_id: userId, ...cr }) })),
+        ...loans.map(ln => fetch('/api/v1/loans', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user_id: userId, ...ln }) }))
+      ]);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch(e) {}
@@ -4177,8 +4202,50 @@ function ProfileSettingsSheet({ onClose }) {
 
           {!loading && tab === 'finance' && <>
             <Field label="Ежемесячный доход" k="income" type="number" placeholder="60000" unit="₽"/>
-            <div style={{ background: 'var(--surface-2)', borderRadius: 12, padding: '14px 16px', marginTop: 4, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              💳 Раздел «Кредиты» с загрузкой договоров и AI-анализом ставок появится в следующем обновлении.
+
+            {/* Кредиты */}
+            <div style={{ marginTop: 18, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>Кредиты (банк)</span>
+              <button onClick={addCredit} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 9, border: 'none', background: 'var(--primary-tint)', color: 'var(--primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Добавить</button>
+            </div>
+            {credits.length === 0 && <div style={{ fontSize: 13, color: 'var(--text-subtle)', marginBottom: 10 }}>Нет добавленных кредитов</div>}
+            {credits.map(cr => (
+              <div key={cr.id} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Кредит</span>
+                  <button onClick={() => delCredit(cr.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: 13, cursor: 'pointer' }}>Удалить</button>
+                </div>
+                <input value={cr.name ?? ''} placeholder="Название банка" onChange={e => updCredit(cr.id, 'name', e.target.value)} style={{ ...fieldStyle, marginBottom: 8 }}/>
+                <div style={{ position: 'relative' }}>
+                  <input type="number" inputMode="decimal" value={cr.amount ?? ''} placeholder="Сумма" onChange={e => updCredit(cr.id, 'amount', e.target.value === '' ? null : Number(e.target.value))} style={fieldStyle}/>
+                  <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-subtle)' }}>₽</span>
+                </div>
+              </div>
+            ))}
+
+            {/* Займы */}
+            <div style={{ marginTop: 14, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>Займы (у знакомых)</span>
+              <button onClick={addLoan} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 9, border: 'none', background: 'var(--primary-tint)', color: 'var(--primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ Добавить</button>
+            </div>
+            {loans.length === 0 && <div style={{ fontSize: 13, color: 'var(--text-subtle)', marginBottom: 10 }}>Нет добавленных займов</div>}
+            {loans.map(ln => (
+              <div key={ln.id} style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 12, padding: 12, marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Займ</span>
+                  <button onClick={() => delLoan(ln.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: 13, cursor: 'pointer' }}>Удалить</button>
+                </div>
+                <input value={ln.name ?? ''} placeholder="У кого / кому (имя)" onChange={e => updLoan(ln.id, 'name', e.target.value)} style={{ ...fieldStyle, marginBottom: 8 }}/>
+                <div style={{ position: 'relative', marginBottom: 8 }}>
+                  <input type="number" inputMode="decimal" value={ln.amount ?? ''} placeholder="Сумма" onChange={e => updLoan(ln.id, 'amount', e.target.value === '' ? null : Number(e.target.value))} style={fieldStyle}/>
+                  <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-subtle)' }}>₽</span>
+                </div>
+                <input value={ln.due_date ?? ''} placeholder="Срок возврата (например: до 1 августа)" onChange={e => updLoan(ln.id, 'due_date', e.target.value)} style={fieldStyle}/>
+              </div>
+            ))}
+
+            <div style={{ background: 'var(--surface-2)', borderRadius: 12, padding: '12px 16px', marginTop: 6, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              📎 Загрузка договоров с AI-анализом ставок и сроков появится в следующем обновлении.
             </div>
           </>}
         </div>
