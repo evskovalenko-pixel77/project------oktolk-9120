@@ -4056,6 +4056,73 @@ function SubscriptionScreen({ onClose }) {
   );
 }
 
+// Стабильные поля профиля (вынесены наружу, чтобы не терять фокус при вводе)
+const PF_STYLE = { width: '100%', boxSizing: 'border-box', padding: '13px 14px', minHeight: 48, borderRadius: 12, border: '0.5px solid var(--border)', background: 'var(--surface)', fontSize: 16, color: 'var(--text)', fontFamily: 'inherit', outline: 'none' };
+const PF_LABEL = { fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' };
+const PF_GROUP = { marginBottom: 14 };
+
+function PField({ p, upd, label, k, type = 'text', placeholder, unit }) {
+  return (
+    <div style={PF_GROUP}>
+      <label style={PF_LABEL}>{label}</label>
+      <div style={{ position: 'relative' }}>
+        <input type={type} value={p[k] ?? ''} placeholder={placeholder || ''}
+          onChange={e => upd(k, type === 'number' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value)}
+          style={{ ...PF_STYLE, paddingRight: unit ? 48 : 14 }} inputMode={type === 'number' ? 'decimal' : 'text'}/>
+        {unit && <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-subtle)', pointerEvents: 'none' }}>{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
+function PChoice({ p, upd, label, k, options }) {
+  return (
+    <div style={PF_GROUP}>
+      <label style={PF_LABEL}>{label}</label>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {options.map(opt => (
+          <button key={opt.v} onClick={() => upd(k, opt.v)}
+            style={{ padding: '11px 16px', borderRadius: 10, fontSize: 15, fontWeight: 500, cursor: 'pointer', border: '0.5px solid ' + (p[k] === opt.v ? 'var(--primary)' : 'var(--border)'), background: p[k] === opt.v ? 'var(--primary-tint)' : 'var(--surface)', color: p[k] === opt.v ? 'var(--primary)' : 'var(--text-muted)' }}>
+            {opt.l}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PArea({ p, upd, label, k, placeholder }) {
+  return (
+    <div style={PF_GROUP}>
+      <label style={PF_LABEL}>{label}</label>
+      <textarea value={p[k] ?? ''} placeholder={placeholder || ''} rows={2}
+        onChange={e => upd(k, e.target.value)}
+        style={{ ...PF_STYLE, resize: 'vertical', minHeight: 64, lineHeight: 1.4 }}/>
+    </div>
+  );
+}
+
+function PSlider({ p, upd, label, k, labels, ticks }) {
+  const val = Number(p[k] ?? 0);
+  const pct = (val / (labels.length - 1)) * 100;
+  return (
+    <div style={PF_GROUP}>
+      <label style={PF_LABEL}>{label}</label>
+      <div style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '16px 16px 12px' }}>
+        <div style={{ textAlign: 'center', fontSize: 16, fontWeight: 700, color: '#1F6E54', marginBottom: 14, minHeight: 22 }}>{labels[val]}</div>
+        <input type="range" className="h-slider" min={0} max={labels.length - 1} step={1} value={val}
+          onChange={e => upd(k, Number(e.target.value))}
+          style={{ background: 'linear-gradient(to right, #1F6E54 0%, #1F6E54 ' + pct + '%, var(--surface-2) ' + pct + '%)' }}/>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+          {ticks.map((t, i) => (
+            <span key={i} style={{ fontSize: 10, color: 'var(--text-subtle)', flex: 1, textAlign: i === 0 ? 'left' : i === ticks.length - 1 ? 'right' : 'center' }}>{t}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProfileSettingsSheet({ onClose }) {
   const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
   const [tab, setTab] = React.useState('personal');
@@ -4109,66 +4176,6 @@ function ProfileSettingsSheet({ onClose }) {
     } catch(e) {}
   };
 
-  const fieldStyle = { width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 12, border: '0.5px solid var(--border)', background: 'var(--surface)', fontSize: 15, color: 'var(--text)', fontFamily: 'inherit', outline: 'none' };
-  const labelStyle = { fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' };
-  const groupStyle = { marginBottom: 14 };
-
-  const Field = ({ label, k, type = 'text', placeholder, unit }) => (
-    <div style={groupStyle}>
-      <label style={labelStyle}>{label}</label>
-      <div style={{ position: 'relative' }}>
-        <input type={type} value={p[k] ?? ''} placeholder={placeholder || ''}
-          onChange={e => upd(k, type === 'number' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value)}
-          style={fieldStyle} inputMode={type === 'number' ? 'decimal' : 'text'}/>
-        {unit && <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-subtle)' }}>{unit}</span>}
-      </div>
-    </div>
-  );
-
-  const Choice = ({ label, k, options }) => (
-    <div style={groupStyle}>
-      <label style={labelStyle}>{label}</label>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {options.map(opt => (
-          <button key={opt.v} onClick={() => upd(k, opt.v)}
-            style={{ padding: '9px 14px', borderRadius: 10, fontSize: 14, fontWeight: 500, cursor: 'pointer', border: '0.5px solid ' + (p[k] === opt.v ? 'var(--primary)' : 'var(--border)'), background: p[k] === opt.v ? 'var(--primary-tint)' : 'var(--surface)', color: p[k] === opt.v ? 'var(--primary)' : 'var(--text-muted)' }}>
-            {opt.l}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  const Area = ({ label, k, placeholder }) => (
-    <div style={groupStyle}>
-      <label style={labelStyle}>{label}</label>
-      <textarea value={p[k] ?? ''} placeholder={placeholder || ''} rows={2}
-        onChange={e => upd(k, e.target.value)}
-        style={{ ...fieldStyle, resize: 'vertical', minHeight: 56 }}/>
-    </div>
-  );
-
-  const Slider = ({ label, k, labels, ticks }) => {
-    const val = Number(p[k] ?? 0);
-    const pct = (val / (labels.length - 1)) * 100;
-    return (
-      <div style={groupStyle}>
-        <label style={labelStyle}>{label}</label>
-        <div style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '16px 16px 12px' }}>
-          <div style={{ textAlign: 'center', fontSize: 16, fontWeight: 700, color: '#1F6E54', marginBottom: 14, minHeight: 22 }}>{labels[val]}</div>
-          <input type="range" className="h-slider" min={0} max={labels.length - 1} step={1} value={val}
-            onChange={e => upd(k, Number(e.target.value))}
-            style={{ background: 'linear-gradient(to right, #1F6E54 0%, #1F6E54 ' + pct + '%, var(--surface-2) ' + pct + '%)' }}/>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-            {ticks.map((t, i) => (
-              <span key={i} style={{ fontSize: 10, color: 'var(--text-subtle)', flex: 1, textAlign: i === 0 ? 'left' : i === ticks.length - 1 ? 'right' : 'center' }}>{t}</span>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const tabs = [
     { id: 'personal', label: 'Личное' },
     { id: 'health', label: 'Здоровье' },
@@ -4203,37 +4210,37 @@ function ProfileSettingsSheet({ onClose }) {
           {loading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-subtle)' }}>Загрузка…</div>}
 
           {!loading && tab === 'personal' && <>
-            <Choice label="Пол" k="gender" options={[{v:'м',l:'Мужской'},{v:'ж',l:'Женский'}]}/>
-            <Field label="Возраст" k="age" type="number" placeholder="55" unit="лет"/>
-            <Field label="Рост" k="height" type="number" placeholder="170" unit="см"/>
-            <Field label="Вес" k="weight" type="number" placeholder="75" unit="кг"/>
-            <Field label="Профессия" k="profession" placeholder="Например: бухгалтер, водитель, пенсионер"/>
-            <Area label="Хобби и увлечения" k="hobbies" placeholder="Чем увлекаетесь, что любите"/>
+            <PChoice p={p} upd={upd} label="Пол" k="gender" options={[{v:'м',l:'Мужской'},{v:'ж',l:'Женский'}]}/>
+            <PField p={p} upd={upd} label="Возраст" k="age" type="number" placeholder="55" unit="лет"/>
+            <PField p={p} upd={upd} label="Рост" k="height" type="number" placeholder="170" unit="см"/>
+            <PField p={p} upd={upd} label="Вес" k="weight" type="number" placeholder="75" unit="кг"/>
+            <PField p={p} upd={upd} label="Профессия" k="profession" placeholder="Например: бухгалтер, водитель, пенсионер"/>
+            <PArea p={p} upd={upd} label="Хобби и увлечения" k="hobbies" placeholder="Чем увлекаетесь, что любите"/>
           </>}
 
           {!loading && tab === 'health' && <>
             <div style={{ display: 'flex', gap: 10 }}>
-              <div style={{ flex: 1 }}><Field label="Рабочее верхнее" k="work_pressure_1" type="number" placeholder="120" unit="мм"/></div>
-              <div style={{ flex: 1 }}><Field label="Рабочее нижнее" k="work_pressure_2" type="number" placeholder="80" unit="мм"/></div>
+              <div style={{ flex: 1 }}><PField p={p} upd={upd} label="Рабочее верхнее" k="work_pressure_1" type="number" placeholder="120" unit="мм"/></div>
+              <div style={{ flex: 1 }}><PField p={p} upd={upd} label="Рабочее нижнее" k="work_pressure_2" type="number" placeholder="80" unit="мм"/></div>
             </div>
-            <Field label="Обычный пульс" k="work_pulse" type="number" placeholder="70" unit="уд/мин"/>
-            <Field label="Сахар (если знаете)" k="base_sugar" type="number" placeholder="5.5" unit="ммоль/л"/>
-            <Slider label="Употребление алкоголя" k="alcohol"
+            <PField p={p} upd={upd} label="Обычный пульс" k="work_pulse" type="number" placeholder="70" unit="уд/мин"/>
+            <PField p={p} upd={upd} label="Сахар (если знаете)" k="base_sugar" type="number" placeholder="5.5" unit="ммоль/л"/>
+            <PSlider p={p} upd={upd} label="Употребление алкоголя" k="alcohol"
               labels={['Не употребляю', 'Раз в месяц или реже', '2–4 раза в месяц', '2–3 раза в неделю', '4 раза в неделю и чаще']}
               ticks={['Нет', 'Редко', '2–4/мес', '2–3/нед', '4+/нед']}/>
-            <Slider label="Курение — сигарет в день" k="smoking"
+            <PSlider p={p} upd={upd} label="Курение — сигарет в день" k="smoking"
               labels={['Не курю', 'до 5 сигарет', 'около 10 сигарет', 'около 15 сигарет', '20 и более']}
               ticks={['0', '5', '10', '15', '20+']}/>
             {Number(p.smoking ?? 0) > 0 && (
-              <Field label="Стаж курения" k="smoking_years" type="number" placeholder="10" unit="лет"/>
+              <PField p={p} upd={upd} label="Стаж курения" k="smoking_years" type="number" placeholder="10" unit="лет"/>
             )}
-            <Choice label="Физическая активность" k="activity" options={[{v:'низкая',l:'Низкая'},{v:'средняя',l:'Средняя'},{v:'высокая',l:'Высокая'}]}/>
-            <Area label="Наследственность" k="heredity" placeholder="Болезни у близких родственников (гипертония, диабет, сердце)"/>
-            <Area label="Хронические заболевания" k="chronic" placeholder="Ваши хронические заболевания, если есть"/>
+            <PChoice p={p} upd={upd} label="Физическая активность" k="activity" options={[{v:'низкая',l:'Низкая'},{v:'средняя',l:'Средняя'},{v:'высокая',l:'Высокая'}]}/>
+            <PArea p={p} upd={upd} label="Наследственность" k="heredity" placeholder="Болезни у близких родственников (гипертония, диабет, сердце)"/>
+            <PArea p={p} upd={upd} label="Хронические заболевания" k="chronic" placeholder="Ваши хронические заболевания, если есть"/>
           </>}
 
           {!loading && tab === 'finance' && <>
-            <Field label="Ежемесячный доход" k="income" type="number" placeholder="60000" unit="₽"/>
+            <PField p={p} upd={upd} label="Ежемесячный доход" k="income" type="number" placeholder="60000" unit="₽"/>
 
             {/* Кредиты */}
             <div style={{ marginTop: 18, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -4247,13 +4254,13 @@ function ProfileSettingsSheet({ onClose }) {
                   <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Кредит</span>
                   <button onClick={() => delCredit(cr.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: 13, cursor: 'pointer' }}>Удалить</button>
                 </div>
-                <input value={cr.name ?? ''} placeholder="Название банка" onChange={e => updCredit(cr.id, 'name', e.target.value)} style={{ ...fieldStyle, marginBottom: 8 }}/>
+                <input value={cr.name ?? ''} placeholder="Название банка" onChange={e => updCredit(cr.id, 'name', e.target.value)} style={{ ...PF_STYLE, marginBottom: 8 }}/>
                 <div style={{ position: 'relative', marginBottom: 8 }}>
-                  <input type="number" inputMode="decimal" value={cr.amount ?? ''} placeholder="Сумма" onChange={e => updCredit(cr.id, 'amount', e.target.value === '' ? null : Number(e.target.value))} style={fieldStyle}/>
+                  <input type="number" inputMode="decimal" value={cr.amount ?? ''} placeholder="Сумма" onChange={e => updCredit(cr.id, 'amount', e.target.value === '' ? null : Number(e.target.value))} style={PF_STYLE}/>
                   <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-subtle)' }}>₽</span>
                 </div>
                 <div style={{ position: 'relative' }}>
-                  <input type="number" inputMode="decimal" value={cr.monthly_payment ?? ''} placeholder="Ежемесячный платёж" onChange={e => updCredit(cr.id, 'monthly_payment', e.target.value === '' ? null : Number(e.target.value))} style={fieldStyle}/>
+                  <input type="number" inputMode="decimal" value={cr.monthly_payment ?? ''} placeholder="Ежемесячный платёж" onChange={e => updCredit(cr.id, 'monthly_payment', e.target.value === '' ? null : Number(e.target.value))} style={PF_STYLE}/>
                   <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-subtle)' }}>₽/мес</span>
                 </div>
               </div>
@@ -4271,14 +4278,14 @@ function ProfileSettingsSheet({ onClose }) {
                   <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Займ</span>
                   <button onClick={() => delLoan(ln.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: 13, cursor: 'pointer' }}>Удалить</button>
                 </div>
-                <input value={ln.name ?? ''} placeholder="У кого / кому (имя)" onChange={e => updLoan(ln.id, 'name', e.target.value)} style={{ ...fieldStyle, marginBottom: 8 }}/>
+                <input value={ln.name ?? ''} placeholder="У кого / кому (имя)" onChange={e => updLoan(ln.id, 'name', e.target.value)} style={{ ...PF_STYLE, marginBottom: 8 }}/>
                 <div style={{ position: 'relative', marginBottom: 8 }}>
-                  <input type="number" inputMode="decimal" value={ln.amount ?? ''} placeholder="Сумма" onChange={e => updLoan(ln.id, 'amount', e.target.value === '' ? null : Number(e.target.value))} style={fieldStyle}/>
+                  <input type="number" inputMode="decimal" value={ln.amount ?? ''} placeholder="Сумма" onChange={e => updLoan(ln.id, 'amount', e.target.value === '' ? null : Number(e.target.value))} style={PF_STYLE}/>
                   <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-subtle)' }}>₽</span>
                 </div>
-                <input value={ln.due_date ?? ''} placeholder="Срок возврата (например: до 1 августа)" onChange={e => updLoan(ln.id, 'due_date', e.target.value)} style={{ ...fieldStyle, marginBottom: 8 }}/>
+                <input value={ln.due_date ?? ''} placeholder="Срок возврата (например: до 1 августа)" onChange={e => updLoan(ln.id, 'due_date', e.target.value)} style={{ ...PF_STYLE, marginBottom: 8 }}/>
                 <div style={{ position: 'relative' }}>
-                  <input type="number" inputMode="decimal" value={ln.monthly_payment ?? ''} placeholder="Ежемесячный платёж (если есть)" onChange={e => updLoan(ln.id, 'monthly_payment', e.target.value === '' ? null : Number(e.target.value))} style={fieldStyle}/>
+                  <input type="number" inputMode="decimal" value={ln.monthly_payment ?? ''} placeholder="Ежемесячный платёж (если есть)" onChange={e => updLoan(ln.id, 'monthly_payment', e.target.value === '' ? null : Number(e.target.value))} style={PF_STYLE}/>
                   <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-subtle)' }}>₽/мес</span>
                 </div>
               </div>
@@ -4476,7 +4483,7 @@ function NotifSheet({ onClose }) {
   );
 }
 
-Object.assign(window, { ChatOverlay, ProfileSheet, ProfileSettingsSheet, VoiceModal, NotifSheet });
+Object.assign(window, { ChatOverlay, ProfileSheet, ProfileSettingsSheet, PField, PChoice, PArea, PSlider, VoiceModal, NotifSheet });
 </script>
 <script type="text/babel" data-presets="react">// app.jsx — OkTolk PWA orchestrator. Theme, state, navigation, tweaks.
 
