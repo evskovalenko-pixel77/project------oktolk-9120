@@ -62,7 +62,8 @@ async def init_db():
                 created_at  TIMESTAMP DEFAULT NOW(),
                 tariff      VARCHAR(20) DEFAULT 'demo',
                 tariff_until TIMESTAMP,
-                marketing_consent BOOLEAN DEFAULT FALSE
+                marketing_consent BOOLEAN DEFAULT FALSE,
+                is_demo     BOOLEAN DEFAULT FALSE
             );
 
             CREATE TABLE IF NOT EXISTS sessions (
@@ -164,6 +165,7 @@ async def init_db():
         # Миграции для существующих таблиц (CREATE IF NOT EXISTS не добавляет колонки)
         await conn.execute("""
             ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_consent BOOLEAN DEFAULT FALSE;
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT FALSE;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS alcohol INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking_years INTEGER;
@@ -326,6 +328,26 @@ async def login(req: LoginRequest):
 async def me(user=Depends(get_current_user)):
     return {"id": user["id"], "name": user["name"], "phone": user["phone"], "tariff": user["tariff"]}
 
+@app.post("/api/v1/auth/demo")
+async def auth_demo():
+    """Создать анонимного демо-пользователя без персональных данных и выдать токен"""
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        # Анонимный пользователь: телефон уникальный технический, без ПД
+        demo_phone = "demo_" + secrets.token_hex(8)
+        user_id = await conn.fetchval(
+            "INSERT INTO users (phone, name, password_hash, tariff, is_demo) VALUES ($1,$2,$3,$4,$5) RETURNING id",
+            demo_phone, "Гость", None, "demo", True
+        )
+        token = generate_token()
+        expires = datetime.now() + timedelta(days=90)
+        await conn.execute(
+            "INSERT INTO sessions (token, user_id, expires_at) VALUES ($1,$2,$3)",
+            token, user_id, expires
+        )
+        return {"token": token, "user_id": user_id, "name": "Гость", "tariff": "demo", "is_demo": True}
+
 # Feature Flags
 @app.get("/api/v1/features")
 async def get_features():
@@ -432,19 +454,20 @@ class ProfileRequest(BaseModel):
     income: Optional[float] = None
 
 @app.get("/api/v1/profile")
-async def get_profile(user_id: int):
-    """Получить профиль пользователя"""
+async def get_profile(user=Depends(get_current_user)):
+    """Получить профиль текущего пользователя (user_id из токена)"""
     if not db_pool:
         return {}
     async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT * FROM user_profile WHERE user_id=$1", user_id)
+        row = await conn.fetchrow("SELECT * FROM user_profile WHERE user_id=$1", user["id"])
         return dict(row) if row else {}
 
 @app.post("/api/v1/profile")
-async def save_profile(req: ProfileRequest):
-    """Сохранить/обновить профиль (upsert)"""
+async def save_profile(req: ProfileRequest, user=Depends(get_current_user)):
+    """Сохранить/обновить профиль (upsert) — user_id из токена"""
     if not db_pool:
         raise HTTPException(status_code=503, detail="БД недоступна")
+    uid = user["id"]
     async with db_pool.acquire() as conn:
         await conn.execute("""
             INSERT INTO user_profile
@@ -457,7 +480,7 @@ async def save_profile(req: ProfileRequest):
                 work_pressure_1=$8, work_pressure_2=$9, work_pulse=$10, base_sugar=$11,
                 habits=$12, activity=$13, alcohol=$14, smoking=$15, smoking_years=$16,
                 heredity=$17, chronic=$18, income=$19, updated_at=NOW()
-        """, req.user_id, req.gender, req.age, req.height, req.weight, req.profession,
+        """, uid, req.gender, req.age, req.height, req.weight, req.profession,
             req.hobbies, req.work_pressure_1, req.work_pressure_2, req.work_pulse,
             req.base_sugar, req.habits, req.activity, req.alcohol, req.smoking,
             req.smoking_years, req.heredity, req.chronic, req.income)
@@ -485,68 +508,71 @@ class LoanRequest(BaseModel):
     notes: Optional[str] = None
 
 @app.get("/api/v1/credits")
-async def get_credits(user_id: int):
+async def get_credits(user=Depends(get_current_user)):
     if not db_pool:
         return []
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT * FROM credits WHERE user_id=$1 ORDER BY created_at DESC", user_id)
+        rows = await conn.fetch("SELECT * FROM credits WHERE user_id=$1 ORDER BY created_at DESC", user["id"])
         return [dict(r) for r in rows]
 
 @app.post("/api/v1/credits")
-async def add_credit(req: CreditRequest):
+async def add_credit(req: CreditRequest, user=Depends(get_current_user)):
     if not db_pool:
         raise HTTPException(status_code=503, detail="БД недоступна")
+    uid = user["id"]
     async with db_pool.acquire() as conn:
         if req.id:
             await conn.execute("""
                 UPDATE credits SET name=$2, amount=$3, rate=$4, term_months=$5, monthly_payment=$6, notes=$7
-                WHERE id=$1
-            """, req.id, req.name, req.amount, req.rate, req.term_months, req.monthly_payment, req.notes)
+                WHERE id=$1 AND user_id=$8
+            """, req.id, req.name, req.amount, req.rate, req.term_months, req.monthly_payment, req.notes, uid)
             return {"id": req.id, "status": "ok"}
         row = await conn.fetchrow("""
             INSERT INTO credits (user_id, name, amount, rate, term_months, monthly_payment, notes)
             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
-        """, req.user_id, req.name, req.amount, req.rate, req.term_months, req.monthly_payment, req.notes)
+        """, uid, req.name, req.amount, req.rate, req.term_months, req.monthly_payment, req.notes)
         return {"id": row["id"], "status": "ok"}
 
 @app.delete("/api/v1/credits/{credit_id}")
-async def delete_credit(credit_id: int):
+async def delete_credit(credit_id: int, user=Depends(get_current_user)):
     if not db_pool:
         raise HTTPException(status_code=503, detail="БД недоступна")
     async with db_pool.acquire() as conn:
-        await conn.execute("DELETE FROM credits WHERE id=$1", credit_id)
+        await conn.execute("DELETE FROM credits WHERE id=$1 AND user_id=$2", credit_id, user["id"])
         return {"status": "ok"}
 
 @app.get("/api/v1/loans")
-async def get_loans(user_id: int):
+async def get_loans(user=Depends(get_current_user)):
     if not db_pool:
         return []
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT * FROM loans WHERE user_id=$1 ORDER BY created_at DESC", user_id)
+        rows = await conn.fetch("SELECT * FROM loans WHERE user_id=$1 ORDER BY created_at DESC", user["id"])
         return [dict(r) for r in rows]
 
 @app.post("/api/v1/loans")
-async def add_loan(req: LoanRequest):
+async def add_loan(req: LoanRequest, user=Depends(get_current_user)):
     if not db_pool:
         raise HTTPException(status_code=503, detail="БД недоступна")
+    uid = user["id"]
     async with db_pool.acquire() as conn:
         if req.id:
             await conn.execute("""
-                UPDATE loans SET name=$2, amount=$3, due_date=$4, monthly_payment=$5, notes=$6 WHERE id=$1
-            """, req.id, req.name, req.amount, req.due_date, req.monthly_payment, req.notes)
+                UPDATE loans SET name=$2, amount=$3, due_date=$4, monthly_payment=$5, notes=$6
+                WHERE id=$1 AND user_id=$7
+            """, req.id, req.name, req.amount, req.due_date, req.monthly_payment, req.notes, uid)
             return {"id": req.id, "status": "ok"}
         row = await conn.fetchrow("""
             INSERT INTO loans (user_id, name, amount, due_date, monthly_payment, notes)
             VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
-        """, req.user_id, req.name, req.amount, req.due_date, req.monthly_payment, req.notes)
+        """, uid, req.name, req.amount, req.due_date, req.monthly_payment, req.notes)
         return {"id": row["id"], "status": "ok"}
 
 @app.delete("/api/v1/loans/{loan_id}")
-async def delete_loan(loan_id: int):
+async def delete_loan(loan_id: int, user=Depends(get_current_user)):
     if not db_pool:
         raise HTTPException(status_code=503, detail="БД недоступна")
     async with db_pool.acquire() as conn:
-        await conn.execute("DELETE FROM loans WHERE id=$1", loan_id)
+        await conn.execute("DELETE FROM loans WHERE id=$1 AND user_id=$2", loan_id, user["id"])
         return {"status": "ok"}
 
 # ── Health ───────────────────────────────────────────────────────
@@ -567,14 +593,15 @@ class HealthRecordCreateRequest(BaseModel):
 
 @app.get("/api/v1/health/records")
 async def get_health_records(
-    user_id: int,
     type: Optional[str] = None,
     days: int = 30,
-    limit: int = 100
+    limit: int = 100,
+    user=Depends(get_current_user)
 ):
-    """Публичный эндпоинт — получить записи здоровья по user_id с фильтрацией"""
+    """Записи здоровья текущего пользователя (user_id из токена)"""
     if not db_pool:
         return []
+    uid = user["id"]
     async with db_pool.acquire() as conn:
         if type:
             rows = await conn.fetch("""
@@ -585,7 +612,7 @@ async def get_health_records(
                   AND recorded_at >= NOW() - make_interval(days => $3)
                 ORDER BY recorded_at DESC
                 LIMIT $4
-            """, user_id, type, days, limit)
+            """, uid, type, days, limit)
         else:
             rows = await conn.fetch("""
                 SELECT id, user_id, type, value_1, value_2, comment, recorded_at
@@ -594,24 +621,24 @@ async def get_health_records(
                   AND recorded_at >= NOW() - make_interval(days => $2)
                 ORDER BY recorded_at DESC
                 LIMIT $3
-            """, user_id, days, limit)
+            """, uid, days, limit)
         return [dict(r) for r in rows]
 
 @app.post("/api/v1/health/records")
-async def add_health_record_public(req: HealthRecordCreateRequest):
-    """Публичный эндпоинт — добавить показатель здоровья"""
+async def add_health_record_public(req: HealthRecordCreateRequest, user=Depends(get_current_user)):
+    """Добавить показатель здоровья (user_id из токена)"""
     if not db_pool:
         raise HTTPException(status_code=503, detail="БД недоступна")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
             """INSERT INTO health_records (user_id, type, value_1, value_2, comment)
                VALUES ($1,$2,$3,$4,$5) RETURNING id, recorded_at""",
-            req.user_id, req.type, req.value_1, req.value_2, req.comment
+            user["id"], req.type, req.value_1, req.value_2, req.comment
         )
         return {"id": row["id"], "recorded_at": str(row["recorded_at"]), "status": "ok"}
 
 @app.post("/api/v1/health/parse")
-async def parse_health_photo(req: HealthParseRequest):
+async def parse_health_photo(req: HealthParseRequest, user=Depends(get_current_user)):
     """AI распознавание показателя из фото (тонометр, весы, глюкометр) или текста"""
     if not AITUNNEL_API_KEY:
         raise HTTPException(status_code=503, detail="AI недоступен")
@@ -665,7 +692,7 @@ async def parse_health_photo(req: HealthParseRequest):
                 row = await conn.fetchrow(
                     """INSERT INTO health_records (user_id, type, value_1, value_2, comment)
                        VALUES ($1,$2,$3,$4,$5) RETURNING id, recorded_at""",
-                    req.user_id, req.type,
+                    user["id"], req.type,
                     float(parsed["value_1"]),
                     float(parsed["value_2"]) if parsed.get("value_2") is not None else None,
                     parsed.get("comment") or default_comment
@@ -702,12 +729,18 @@ async def add_medication(req: MedicationRequest, user=Depends(get_current_user))
 
 # Finance
 @app.get("/api/v1/finance/records")
-async def get_finance_records(user=Depends(get_current_user)):
+async def get_finance_records(category: Optional[str] = None, user=Depends(get_current_user)):
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT * FROM finance_records WHERE user_id=$1 ORDER BY recorded_at DESC LIMIT 100",
-            user["id"]
-        )
+        if category:
+            rows = await conn.fetch(
+                "SELECT * FROM finance_records WHERE user_id=$1 AND category=$2 ORDER BY recorded_at DESC LIMIT 100",
+                user["id"], category
+            )
+        else:
+            rows = await conn.fetch(
+                "SELECT * FROM finance_records WHERE user_id=$1 ORDER BY recorded_at DESC LIMIT 100",
+                user["id"]
+            )
         return [dict(r) for r in rows]
 
 @app.post("/api/v1/finance/records")
@@ -1158,8 +1191,8 @@ class FinanceParseRequest(BaseModel):
     user_id: int
 
 @app.post("/api/v1/finance/parse")
-async def finance_parse(req: FinanceParseRequest):
-    """AI парсинг финансовых данных из текста, голоса или фото чека"""
+async def finance_parse(req: FinanceParseRequest, user=Depends(get_current_user)):
+    """AI парсинг финансовых данных (user_id из токена)"""
     if not AITUNNEL_API_KEY:
         raise HTTPException(status_code=503, detail="AI недоступен")
     try:
@@ -1200,7 +1233,7 @@ async def finance_parse(req: FinanceParseRequest):
             async with db_pool.acquire() as conn:
                 row_id = await conn.fetchval(
                     "INSERT INTO finance_records (user_id, category, amount, comment) VALUES ($1,$2,$3,$4) RETURNING id",
-                    req.user_id, parsed.get("category", "other"), float(parsed["amount"]), 
+                    user["id"], parsed.get("category", "other"), float(parsed["amount"]), 
                     parsed.get("comment", "") + (" · " + parsed.get("merchant", "") if parsed.get("merchant") else "")
                 )
                 parsed["id"] = row_id
@@ -1213,9 +1246,9 @@ async def finance_parse(req: FinanceParseRequest):
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
 
 
-@app.get("/api/v1/finance/summary/public/{user_id}")
-async def get_finance_summary_public(user_id: int):
-    """Публичный summary для демо режима"""
+@app.get("/api/v1/finance/summary/me")
+async def get_finance_summary_me(user=Depends(get_current_user)):
+    """Summary расходов текущего пользователя (user_id из токена)"""
     if not db_pool:
         return {"month": "", "categories": []}
     async with db_pool.acquire() as conn:
@@ -1225,7 +1258,7 @@ async def get_finance_summary_public(user_id: int):
             WHERE user_id=$1
             AND recorded_at >= date_trunc('month', NOW())
             GROUP BY category
-        """, user_id)
+        """, user["id"])
         return {"month": datetime.now().strftime("%Y-%m"), "categories": [dict(r) for r in rows]}
 
 app.mount("/", StaticFiles(directory=".", html=True), name="static")

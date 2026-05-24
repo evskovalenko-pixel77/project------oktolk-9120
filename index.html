@@ -2063,6 +2063,24 @@ Object.assign(window, {
 <script type="text/babel" data-presets="react">// screens.jsx — all OkTolk PWA screens
 
 // ─────────────────────────────────────────────────────────────
+// apiFetch — единая обёртка: добавляет JWT-токен ко всем запросам
+// user_id берётся бэкендом ИЗ токена, в URL его передавать не нужно
+// ─────────────────────────────────────────────────────────────
+async function apiFetch(path, options = {}) {
+  const token = localStorage.getItem('oktolk_token') || '';
+  const headers = { ...(options.headers || {}) };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  const res = await fetch(path, { ...options, headers });
+  if (res.status === 401) {
+    // токен протух — сбрасываем, чтобы переинициализировать демо
+    try { window.dispatchEvent(new Event('oktolk-unauth')); } catch(e) {}
+  }
+  return res;
+}
+window.apiFetch = apiFetch;
+
+// ─────────────────────────────────────────────────────────────
 // TopBar — shared header
 // ─────────────────────────────────────────────────────────────
 function TopBar({ onProfile, onNotif, onSettings, hasNotif = true }) {
@@ -2602,7 +2620,7 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
   const CI = cat.icon;
   React.useEffect(() => {
     const userId = parseInt(localStorage.getItem("oktolk_user_id") || "1");
-    fetch("/api/v1/finance/records/public/" + userId + "/" + catKey)
+    apiFetch("/api/v1/finance/records?category=" + catKey)
       .then(r => r.json())
       .then(data => setRecords((data.records || []).slice(0, 5)))
       .catch(() => {});
@@ -2636,11 +2654,11 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
       const base64 = await new Promise(res => { const r = new FileReader(); r.onloadend = () => res(r.result.split(",")[1]); r.readAsDataURL(file); });
       const userId = parseInt(localStorage.getItem("oktolk_user_id") || "1");
       const token = localStorage.getItem("oktolk_token") || "demo";
-      const res = await fetch("/api/v1/finance/parse", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ user_id: userId, image_base64: base64, mime_type: file.type }) });
+      const res = await apiFetch("/api/v1/finance/parse", { method: "POST", body: JSON.stringify({ image_base64: base64, mime_type: file.type }) });
       const data = await res.json();
       if (data.status === "saved") {
         setChatMsgs(m => [...m, { role: "ai", text: "Записал: " + data.amount.toLocaleString("ru") + " руб." }]);
-        const r2 = await fetch("/api/v1/finance/records/public/" + userId + "/" + catKey);
+        const r2 = await apiFetch("/api/v1/finance/records?category=" + catKey);
         const d2 = await r2.json();
         setRecords((d2.records || []).slice(0, 5));
       }
@@ -2753,7 +2771,7 @@ function FinanceScreen({ onAsk, onMode }) {
 
   const loadSummary = () => {
     const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
-    fetch('/api/v1/finance/summary/public/' + userId)
+    apiFetch('/api/v1/finance/summary/me')
       .then(r => r.json())
       .then(data => {
         const map = {};
@@ -2771,12 +2789,11 @@ function FinanceScreen({ onAsk, onMode }) {
     const token = localStorage.getItem('oktolk_token') || 'demo';
     const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
     try {
-      const body = { user_id: userId };
+      const body = {};
       if (imageBase64) { body.image_base64 = imageBase64; body.mime_type = mimeType; }
       else { body.text = text; }
-      const res = await fetch('/api/v1/finance/parse', {
+      const res = await apiFetch('/api/v1/finance/parse', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify(body)
       });
       const data = await res.json();
@@ -2876,8 +2893,7 @@ function HealthDetailScreen({ metric, onBack }) {
 
   React.useEffect(() => {
     setLoading(true);
-    fetch('/api/v1/health/records?user_id=' + userId + '&type=' + metric.type + '&days=' + period)
-      .then(r => r.json())
+    authGet('/api/v1/health/records?type=' + metric.type + '&days=' + period)
       .then(d => { setRecords(Array.isArray(d) ? d : (d.records || [])); setLoading(false); })
       .catch(() => setLoading(false));
   }, [period, metric.type]);
@@ -2896,13 +2912,8 @@ function HealthDetailScreen({ metric, onBack }) {
         return d.toLocaleDateString('ru-RU') + ' (' + day + '): ' + (r.value_2 ? r.value_1 + '/' + r.value_2 : r.value_1) + ' ' + metric.unit + comment;
       }).join('\n');
       const prompt = 'Ты — аналитик данных здоровья. Проанализируй показатели ' + metric.label + ' пользователя. Только анализ фактических данных — когда были отклонения, паттерны по дням недели/времени суток, как часто норма нарушалась. БЕЗ диагнозов, БЕЗ рекомендаций по лекарствам, БЕЗ советов по лечению. Если в заметках есть упоминания причин (стресс, физнагрузка и т.д.) — учитывай их в анализе. Ответ лаконичный, 3-5 предложений, понятным языком.\n\nДанные:\n' + summary;
-      const res = await fetch('/api/v1/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('oktolk_token') || 'demo') },
-        body: JSON.stringify({ message: prompt })
-      });
-      const data = await res.json();
-      setAiText(data.reply || data.message || 'Недостаточно данных для анализа.');
+      const data = await authSend('/api/v1/chat', 'POST', { message: prompt, mode: 'health' });
+      setAiText((data && (data.reply || data.message)) || 'Недостаточно данных для анализа.');
     } catch(e) { setAiText('Не удалось загрузить анализ. Попробуйте позже.'); }
     setAiLoading(false);
   };
@@ -2910,16 +2921,9 @@ function HealthDetailScreen({ metric, onBack }) {
   const sendHealthInput = async (text) => {
     if (!text.trim()) return;
     try {
-      const token = localStorage.getItem('oktolk_token') || 'demo';
-      const res = await fetch('/api/v1/health/parse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ user_id: userId, type: metric.type, text: text })
-      });
-      const data = await res.json();
+      const data = await authSend('/api/v1/health/parse', 'POST', { type: metric.type, text: text });
       if (data && data.value_1) {
-        const r2 = await fetch('/api/v1/health/records?user_id=' + userId + '&type=' + metric.type + '&days=' + period);
-        const d2 = await r2.json();
+        const d2 = await authGet('/api/v1/health/records?type=' + metric.type + '&days=' + period);
         setRecords(Array.isArray(d2) ? d2 : (d2.records || []));
         setAiText('');
         setInput('');
@@ -2931,17 +2935,10 @@ function HealthDetailScreen({ metric, onBack }) {
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const base64 = ev.target.result.split(',')[1];
-      const token = localStorage.getItem('oktolk_token') || 'demo';
       try {
-        const res = await fetch('/api/v1/health/parse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ user_id: userId, type: metric.type, image_base64: base64, mime_type: file.type })
-        });
-        const d = await res.json();
-        if (d.value_1) {
-          const r2 = await fetch('/api/v1/health/records?user_id=' + userId + '&type=' + metric.type + '&days=' + period);
-          const d2 = await r2.json();
+        const d = await authSend('/api/v1/health/parse', 'POST', { type: metric.type, image_base64: base64, mime_type: file.type });
+        if (d && d.value_1) {
+          const d2 = await authGet('/api/v1/health/records?type=' + metric.type + '&days=' + period);
           setRecords(Array.isArray(d2) ? d2 : (d2.records || []));
           setAiText('');
         }
@@ -3311,8 +3308,7 @@ function HealthScreen({ onAsk, onMode }) {
 
   React.useEffect(() => {
     Promise.all(METRICS.map(m =>
-      fetch('/api/v1/health/records?user_id=' + userId + '&type=' + m.type + '&days=30&limit=1')
-        .then(r => r.json())
+      authGet('/api/v1/health/records?type=' + m.type + '&days=30&limit=1')
         .then(d => {
           const arr = Array.isArray(d) ? d : (d.records || []);
           const last = arr[0];
@@ -4124,7 +4120,6 @@ function PSlider({ p, upd, label, k, labels, ticks }) {
 }
 
 function ProfileSettingsSheet({ onClose }) {
-  const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
   const [tab, setTab] = React.useState('personal');
   const [p, setP] = React.useState({});
   const [saved, setSaved] = React.useState(false);
@@ -4133,43 +4128,35 @@ function ProfileSettingsSheet({ onClose }) {
   const [loans, setLoans] = React.useState([]);
 
   React.useEffect(() => {
-    fetch('/api/v1/profile?user_id=' + userId)
-      .then(r => r.json())
+    authGet('/api/v1/profile')
       .then(d => { setP(d || {}); setLoading(false); })
       .catch(() => setLoading(false));
-    fetch('/api/v1/credits?user_id=' + userId).then(r => r.json()).then(d => setCredits(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch('/api/v1/loans?user_id=' + userId).then(r => r.json()).then(d => setLoans(Array.isArray(d) ? d : [])).catch(() => {});
+    authGet('/api/v1/credits').then(d => setCredits(Array.isArray(d) ? d : [])).catch(() => {});
+    authGet('/api/v1/loans').then(d => setLoans(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
 
   const addCredit = async () => {
-    const res = await fetch('/api/v1/credits', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ user_id: userId, name: '', amount: null }) });
-    const d = await res.json();
-    setCredits(c => [{ id: d.id, name: '', amount: null }, ...c]);
+    const d = await authSend('/api/v1/credits', 'POST', { name: '', amount: null });
+    if (d) setCredits(c => [{ id: d.id, name: '', amount: null }, ...c]);
   };
   const updCredit = (id, k, v) => setCredits(c => c.map(x => x.id === id ? { ...x, [k]: v } : x));
-  const delCredit = async (id) => { await fetch('/api/v1/credits/' + id, { method:'DELETE' }); setCredits(c => c.filter(x => x.id !== id)); };
+  const delCredit = async (id) => { await authSend('/api/v1/credits/' + id, 'DELETE'); setCredits(c => c.filter(x => x.id !== id)); };
 
   const addLoan = async () => {
-    const res = await fetch('/api/v1/loans', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ user_id: userId, name: '', amount: null }) });
-    const d = await res.json();
-    setLoans(l => [{ id: d.id, name: '', amount: null, due_date: '' }, ...l]);
+    const d = await authSend('/api/v1/loans', 'POST', { name: '', amount: null });
+    if (d) setLoans(l => [{ id: d.id, name: '', amount: null, due_date: '' }, ...l]);
   };
   const updLoan = (id, k, v) => setLoans(l => l.map(x => x.id === id ? { ...x, [k]: v } : x));
-  const delLoan = async (id) => { await fetch('/api/v1/loans/' + id, { method:'DELETE' }); setLoans(l => l.filter(x => x.id !== id)); };
+  const delLoan = async (id) => { await authSend('/api/v1/loans/' + id, 'DELETE'); setLoans(l => l.filter(x => x.id !== id)); };
 
   const upd = (k, v) => { setP(prev => ({ ...prev, [k]: v })); setSaved(false); };
 
   const save = async () => {
     try {
-      await fetch('/api/v1/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, ...p })
-      });
-      // Сохраняем все кредиты и займы
+      await authSend('/api/v1/profile', 'POST', p);
       await Promise.all([
-        ...credits.map(cr => fetch('/api/v1/credits', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user_id: userId, ...cr }) })),
-        ...loans.map(ln => fetch('/api/v1/loans', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user_id: userId, ...ln }) }))
+        ...credits.map(cr => authSend('/api/v1/credits', 'POST', cr)),
+        ...loans.map(ln => authSend('/api/v1/loans', 'POST', ln))
       ]);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -4543,6 +4530,22 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "fontSize": 16
 }/*EDITMODE-END*/;
 
+// Авторизованные запросы — токен подставляется автоматически, user_id берёт бэкенд из токена
+function authHeaders(extra) {
+  const token = localStorage.getItem('oktolk_token') || '';
+  return Object.assign({ 'Authorization': 'Bearer ' + token }, extra || {});
+}
+async function authGet(url) {
+  const r = await fetch(url, { headers: authHeaders() });
+  if (r.status === 401) { window.dispatchEvent(new Event('oktolk-unauth')); return null; }
+  return r.json();
+}
+async function authSend(url, method, body) {
+  const r = await fetch(url, { method, headers: authHeaders({ 'Content-Type': 'application/json' }), body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { window.dispatchEvent(new Event('oktolk-unauth')); return null; }
+  return r.json();
+}
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [tab, setTab] = React.useState('home');
@@ -4557,6 +4560,27 @@ function App() {
     if (token && name) return { token, name, user_id: parseInt(user_id), tariff };
     return null;
   });
+  const [authLoading, setAuthLoading] = React.useState(false);
+
+  // Авто-демо: если нет токена — создаём анонимного демо-пользователя
+  React.useEffect(() => {
+    if (!user && !authLoading) {
+      setAuthLoading(true);
+      fetch('/api/v1/auth/demo', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+          if (d && d.token) {
+            localStorage.setItem('oktolk_token', d.token);
+            localStorage.setItem('oktolk_user_id', String(d.user_id));
+            localStorage.setItem('oktolk_name', d.name || 'Гость');
+            localStorage.setItem('oktolk_tariff', d.tariff || 'demo');
+            setUser({ token: d.token, user_id: d.user_id, name: d.name || 'Гость', tariff: d.tariff || 'demo', is_demo: true });
+          }
+          setAuthLoading(false);
+        })
+        .catch(() => setAuthLoading(false));
+    }
+  }, [user]);
 
   React.useLayoutEffect(() => { applyTheme(t); }, [t]);
 
@@ -4570,6 +4594,12 @@ function App() {
     setUser(null);
   };
 
+  React.useEffect(() => {
+    const handler = () => onLogout();
+    window.addEventListener('oktolk-unauth', handler);
+    return () => window.removeEventListener('oktolk-unauth', handler);
+  }, []);
+
   const [voiceResult, setVoiceResult] = React.useState(null);
   const [voiceText, setVoiceText] = React.useState(null);
   const [chatMode, setChatMode] = React.useState(null);
@@ -4577,7 +4607,12 @@ function App() {
   const [stopFacts, setStopFacts] = React.useState([]);
 
 
-  if (!user) return <AuthScreen onAuth={onAuth} />;
+  if (!user) return (
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: 'var(--bg)' }}>
+      <div style={{ width: 44, height: 44, borderRadius: '50%', border: '3px solid var(--primary-tint)', borderTopColor: 'var(--primary)', animation: 'spin 1s linear infinite' }}/>
+      <div style={{ fontSize: 15, color: 'var(--text-muted)' }}>Загрузка OkTolk…</div>
+    </div>
+  );
 
   const onAsk = (text) => { setChatMode(null); setChat(text || ''); };
   const onAskHealth = (text) => { setChatMode('health'); setChat(text || ''); };
