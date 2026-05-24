@@ -128,6 +128,9 @@ async def init_db():
                 base_sugar  REAL,
                 habits      TEXT,
                 activity    VARCHAR(20),
+                alcohol     INTEGER DEFAULT 0,
+                smoking     INTEGER DEFAULT 0,
+                smoking_years INTEGER,
                 heredity    TEXT,
                 chronic     TEXT,
                 income      REAL,
@@ -152,6 +155,7 @@ async def init_db():
                 name        TEXT,
                 amount      REAL,
                 due_date    TEXT,
+                monthly_payment REAL,
                 notes       TEXT,
                 created_at  TIMESTAMP DEFAULT NOW()
             );
@@ -160,6 +164,10 @@ async def init_db():
         # Миграции для существующих таблиц (CREATE IF NOT EXISTS не добавляет колонки)
         await conn.execute("""
             ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_consent BOOLEAN DEFAULT FALSE;
+            ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS alcohol INTEGER DEFAULT 0;
+            ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking INTEGER DEFAULT 0;
+            ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking_years INTEGER;
+            ALTER TABLE loans ADD COLUMN IF NOT EXISTS monthly_payment REAL;
         """)
 
         # Insert default feature flags
@@ -416,6 +424,9 @@ class ProfileRequest(BaseModel):
     base_sugar: Optional[float] = None
     habits: Optional[str] = None
     activity: Optional[str] = None
+    alcohol: Optional[int] = 0
+    smoking: Optional[int] = 0
+    smoking_years: Optional[int] = None
     heredity: Optional[str] = None
     chronic: Optional[str] = None
     income: Optional[float] = None
@@ -439,15 +450,17 @@ async def save_profile(req: ProfileRequest):
             INSERT INTO user_profile
                 (user_id, gender, age, height, weight, profession, hobbies,
                  work_pressure_1, work_pressure_2, work_pulse, base_sugar,
-                 habits, activity, heredity, chronic, income, updated_at)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
+                 habits, activity, alcohol, smoking, smoking_years, heredity, chronic, income, updated_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW())
             ON CONFLICT (user_id) DO UPDATE SET
                 gender=$2, age=$3, height=$4, weight=$5, profession=$6, hobbies=$7,
                 work_pressure_1=$8, work_pressure_2=$9, work_pulse=$10, base_sugar=$11,
-                habits=$12, activity=$13, heredity=$14, chronic=$15, income=$16, updated_at=NOW()
+                habits=$12, activity=$13, alcohol=$14, smoking=$15, smoking_years=$16,
+                heredity=$17, chronic=$18, income=$19, updated_at=NOW()
         """, req.user_id, req.gender, req.age, req.height, req.weight, req.profession,
             req.hobbies, req.work_pressure_1, req.work_pressure_2, req.work_pulse,
-            req.base_sugar, req.habits, req.activity, req.heredity, req.chronic, req.income)
+            req.base_sugar, req.habits, req.activity, req.alcohol, req.smoking,
+            req.smoking_years, req.heredity, req.chronic, req.income)
         return {"status": "ok"}
 
 # ── Credits & Loans ──────────────────────────────────────────────
@@ -468,6 +481,7 @@ class LoanRequest(BaseModel):
     name: Optional[str] = None
     amount: Optional[float] = None
     due_date: Optional[str] = None
+    monthly_payment: Optional[float] = None
     notes: Optional[str] = None
 
 @app.get("/api/v1/credits")
@@ -518,13 +532,13 @@ async def add_loan(req: LoanRequest):
     async with db_pool.acquire() as conn:
         if req.id:
             await conn.execute("""
-                UPDATE loans SET name=$2, amount=$3, due_date=$4, notes=$5 WHERE id=$1
-            """, req.id, req.name, req.amount, req.due_date, req.notes)
+                UPDATE loans SET name=$2, amount=$3, due_date=$4, monthly_payment=$5, notes=$6 WHERE id=$1
+            """, req.id, req.name, req.amount, req.due_date, req.monthly_payment, req.notes)
             return {"id": req.id, "status": "ok"}
         row = await conn.fetchrow("""
-            INSERT INTO loans (user_id, name, amount, due_date, notes)
-            VALUES ($1,$2,$3,$4,$5) RETURNING id
-        """, req.user_id, req.name, req.amount, req.due_date, req.notes)
+            INSERT INTO loans (user_id, name, amount, due_date, monthly_payment, notes)
+            VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
+        """, req.user_id, req.name, req.amount, req.due_date, req.monthly_payment, req.notes)
         return {"id": row["id"], "status": "ok"}
 
 @app.delete("/api/v1/loans/{loan_id}")
