@@ -4183,20 +4183,17 @@ function ProfileSettingsSheet({ onClose }) {
   ];
 
   return (
-    <>
-      <div className="sheet-backdrop" onClick={onClose}/>
-      <div className="sheet" style={{ maxHeight: '92dvh', display: 'flex', flexDirection: 'column' }}>
-        <div className="sheet-handle"/>
-        <div style={{ padding: '4px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--bg)', display: 'flex', flexDirection: 'column', height: '100dvh' }}>
+        <div style={{ padding: 'calc(14px + env(safe-area-inset-top)) 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, borderBottom: '0.5px solid var(--border)' }}>
           <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-0.01em' }}>Мой профиль</div>
-          <button onClick={onClose} style={{ background: 'var(--surface-2)', border: 'none', borderRadius: 10, width: 32, height: 32, cursor: 'pointer', fontSize: 18, color: 'var(--text-muted)' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'var(--surface-2)', border: 'none', borderRadius: 10, width: 36, height: 36, cursor: 'pointer', fontSize: 18, color: 'var(--text-muted)' }}>✕</button>
         </div>
-        <div style={{ padding: '0 20px 6px', fontSize: 13, color: 'var(--text-subtle)', lineHeight: 1.4 }}>
+        <div style={{ padding: '10px 20px 0', fontSize: 13, color: 'var(--text-subtle)', lineHeight: 1.4, flexShrink: 0 }}>
           Эти данные помогают AI давать точные ответы с учётом вашей ситуации
         </div>
 
         {/* Вкладки */}
-        <div style={{ display: 'flex', gap: 6, padding: '10px 20px 12px' }}>
+        <div style={{ display: 'flex', gap: 6, padding: '10px 20px 12px', flexShrink: 0 }}>
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               style={{ flex: 1, padding: '9px 0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', border: 'none', background: tab === t.id ? 'var(--primary)' : 'var(--surface-2)', color: tab === t.id ? '#fff' : 'var(--text-muted)' }}>
@@ -4298,14 +4295,13 @@ function ProfileSettingsSheet({ onClose }) {
         </div>
 
         {/* Кнопка сохранить */}
-        <div style={{ padding: '10px 20px calc(16px + env(safe-area-inset-bottom))', borderTop: '0.5px solid var(--border)' }}>
+        <div style={{ padding: '10px 20px calc(16px + env(safe-area-inset-bottom))', borderTop: '0.5px solid var(--border)', flexShrink: 0, background: 'var(--bg)' }}>
           <button onClick={save}
             style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saved ? 'var(--success)' : 'var(--primary)', color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s' }}>
             {saved ? '✓ Сохранено' : 'Сохранить'}
           </button>
         </div>
-      </div>
-    </>
+    </div>
   );
 }
 
