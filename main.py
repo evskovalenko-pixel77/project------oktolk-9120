@@ -168,6 +168,8 @@ class LoginRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: Optional[List] = []
+    system: Optional[str] = None
+    mode: Optional[str] = None
 
 class AnalyzeRequest(BaseModel):
     text: str
@@ -198,6 +200,22 @@ SYSTEM_PROMPT = """Ты помощник OkTolk. Говори просто, бе
 НЕ используй ** ## --- и другую разметку.
 Если спрашивают про мошенников: СТОП! Это мошенники! Не отвечайте им!
 Заканчивай: Если не получилось - напишите мне снова!"""
+
+HEALTH_PROMPT = """Ты — грамотный помощник по здоровью в приложении OkTolk.
+Отвечай как знающий человек, который умеет объяснять сложное простым языком — живо, по-человечески, но без болтовни.
+
+Правила:
+- Коротко и по делу: 2-5 предложений для простых вопросов.
+- Объясняй понятно, как образованный собеседник, а не сухая инструкция.
+- Если перечисляешь — каждый пункт с новой строки, начинай с «— ».
+- Не ставь диагнозы, не назначай лекарства и дозировки.
+- При тревожных симптомах мягко советуй обратиться к врачу.
+- Не используй ** ## и markdown-разметку, пиши обычным текстом.
+- Опирайся на проверенную медицинскую информацию."""
+
+SYSTEM_PROMPTS = {
+    "health": HEALTH_PROMPT,
+}
 
 def call_ai(messages, model="deepseek-v4-flash"):
     # Используем прямой DeepSeek если есть ключ, иначе AItunnel
@@ -270,7 +288,8 @@ async def get_features():
 # Chat (без авторизации — публичный)
 @app.post("/api/v1/chat")
 async def chat_v1(req: ChatRequest):
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    sys_prompt = req.system or SYSTEM_PROMPTS.get(req.mode or "", SYSTEM_PROMPT)
+    messages = [{"role": "system", "content": sys_prompt}]
     for h in req.history[-10:]:
         messages.append(h)
     messages.append({"role": "user", "content": req.message})
@@ -528,7 +547,8 @@ async def root():
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    sys_prompt = req.system or SYSTEM_PROMPTS.get(req.mode or "", SYSTEM_PROMPT)
+    messages = [{"role": "system", "content": sys_prompt}]
     for h in req.history[-10:]:
         messages.append(h)
     messages.append({"role": "user", "content": req.message})

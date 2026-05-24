@@ -931,6 +931,9 @@ button { font-family: inherit; }
 .hero.sites {
   background: linear-gradient(135deg, #3A2A6E 0%, #5340A8 60%, #6B53C9 100%);
 }
+.hero.danger {
+  background: linear-gradient(135deg, #B91C1C 0%, #D14343 60%, #EF4444 100%);
+}
 
 /* utility */
 .flex { display: flex; }
@@ -2511,15 +2514,15 @@ function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoice
   }, [voiceText]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
-      <div style={{ borderRadius: 20, padding: '14px 18px', background: 'linear-gradient(135deg, #B91C1C, #D14343, #EF4444)', color: 'white', position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+      <div className="hero danger" style={{ flexShrink: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.8, marginBottom: 4, textAlign: 'center' }}>Защита от мошенников</div>
-        <div style={{ fontSize: 22, fontWeight: 800, textAlign: 'center', marginBottom: 4, letterSpacing: '-0.02em' }}>Стоп Мошенник</div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, opacity: 0.85, marginBottom: 10 }}>
+        <div className="hero-title" style={{ fontSize: 18, textAlign: 'center' }}>Стоп Мошенник</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, opacity: 0.85, marginTop: 3 }}>
           Предотвращено угроз:
           <span style={{ background: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: '2px 10px', fontWeight: 600 }}>0</span>
         </div>
-        <button onClick={() => onMode('stop')} style={{ width: '100%', background: 'rgba(255,255,255,0.18)', border: '0.5px solid rgba(255,255,255,0.3)', borderRadius: 12, color: 'white', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}>
-          <IconShield size={16} sw={2.5}/>Проверить сообщение →
+        <button onClick={() => onMode('stop')} className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.18)', border: '0.5px solid rgba(255,255,255,0.3)', color: 'white' }}>
+          <IconShield size={18} sw={2.5}/>Проверить сообщение<IconArrowRight size={16}/>
         </button>
       </div>
       <div style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 16, padding: '10px 14px', flexShrink: 0 }}>
@@ -2800,12 +2803,12 @@ function FinanceScreen({ onAsk, onMode }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
-      <div className="hero indigo" style={{ padding: '12px 18px 14px' }}>
+      <div className="hero indigo">
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Мои финансы</div>
-        <div className="hero-title" style={{ fontSize: 20, textAlign: 'center' }}>Расходы за май</div>
+        <div className="hero-title" style={{ fontSize: 18, textAlign: 'center' }}>Расходы за май</div>
         <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>{total > 0 ? total.toLocaleString('ru') + ' ₽' : '0 ₽'} · расходы за май</div>
-        <button className="btn-primary" style={{ marginTop: 8, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff', fontSize: 13, padding: '8px 14px' }}>
-          <IconCreditCard size={16}/>Добавить расход<IconArrowRight size={14}/>
+        <button className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
+          <IconCreditCard size={18}/>Добавить расход<IconArrowRight size={16}/>
         </button>
       </div>
 
@@ -3324,8 +3327,7 @@ function HealthScreen({ onAsk, onMode }) {
 
   const sendHealthChat = async (text) => {
     if (!text.trim()) return;
-    const prompt = 'Ты — помощник по здоровью OkTolk. Отвечай коротко и понятно (2-4 предложения). Не давай рекомендаций по лекарствам и лечению. Только объяснение и общая информация из проверенных источников. Вопрос: ' + text;
-    onAsk && onAsk(prompt);
+    onAsk && onAsk(text);
     setInput('');
   };
 
@@ -3464,12 +3466,12 @@ function NewsScreen({ onAsk }) {
   const visible = filter === 'all' ? NEWS : NEWS.filter(n => n.cat === filter);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, boxSizing: 'border-box' }}>
-      <div className="hero news" style={{ margin: '4px 14px 0', padding: '12px 18px 14px' }}>
+      <div className="hero news">
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Что нового</div>
-        <div className="hero-title" style={{ fontSize: 20, textAlign: 'center' }}>Лента за вас</div>
+        <div className="hero-title" style={{ fontSize: 18, textAlign: 'center' }}>Лента за вас</div>
         <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>проверенные источники</div>
-        <button className="btn-primary" style={{ marginTop: 8, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff', fontSize: 13, padding: '8px 14px' }}>
-          <IconHeadphones size={16}/>Слушать ленту как радио<IconArrowRight size={14}/>
+        <button className="btn-primary" style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff' }}>
+          <IconHeadphones size={18}/>Слушать ленту как радио<IconArrowRight size={16}/>
         </button>
       </div>
       <div className="filters">
@@ -3691,7 +3693,7 @@ Object.assign(window, {
 </script>
 <script type="text/babel" data-presets="react">// overlays.jsx — Chat, Profile sheet, Voice modal
 
-function ChatOverlay({ initialMsg, onClose }) {
+function ChatOverlay({ initialMsg, onClose, mode }) {
   const [messages, setMessages] = React.useState(() => initialMsg
     ? [{ role: 'user', text: initialMsg }]
     : []
@@ -3719,7 +3721,7 @@ function ChatOverlay({ initialMsg, onClose }) {
       const res = await fetch('/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ message: text, history: [] })
+        body: JSON.stringify({ message: text, history: [], mode: mode || null })
       });
       const data = await res.json();
       setMessages(m => [...m, { role: 'ai', text: data.reply, source: 'OkTolk AI' }]);
@@ -4313,13 +4315,15 @@ function App() {
 
   const [voiceResult, setVoiceResult] = React.useState(null);
   const [voiceText, setVoiceText] = React.useState(null);
+  const [chatMode, setChatMode] = React.useState(null);
   const [stopMessages, setStopMessages] = React.useState([]);
   const [stopFacts, setStopFacts] = React.useState([]);
 
 
   if (!user) return <AuthScreen onAuth={onAuth} />;
 
-  const onAsk = (text) => setChat(text || '');
+  const onAsk = (text) => { setChatMode(null); setChat(text || ''); };
+  const onAskHealth = (text) => { setChatMode('health'); setChat(text || ''); };
   const onMode = (m) => {
     if (m === 'stop') setOverlay('stop');
     else if (m === 'voice') setOverlay('voice');
@@ -4341,13 +4345,13 @@ function App() {
           />
           {tab === 'home'    && <HomeScreen onAsk={onAsk} onMode={onMode} voiceText={voiceText} onVoiceClear={() => setVoiceText(null)}/>}
           {tab === 'finance' && <FinanceScreen onAsk={onAsk}/>}
-          {tab === 'health'  && <HealthScreen onAsk={onAsk}/>}
+          {tab === 'health'  && <HealthScreen onAsk={onAskHealth} onMode={onMode}/>}
           {tab === 'news'    && <NewsScreen onAsk={onAsk}/>}
           {tab === 'sites'   && <SitesScreen/>}
         </div>
                 <TabBar active={tab} onChange={setTab}/>
 
-        {chat !== null && <ChatOverlay initialMsg={chat} onClose={() => setChat(null)}/>}
+        {chat !== null && <ChatOverlay initialMsg={chat} mode={chatMode} onClose={() => { setChat(null); setChatMode(null); }}/>}
         {overlay === 'profile' && <ProfileSheet onClose={() => setOverlay(null)} name={user.name} onLogout={onLogout}/>}
         {overlay === 'voice'   && <VoiceModal   onClose={() => setOverlay(null)} onResult={onVoiceResult}/>}
         {overlay === 'stop' && <StopMoshennnikSheet onClose={() => setOverlay(null)} onAsk={onAsk} messages={stopMessages} setMessages={setStopMessages} facts={stopFacts} setFacts={setStopFacts}/>}
