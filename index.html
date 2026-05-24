@@ -2062,7 +2062,7 @@ Object.assign(window, {
 // ─────────────────────────────────────────────────────────────
 // TopBar — shared header
 // ─────────────────────────────────────────────────────────────
-function TopBar({ onProfile, onNotif, hasNotif = true }) {
+function TopBar({ onProfile, onNotif, onSettings, hasNotif = true }) {
   return (
     <div className="topbar">
       <button className="topbar-icon" onClick={onNotif} aria-label="Уведомления">
@@ -2070,9 +2070,14 @@ function TopBar({ onProfile, onNotif, hasNotif = true }) {
         {hasNotif && <span className="dot" />}
       </button>
       <div className="brand">OkTolk<span className="dot"/></div>
-      <button className="topbar-icon" onClick={onProfile} aria-label="Профиль">
-        <IconUser size={20} sw={1.8}/>
-      </button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="topbar-icon" onClick={onSettings} aria-label="Настройки профиля">
+          <IconSettings size={20} sw={1.8}/>
+        </button>
+        <button className="topbar-icon" onClick={onProfile} aria-label="Профиль">
+          <IconUser size={20} sw={1.8}/>
+        </button>
+      </div>
     </div>
   );
 }
@@ -4048,6 +4053,148 @@ function SubscriptionScreen({ onClose }) {
   );
 }
 
+function ProfileSettingsSheet({ onClose }) {
+  const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
+  const [tab, setTab] = React.useState('personal');
+  const [p, setP] = React.useState({});
+  const [saved, setSaved] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetch('/api/v1/profile?user_id=' + userId)
+      .then(r => r.json())
+      .then(d => { setP(d || {}); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const upd = (k, v) => { setP(prev => ({ ...prev, [k]: v })); setSaved(false); };
+
+  const save = async () => {
+    try {
+      await fetch('/api/v1/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, ...p })
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch(e) {}
+  };
+
+  const fieldStyle = { width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 12, border: '0.5px solid var(--border)', background: 'var(--surface)', fontSize: 15, color: 'var(--text)', fontFamily: 'inherit', outline: 'none' };
+  const labelStyle = { fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' };
+  const groupStyle = { marginBottom: 14 };
+
+  const Field = ({ label, k, type = 'text', placeholder, unit }) => (
+    <div style={groupStyle}>
+      <label style={labelStyle}>{label}</label>
+      <div style={{ position: 'relative' }}>
+        <input type={type} value={p[k] ?? ''} placeholder={placeholder || ''}
+          onChange={e => upd(k, type === 'number' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value)}
+          style={fieldStyle} inputMode={type === 'number' ? 'decimal' : 'text'}/>
+        {unit && <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-subtle)' }}>{unit}</span>}
+      </div>
+    </div>
+  );
+
+  const Choice = ({ label, k, options }) => (
+    <div style={groupStyle}>
+      <label style={labelStyle}>{label}</label>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {options.map(opt => (
+          <button key={opt.v} onClick={() => upd(k, opt.v)}
+            style={{ padding: '9px 14px', borderRadius: 10, fontSize: 14, fontWeight: 500, cursor: 'pointer', border: '0.5px solid ' + (p[k] === opt.v ? 'var(--primary)' : 'var(--border)'), background: p[k] === opt.v ? 'var(--primary-tint)' : 'var(--surface)', color: p[k] === opt.v ? 'var(--primary)' : 'var(--text-muted)' }}>
+            {opt.l}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const Area = ({ label, k, placeholder }) => (
+    <div style={groupStyle}>
+      <label style={labelStyle}>{label}</label>
+      <textarea value={p[k] ?? ''} placeholder={placeholder || ''} rows={2}
+        onChange={e => upd(k, e.target.value)}
+        style={{ ...fieldStyle, resize: 'vertical', minHeight: 56 }}/>
+    </div>
+  );
+
+  const tabs = [
+    { id: 'personal', label: 'Личное' },
+    { id: 'health', label: 'Здоровье' },
+    { id: 'finance', label: 'Финансы' },
+  ];
+
+  return (
+    <>
+      <div className="sheet-backdrop" onClick={onClose}/>
+      <div className="sheet" style={{ maxHeight: '92dvh', display: 'flex', flexDirection: 'column' }}>
+        <div className="sheet-handle"/>
+        <div style={{ padding: '4px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-0.01em' }}>Мой профиль</div>
+          <button onClick={onClose} style={{ background: 'var(--surface-2)', border: 'none', borderRadius: 10, width: 32, height: 32, cursor: 'pointer', fontSize: 18, color: 'var(--text-muted)' }}>✕</button>
+        </div>
+        <div style={{ padding: '0 20px 6px', fontSize: 13, color: 'var(--text-subtle)', lineHeight: 1.4 }}>
+          Эти данные помогают AI давать точные ответы с учётом вашей ситуации
+        </div>
+
+        {/* Вкладки */}
+        <div style={{ display: 'flex', gap: 6, padding: '10px 20px 12px' }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              style={{ flex: 1, padding: '9px 0', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', border: 'none', background: tab === t.id ? 'var(--primary)' : 'var(--surface-2)', color: tab === t.id ? '#fff' : 'var(--text-muted)' }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Контент */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 20px 12px', minHeight: 0 }}>
+          {loading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-subtle)' }}>Загрузка…</div>}
+
+          {!loading && tab === 'personal' && <>
+            <Choice label="Пол" k="gender" options={[{v:'м',l:'Мужской'},{v:'ж',l:'Женский'}]}/>
+            <Field label="Возраст" k="age" type="number" placeholder="55" unit="лет"/>
+            <Field label="Рост" k="height" type="number" placeholder="170" unit="см"/>
+            <Field label="Вес" k="weight" type="number" placeholder="75" unit="кг"/>
+            <Field label="Профессия" k="profession" placeholder="Например: бухгалтер, водитель, пенсионер"/>
+            <Area label="Хобби и увлечения" k="hobbies" placeholder="Чем увлекаетесь, что любите"/>
+          </>}
+
+          {!loading && tab === 'health' && <>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ flex: 1 }}><Field label="Рабочее верхнее" k="work_pressure_1" type="number" placeholder="120" unit="мм"/></div>
+              <div style={{ flex: 1 }}><Field label="Рабочее нижнее" k="work_pressure_2" type="number" placeholder="80" unit="мм"/></div>
+            </div>
+            <Field label="Обычный пульс" k="work_pulse" type="number" placeholder="70" unit="уд/мин"/>
+            <Field label="Сахар (если знаете)" k="base_sugar" type="number" placeholder="5.5" unit="ммоль/л"/>
+            <Choice label="Вредные привычки" k="habits" options={[{v:'нет',l:'Нет'},{v:'курение',l:'Курение'},{v:'алкоголь',l:'Алкоголь'},{v:'оба',l:'И то, и другое'}]}/>
+            <Choice label="Физическая активность" k="activity" options={[{v:'низкая',l:'Низкая'},{v:'средняя',l:'Средняя'},{v:'высокая',l:'Высокая'}]}/>
+            <Area label="Наследственность" k="heredity" placeholder="Болезни у близких родственников (гипертония, диабет, сердце)"/>
+            <Area label="Хронические заболевания" k="chronic" placeholder="Ваши хронические заболевания, если есть"/>
+          </>}
+
+          {!loading && tab === 'finance' && <>
+            <Field label="Ежемесячный доход" k="income" type="number" placeholder="60000" unit="₽"/>
+            <div style={{ background: 'var(--surface-2)', borderRadius: 12, padding: '14px 16px', marginTop: 4, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              💳 Раздел «Кредиты» с загрузкой договоров и AI-анализом ставок появится в следующем обновлении.
+            </div>
+          </>}
+        </div>
+
+        {/* Кнопка сохранить */}
+        <div style={{ padding: '10px 20px calc(16px + env(safe-area-inset-bottom))', borderTop: '0.5px solid var(--border)' }}>
+          <button onClick={save}
+            style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: saved ? 'var(--success)' : 'var(--primary)', color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer', transition: 'background 0.2s' }}>
+            {saved ? '✓ Сохранено' : 'Сохранить'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ProfileSheet({ onClose, name = 'Евгений', onLogout }) {
   const [showSub, setShowSub] = React.useState(false);
   const rows = [
@@ -4222,7 +4369,7 @@ function NotifSheet({ onClose }) {
   );
 }
 
-Object.assign(window, { ChatOverlay, ProfileSheet, VoiceModal, NotifSheet });
+Object.assign(window, { ChatOverlay, ProfileSheet, ProfileSettingsSheet, VoiceModal, NotifSheet });
 </script>
 <script type="text/babel" data-presets="react">// app.jsx — OkTolk PWA orchestrator. Theme, state, navigation, tweaks.
 
@@ -4342,6 +4489,7 @@ function App() {
           <TopBar
             onProfile={() => setOverlay('profile')}
             onNotif={() => setOverlay('notif')}
+            onSettings={() => setOverlay('settings')}
           />
           {tab === 'home'    && <HomeScreen onAsk={onAsk} onMode={onMode} voiceText={voiceText} onVoiceClear={() => setVoiceText(null)}/>}
           {tab === 'finance' && <FinanceScreen onAsk={onAsk}/>}
@@ -4353,6 +4501,7 @@ function App() {
 
         {chat !== null && <ChatOverlay initialMsg={chat} mode={chatMode} onClose={() => { setChat(null); setChatMode(null); }}/>}
         {overlay === 'profile' && <ProfileSheet onClose={() => setOverlay(null)} name={user.name} onLogout={onLogout}/>}
+        {overlay === 'settings' && <ProfileSettingsSheet onClose={() => setOverlay(null)}/>}
         {overlay === 'voice'   && <VoiceModal   onClose={() => setOverlay(null)} onResult={onVoiceResult}/>}
         {overlay === 'stop' && <StopMoshennnikSheet onClose={() => setOverlay(null)} onAsk={onAsk} messages={stopMessages} setMessages={setStopMessages} facts={stopFacts} setFacts={setStopFacts}/>}
         {overlay === 'notif'   && <NotifSheet   onClose={() => setOverlay(null)}/>}

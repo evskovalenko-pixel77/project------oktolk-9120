@@ -113,6 +113,38 @@ async def init_db():
                 error       TEXT,
                 created_at  TIMESTAMP DEFAULT NOW()
             );
+
+            CREATE TABLE IF NOT EXISTS user_profile (
+                user_id     INTEGER PRIMARY KEY,
+                gender      VARCHAR(10),
+                age         INTEGER,
+                height      INTEGER,
+                weight      REAL,
+                profession  TEXT,
+                hobbies     TEXT,
+                work_pressure_1 INTEGER,
+                work_pressure_2 INTEGER,
+                work_pulse  INTEGER,
+                base_sugar  REAL,
+                habits      TEXT,
+                activity    VARCHAR(20),
+                heredity    TEXT,
+                chronic     TEXT,
+                income      REAL,
+                updated_at  TIMESTAMP DEFAULT NOW()
+            );
+
+            CREATE TABLE IF NOT EXISTS credits (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER NOT NULL,
+                name        TEXT,
+                amount      REAL,
+                rate        REAL,
+                term_months INTEGER,
+                monthly_payment REAL,
+                notes       TEXT,
+                created_at  TIMESTAMP DEFAULT NOW()
+            );
         """)
 
         # Миграции для существующих таблиц (CREATE IF NOT EXISTS не добавляет колонки)
@@ -357,6 +389,56 @@ async def analyze_v1(req: AnalyzeRequest):
         return {"risk_level": risk_level, "risk_label": labels[min(risk_level, 3)], "signs": signs,
                 "summary": "СТОП! Мошенники!" if risk_level == 3 else "Проверьте ещё раз",
                 "action": "Заблокируйте отправителя" if risk_level == 3 else "Будьте осторожны"}
+
+# ── User Profile ─────────────────────────────────────────────────
+
+class ProfileRequest(BaseModel):
+    user_id: int
+    gender: Optional[str] = None
+    age: Optional[int] = None
+    height: Optional[int] = None
+    weight: Optional[float] = None
+    profession: Optional[str] = None
+    hobbies: Optional[str] = None
+    work_pressure_1: Optional[int] = None
+    work_pressure_2: Optional[int] = None
+    work_pulse: Optional[int] = None
+    base_sugar: Optional[float] = None
+    habits: Optional[str] = None
+    activity: Optional[str] = None
+    heredity: Optional[str] = None
+    chronic: Optional[str] = None
+    income: Optional[float] = None
+
+@app.get("/api/v1/profile")
+async def get_profile(user_id: int):
+    """Получить профиль пользователя"""
+    if not db_pool:
+        return {}
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM user_profile WHERE user_id=$1", user_id)
+        return dict(row) if row else {}
+
+@app.post("/api/v1/profile")
+async def save_profile(req: ProfileRequest):
+    """Сохранить/обновить профиль (upsert)"""
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO user_profile
+                (user_id, gender, age, height, weight, profession, hobbies,
+                 work_pressure_1, work_pressure_2, work_pulse, base_sugar,
+                 habits, activity, heredity, chronic, income, updated_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+                gender=$2, age=$3, height=$4, weight=$5, profession=$6, hobbies=$7,
+                work_pressure_1=$8, work_pressure_2=$9, work_pulse=$10, base_sugar=$11,
+                habits=$12, activity=$13, heredity=$14, chronic=$15, income=$16, updated_at=NOW()
+        """, req.user_id, req.gender, req.age, req.height, req.weight, req.profession,
+            req.hobbies, req.work_pressure_1, req.work_pressure_2, req.work_pulse,
+            req.base_sugar, req.habits, req.activity, req.heredity, req.chronic, req.income)
+        return {"status": "ok"}
 
 # ── Health ───────────────────────────────────────────────────────
 
