@@ -3307,6 +3307,8 @@ function HealthScreen({ onAsk, onMode }) {
   ];
 
   React.useEffect(() => {
+    const token = localStorage.getItem('oktolk_token');
+    if (!token || token === 'local_demo') return; // нет токена — не делаем запросы
     Promise.all(METRICS.map(m =>
       authGet('/api/v1/health/records?type=' + m.type + '&days=30&limit=1')
         .then(d => {
@@ -4536,13 +4538,24 @@ function authHeaders(extra) {
   return Object.assign({ 'Authorization': 'Bearer ' + token }, extra || {});
 }
 async function authGet(url) {
+  const token = localStorage.getItem('oktolk_token') || '';
+  if (!token || token === 'local_demo') return null; // нет реального токена — молча возвращаем null
   const r = await fetch(url, { headers: authHeaders() });
-  if (r.status === 401) { window.dispatchEvent(new Event('oktolk-unauth')); return null; }
+  if (r.status === 401) {
+    // Диспатчим только если токен был реальным (не local_demo)
+    if (token !== 'local_demo') window.dispatchEvent(new Event('oktolk-unauth'));
+    return null;
+  }
   return r.json();
 }
 async function authSend(url, method, body) {
+  const token = localStorage.getItem('oktolk_token') || '';
+  if (!token || token === 'local_demo') return null;
   const r = await fetch(url, { method, headers: authHeaders({ 'Content-Type': 'application/json' }), body: body ? JSON.stringify(body) : undefined });
-  if (r.status === 401) { window.dispatchEvent(new Event('oktolk-unauth')); return null; }
+  if (r.status === 401) {
+    if (token !== 'local_demo') window.dispatchEvent(new Event('oktolk-unauth'));
+    return null;
+  }
   return r.json();
 }
 
@@ -4563,11 +4576,12 @@ function App() {
   const [authLoading, setAuthLoading] = React.useState(false);
 
   // Авто-демо: если нет токена — создаём анонимного демо-пользователя
+  const demoAttempts = React.useRef(0);
   React.useEffect(() => {
-    if (!user && !authLoading) {
+    if (!user && !authLoading && demoAttempts.current < 3) {
+      demoAttempts.current += 1;
       setAuthLoading(true);
       const timeout = setTimeout(() => {
-        // Таймаут 8 сек — создаём локального гостя если сервер не отвечает
         const localUser = { token: 'local_demo', user_id: 1, name: 'Гость', tariff: 'demo', is_demo: true };
         localStorage.setItem('oktolk_token', 'local_demo');
         localStorage.setItem('oktolk_user_id', '1');
@@ -4588,7 +4602,6 @@ function App() {
             localStorage.setItem('oktolk_tariff', d.tariff || 'demo');
             setUser({ token: d.token, user_id: d.user_id, name: d.name || 'Гость', tariff: d.tariff || 'demo', is_demo: true });
           } else {
-            // Сервер ответил но без токена — локальный гость
             setUser({ token: 'local_demo', user_id: 1, name: 'Гость', tariff: 'demo', is_demo: true });
           }
           setAuthLoading(false);
