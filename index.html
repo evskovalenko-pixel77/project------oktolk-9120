@@ -2887,6 +2887,7 @@ function HealthDetailScreen({ metric, onBack }) {
   const [aiLoading, setAiLoading] = React.useState(false);
   const [input, setInput] = React.useState('');
   const startX = React.useRef(null);
+  const startY = React.useRef(null);
   const SLIDES = 5;
 
   const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
@@ -2984,15 +2985,21 @@ function HealthDetailScreen({ metric, onBack }) {
   const lastRec = records[0];
   const lastVal = lastRec ? (lastRec.value_2 ? lastRec.value_1 + '/' + lastRec.value_2 : lastRec.value_1) : '—';
 
-  const onTouchStart = (e) => { startX.current = e.touches[0].clientX; };
+  const onTouchStart = (e) => {
+    startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+  };
   const onTouchEnd = (e) => {
     if (startX.current === null) return;
-    const diff = startX.current - e.changedTouches[0].clientX;
-    if (Math.abs(diff) > 50) {
-      if (diff > 0 && slide < SLIDES - 1) setSlide(s => s + 1);
-      if (diff < 0 && slide > 0) setSlide(s => s - 1);
+    const diffX = startX.current - e.changedTouches[0].clientX;
+    const diffY = Math.abs((startY.current || 0) - e.changedTouches[0].clientY);
+    // Свайп только если горизонтальное движение доминирует
+    if (Math.abs(diffX) > 50 && Math.abs(diffX) > diffY * 1.5) {
+      if (diffX > 0 && slide < SLIDES - 1) setSlide(s => s + 1);
+      if (diffX < 0 && slide > 0) setSlide(s => s - 1);
     }
     startX.current = null;
+    startY.current = null;
   };
 
   const slideStyle = { display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', flex: 1, minHeight: 0 };
@@ -3256,7 +3263,7 @@ function HealthDetailScreen({ metric, onBack }) {
       </div>
 
       {/* Контент слайда */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', touchAction: 'pan-y' }}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', touchAction: 'pan-y' }}
         onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {slide === 0 && <Slide0/>}
         {slide === 1 && <Slide1/>}
