@@ -270,18 +270,24 @@ SYSTEM_PROMPTS = {
     "health": HEALTH_PROMPT,
 }
 
-def call_ai(messages, model="deepseek-v4-flash"):
-    # Используем прямой DeepSeek если есть ключ, иначе AItunnel
+def call_ai(messages, model="deepseek-chat"):
+    # Пробуем AItunnel (основной), при ошибке — DeepSeek напрямую
+    try:
+        if AITUNNEL_API_KEY:
+            headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+            data = {"model": "deepseek-v4-flash", "messages": messages, "max_tokens": 800, "temperature": 0.7}
+            response = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
+            if response.status_code == 200:
+                return response.json()["choices"][0]["message"]["content"]
+    except Exception:
+        pass
+    # Fallback — DeepSeek напрямую
     if DEEPSEEK_API_KEY:
-        api_key = DEEPSEEK_API_KEY
-        base_url = DEEPSEEK_BASE_URL
-    else:
-        api_key = AITUNNEL_API_KEY
-        base_url = AITUNNEL_BASE_URL
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    data = {"model": model, "messages": messages, "max_tokens": 500, "temperature": 0.7}
-    response = requests.post(f"{base_url}chat/completions", headers=headers, json=data, timeout=30)
-    return response.json()["choices"][0]["message"]["content"]
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+        data = {"model": "deepseek-chat", "messages": messages, "max_tokens": 800}
+        response = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=data, timeout=30)
+        return response.json()["choices"][0]["message"]["content"]
+    raise Exception("AI недоступен: нет рабочих API ключей")
 
 # ── API v1 ───────────────────────────────────────────────────────
 
@@ -370,13 +376,16 @@ async def get_features():
 # Chat (без авторизации — публичный)
 @app.post("/api/v1/chat")
 async def chat_v1(req: ChatRequest):
-    sys_prompt = req.system or SYSTEM_PROMPTS.get(req.mode or "", SYSTEM_PROMPT)
-    messages = [{"role": "system", "content": sys_prompt}]
-    for h in req.history[-10:]:
-        messages.append(h)
-    messages.append({"role": "user", "content": req.message})
-    reply = call_ai(messages)
-    return {"reply": reply}
+    try:
+        sys_prompt = req.system or SYSTEM_PROMPTS.get(req.mode or "", SYSTEM_PROMPT)
+        messages = [{"role": "system", "content": sys_prompt}]
+        for h in req.history[-10:]:
+            messages.append(h)
+        messages.append({"role": "user", "content": req.message})
+        reply = call_ai(messages)
+        return {"reply": reply}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI недоступен: {str(e)}")
 
 # Antiscam
 @app.post("/api/v1/analyze/text")
