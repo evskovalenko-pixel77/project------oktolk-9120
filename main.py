@@ -166,6 +166,7 @@ async def init_db():
         await conn.execute("""
             ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_consent BOOLEAN DEFAULT FALSE;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT FALSE;
+            ALTER TABLE users ALTER COLUMN phone TYPE VARCHAR(40);
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS alcohol INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking_years INTEGER;
@@ -333,27 +334,29 @@ async def auth_demo():
     """Создать анонимного демо-пользователя без персональных данных и выдать токен"""
     if not db_pool:
         raise HTTPException(status_code=503, detail="БД недоступна")
+
+    # Гарантируем наличие колонки is_demo и расширяем phone (миграция)
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT FALSE")
+            await conn.execute("ALTER TABLE users ALTER COLUMN phone TYPE VARCHAR(40)")
+    except Exception:
+        pass
+
+    # Создаём пользователя в чистом соединении (телефон <= 20 символов на всякий случай)
+    demo_phone = "d_" + secrets.token_hex(6)
     async with db_pool.acquire() as conn:
-        try:
-            demo_phone = "demo_" + secrets.token_hex(8)
-            user_id = await conn.fetchval(
-                "INSERT INTO users (phone, name, password_hash, tariff, is_demo) VALUES ($1,$2,$3,$4,$5) RETURNING id",
-                demo_phone, "Гость", "demo_no_password", "demo", True
-            )
-        except Exception:
-            # Fallback: без is_demo колонки (если миграция не прошла)
-            demo_phone = "demo_" + secrets.token_hex(8)
-            user_id = await conn.fetchval(
-                "INSERT INTO users (phone, name, password_hash, tariff) VALUES ($1,$2,$3,$4) RETURNING id",
-                demo_phone, "Гость", "demo_no_password", "demo"
-            )
+        user_id = await conn.fetchval(
+            "INSERT INTO users (phone, name, password_hash, tariff, is_demo) VALUES ($1,$2,$3,$4,$5) RETURNING id",
+            demo_phone, "Гость", "demo_no_password", "demo", True
+        )
         token = generate_token()
         expires = datetime.now() + timedelta(days=90)
         await conn.execute(
             "INSERT INTO sessions (token, user_id, expires_at) VALUES ($1,$2,$3)",
             token, user_id, expires
         )
-        return {"token": token, "user_id": user_id, "name": "Гость", "tariff": "demo", "is_demo": True}
+    return {"token": token, "user_id": user_id, "name": "Гость", "tariff": "demo", "is_demo": True}
 
 # Feature Flags
 @app.get("/api/v1/features")
