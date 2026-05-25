@@ -2610,132 +2610,238 @@ function RecentCard({ onAsk }) {
 // Finance screen
 // ─────────────────────────────────────────────────────────────
 function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
+  const catMap = { "Магазины": "shop", "Медицина": "pharmacy", "ЖКУ": "utility", "Кредиты": "credit", "Транспорт": "transport", "Досуг": "leisure", "Прочее": "other" };
+  const catKey = catMap[cat.label] || "other";
+  const CI = cat.icon;
+  const isCredit = catKey === "credit";
+  const SLIDES = 5;
+
+  const [slide, setSlide] = React.useState(0);
+  const [detail, setDetail] = React.useState(null);
+  const [credits, setCredits] = React.useState(null);
   const [records, setRecords] = React.useState([]);
   const [chatMsgs, setChatMsgs] = React.useState([]);
   const [input, setInput] = React.useState("");
   const [pending, setPending] = React.useState(false);
-  const catMap = { "Магазины": "shop", "Медицина": "pharmacy", "ЖКУ": "utility", "Кредиты": "credit", "Транспорт": "transport", "Досуг": "leisure", "Прочее": "other" };
-  const catKey = catMap[cat.label] || "other";
-  const amount = summary[catMap[cat.label]] || 0;
-  const CI = cat.icon;
+  const [aiText, setAiText] = React.useState("");
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const startX = React.useRef(null);
+  const startY = React.useRef(null);
+
+  const catColors = { shop: "#F59E0B", pharmacy: "#EF4444", utility: "#10B981", credit: "#D14343", transport: "#3B4FE0", leisure: "#8B5CF6", other: "#6B7280" };
+  const accent = catColors[catKey] || "#3B4FE0";
+
+  const subcatChips = {
+    transport: [["taxi","🚕 Такси"],["public","🚇 Метро/автобус"],["fuel","⛽ Бензин"],["parking","🅿️ Парковка"],["service","🔧 ТО"],["other_transport","✈️ Авиа/ж.д."]],
+    pharmacy: [["drugs","💊 Аптека"],["doctor","👨‍⚕️ Врач"],["tests","🔬 Анализы"],["hospital","🏥 Стационар"]],
+    shop: [["groceries","🛒 Продукты"],["clothes","👕 Одежда"],["household","🏠 Хозтовары"]],
+  };
+  const chips = subcatChips[catKey] || [];
+  const [activeChip, setActiveChip] = React.useState(null);
+  const subcatLabels = { taxi:"Такси", public:"Метро/автобус", fuel:"Бензин", parking:"Парковка", service:"ТО/ремонт", other_transport:"Авиа/ж.д.", drugs:"Аптека", doctor:"Врач/клиника", tests:"Анализы", hospital:"Стационар", groceries:"Продукты", clothes:"Одежда", household:"Хозтовары" };
+
   React.useEffect(() => {
-    const userId = parseInt(localStorage.getItem("oktolk_user_id") || "1");
-    apiFetch("/api/v1/finance/records?category=" + catKey)
-      .then(r => r.json())
-      .then(data => setRecords((data.records || []).slice(0, 5)))
-      .catch(() => {});
-    setChatMsgs([{ role: "ai", text: "Вижу расходы на " + cat.label + " за май — " + (amount > 0 ? amount.toLocaleString("ru") + " руб." : "0 руб.") + ". Спросите что угодно о ваших тратах." }]);
+    if (isCredit) { authGet("/api/v1/finance/credits-overview").then(d => { if (d) setCredits(d); }).catch(() => {}); }
+    else { authGet("/api/v1/finance/category/" + catKey).then(d => { if (d) setDetail(d); }).catch(() => {}); }
+    apiFetch("/api/v1/finance/records?category=" + catKey).then(r => r.json()).then(data => setRecords((data.records || data || []).slice(0, 20))).catch(() => {});
   }, []);
+
+  React.useEffect(() => { if (slide === 4 && !aiText && !aiLoading) loadAI(); }, [slide]);
+
+  const loadAI = async () => {
+    setAiLoading(true);
+    try {
+      let prompt;
+      if (isCredit && credits) {
+        prompt = "Проанализируй кредитную ситуацию пользователя простым языком. Доход: " + credits.income + " руб, расходы: " + credits.expenses + " руб, платежи по кредитам: " + credits.total_payment + " руб/мес. " + (credits.load_pct ? "Нагрузка " + credits.load_pct + "% от дохода. " : "") + "Дай совет: стоит ли брать новый кредит, какие риски, что закрыть первым. 3-4 коротких предложения, простой язык, без терминов.";
+      } else {
+        const subText = detail && detail.subcategories.length ? "Разбивка: " + detail.subcategories.map(s => (subcatLabels[s.key]||s.key) + " " + Math.round(s.total) + "руб").join(", ") + ". " : "";
+        const itemText = detail && detail.top_items.length ? "Часто покупает: " + detail.top_items.map(i => i.name + " (" + i.count + "р)").join(", ") + ". " : "";
+        prompt = "Проанализируй расходы на " + cat.label + " простым языком. Сумма за месяц: " + (detail ? Math.round(detail.month_total) : 0) + " руб" + (detail && detail.income_pct ? " (" + detail.income_pct + "% от дохода)" : "") + ". " + (detail && detail.prev_total ? "В прошлом месяце было " + Math.round(detail.prev_total) + " руб. " : "") + subText + itemText + "Дай простой вывод и 1-2 совета. 3-4 коротких предложения, без сложных слов.";
+      }
+      const data = await authSend("/api/v1/chat", "POST", { message: prompt, mode: "finance" });
+      setAiText((data && (data.reply || data.message)) || "Недостаточно данных для анализа.");
+    } catch(e) { setAiText("Не удалось загрузить анализ. Попробуйте позже."); }
+    setAiLoading(false);
+  };
+
   const sendMsg = async () => {
     if (input.trim() === "") return;
-    const txt = input.trim();
-    setInput("");
-    setChatMsgs(m => [...m, { role: "user", text: txt }]);
-    setPending(true);
+    const txt = input.trim(); setInput("");
+    setChatMsgs(m => [...m, { role: "user", text: txt }]); setPending(true);
     try {
-      const res = await apiFetch("/api/v1/chat", { method: "POST", body: JSON.stringify({ message: "Категория: " + cat.label + ", сумма: " + amount + " руб. Вопрос: " + txt, mode: "finance" }) });
+      const ctx = isCredit && credits ? "Данные о кредитах: доход " + credits.income + " руб, платежи " + credits.total_payment + " руб/мес. " : "Категория: " + cat.label + ", потрачено " + (detail ? Math.round(detail.month_total) : 0) + " руб. ";
+      const res = await apiFetch("/api/v1/chat", { method: "POST", body: JSON.stringify({ message: ctx + "Вопрос: " + txt, mode: "finance" }) });
       const data = await res.json();
       setChatMsgs(m => [...m, { role: "ai", text: data.reply || "Не удалось получить ответ." }]);
-    } catch(e) {
-      setChatMsgs(m => [...m, { role: "ai", text: "Ошибка соединения." }]);
-    } finally {
-      setPending(false);
-    }
+    } catch(e) { setChatMsgs(m => [...m, { role: "ai", text: "Ошибка соединения." }]); } finally { setPending(false); }
   };
-  const handleVoice = () => {
-    if (window.VoiceRecorder) window.VoiceRecorder.start((text) => { setInput(text); }, () => {}, () => {});
-  };
-  const handlePhoto = () => {
-    const inp = document.createElement("input");
-    inp.type = "file"; inp.accept = "image/*"; inp.capture = "environment";
-    inp.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (file == null) return;
-      const base64 = await new Promise(res => { const r = new FileReader(); r.onloadend = () => res(r.result.split(",")[1]); r.readAsDataURL(file); });
-      const userId = parseInt(localStorage.getItem("oktolk_user_id") || "1");
-      const token = localStorage.getItem("oktolk_token") || "demo";
-      const res = await apiFetch("/api/v1/finance/parse", { method: "POST", body: JSON.stringify({ image_base64: base64, mime_type: file.type }) });
+
+  const sendExpense = async (text, imageBase64, mimeType) => {
+    try {
+      const body = {};
+      if (imageBase64) { body.image_base64 = imageBase64; body.mime_type = mimeType; }
+      else if (text) { body.text = (activeChip ? subcatLabels[activeChip] + ": " : "") + text; }
+      else return;
+      const res = await apiFetch("/api/v1/finance/parse", { method: "POST", body: JSON.stringify(body) });
       const data = await res.json();
       if (data.status === "saved") {
-        setChatMsgs(m => [...m, { role: "ai", text: "Записал: " + data.amount.toLocaleString("ru") + " руб." }]);
-        const r2 = await apiFetch("/api/v1/finance/records?category=" + catKey);
-        const d2 = await r2.json();
-        setRecords((d2.records || []).slice(0, 5));
+        setChatMsgs(m => [...m, { role: "ai", text: "✅ Записал: " + data.amount.toLocaleString("ru") + " ₽" }]);
+        if (!isCredit) authGet("/api/v1/finance/category/" + catKey).then(d => { if (d) setDetail(d); });
+        const r2 = await apiFetch("/api/v1/finance/records?category=" + catKey); const d2 = await r2.json();
+        setRecords((d2.records || d2 || []).slice(0, 20)); setInput(""); setActiveChip(null);
       }
-    };
+    } catch(e) {}
+  };
+
+  const handlePhoto = () => {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.capture = "environment";
+    inp.onchange = async (e) => { const file = e.target.files[0]; if (!file) return; const base64 = await new Promise(res => { const r = new FileReader(); r.onloadend = () => res(r.result.split(",")[1]); r.readAsDataURL(file); }); sendExpense(null, base64, file.type); };
     inp.click();
   };
-  const fmt = (dt) => { try { const d = new Date(dt); return d.toLocaleDateString("ru", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" }); } catch(e) { return ""; } };
+  const handleDoc = () => {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".pdf,.doc,.docx,.txt,image/*";
+    inp.onchange = (e) => { const f = e.target.files[0]; if (f && onAsk) onAsk("Помогите разобрать документ: " + f.name); };
+    inp.click();
+  };
+
+  const onTouchStart = (e) => { startX.current = e.touches[0].clientX; startY.current = e.touches[0].clientY; };
+  const onTouchEnd = (e) => {
+    if (startX.current === null) return;
+    const dx = startX.current - e.changedTouches[0].clientX;
+    const dy = Math.abs((startY.current||0) - e.changedTouches[0].clientY);
+    if (Math.abs(dx) > 50 && Math.abs(dx) > dy * 1.5) { if (dx > 0 && slide < SLIDES-1) setSlide(s => s+1); if (dx < 0 && slide > 0) setSlide(s => s-1); }
+    startX.current = null; startY.current = null;
+  };
+
+  const fmt = (dt) => { try { const d = new Date(dt); return d.toLocaleDateString("ru", { day: "numeric", month: "short" }); } catch(e) { return ""; } };
+  const slideStyle = { display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", flex: 1, minHeight: 0 };
+  const SLIDE_NAMES = isCredit ? ["Обзор", "Нагрузка", "Кредиты", "История", "AI совет"] : ["Обзор", "Разбивка", "График", "История", "AI анализ"];
+
+  const renderAISlide = () => (
+    <div style={slideStyle}>
+      <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-muted)", paddingTop: 4 }}>{isCredit ? "AI разобрался в ваших кредитах" : "AI посмотрел на ваши траты"}</div>
+      {aiLoading && (<div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: 32 }}><div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid var(--primary-tint)", borderTopColor: "var(--primary)", animation: "spin 1s linear infinite" }}/><div style={{ fontSize: 13, color: "var(--text-muted)" }}>Анализирую…</div></div>)}
+      {!aiLoading && aiText && (<div style={{ background: "linear-gradient(135deg, " + accent + "CC, " + accent + ")", borderRadius: 14, padding: "18px 16px", color: "#fff" }}><div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}><span style={{ fontSize: 16 }}>✦</span><span style={{ fontSize: 13, fontWeight: 700, opacity: 0.9 }}>{isCredit ? "Совет по кредитам" : "Анализ расходов"}</span></div><div style={{ fontSize: 14, lineHeight: 1.65, opacity: 0.96, whiteSpace: "pre-wrap" }}>{aiText}</div></div>)}
+      {!aiLoading && aiText && (<button onClick={() => { setAiText(""); loadAI(); }} style={{ padding: 10, borderRadius: 12, background: "var(--surface-2)", color: "var(--text-muted)", border: "none", fontSize: 13, cursor: "pointer" }}>Обновить анализ</button>)}
+      <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>ℹ️ AI смотрит только на ваши данные. Это не финансовая консультация.</div>
+      {chatMsgs.length > 0 && (<div className="card" style={{ padding: "8px 0" }}>{chatMsgs.map((m, i) => (<div key={i} style={ m.role === "user" ? { margin: "6px 14px", background: "var(--primary)", borderRadius: 12, padding: "10px 14px", fontSize: 14, color: "white", lineHeight: 1.5 } : { padding: "8px 14px", fontSize: 14, color: "var(--text)", lineHeight: 1.5 } }>{m.text}</div>))}{pending && <div style={{ padding: "8px 14px", fontSize: 14, color: "var(--text-muted)" }}>Думаю…</div>}</div>)}
+    </div>
+  );
+
+  const renderCreditSlide = () => {
+    const c = credits;
+    if (!c) return <div style={{ ...slideStyle, alignItems: "center", justifyContent: "center" }}><div style={{ color: "var(--text-muted)" }}>Загрузка…</div></div>;
+    const loadColor = c.load_pct == null ? "var(--text-muted)" : c.load_pct < 30 ? "var(--success)" : c.load_pct < 50 ? "var(--warn)" : "var(--danger)";
+    if (slide === 0) return (
+      <div style={slideStyle}>
+        <div className="card">
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>Плачу за кредиты каждый месяц</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "var(--danger)" }}>{c.total_payment.toLocaleString("ru")} ₽</div>
+          {c.total_debt > 0 && <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>ещё должен {c.total_debt.toLocaleString("ru")} ₽</div>}
+          {c.load_pct != null && <><div style={{ height: 8, borderRadius: 99, background: "var(--surface-2)", overflow: "hidden", margin: "10px 0 4px" }}><div style={{ height: "100%", width: Math.min(c.load_pct, 100) + "%", background: loadColor, borderRadius: 99 }}/></div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>Из каждых 100 ₽ дохода — {c.load_pct} уходит на кредиты</div></>}
+        </div>
+        {c.income > 0 && <div style={{ display: "flex", gap: 8 }}>
+          <div className="card" style={{ flex: 1 }}><div style={{ fontSize: 11, color: "var(--text-muted)" }}>Доход</div><div style={{ fontSize: 18, fontWeight: 800, color: "var(--success)" }}>{c.income.toLocaleString("ru")}</div></div>
+          <div className="card" style={{ flex: 1 }}><div style={{ fontSize: 11, color: "var(--text-muted)" }}>Расходы</div><div style={{ fontSize: 18, fontWeight: 800 }}>{Math.round(c.expenses).toLocaleString("ru")}</div></div>
+          <div className="card" style={{ flex: 1 }}><div style={{ fontSize: 11, color: "var(--text-muted)" }}>Остаётся</div><div style={{ fontSize: 18, fontWeight: 800, color: c.free_money < 5000 ? "var(--danger)" : "var(--primary)" }}>{c.free_money != null ? Math.round(c.free_money).toLocaleString("ru") : "—"}</div></div>
+        </div>}
+        {c.load_pct != null && (<div style={{ display: "flex", gap: 6, alignItems: "center", padding: "10px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, background: c.load_pct < 30 ? "var(--success-tint)" : c.load_pct < 50 ? "var(--warn-tint)" : "var(--danger-tint)", color: loadColor }}><div style={{ width: 10, height: 10, borderRadius: "50%", background: loadColor, flexShrink: 0 }}/>{c.load_pct < 30 ? "Всё хорошо — нагрузка небольшая" : c.load_pct < 50 ? "Денег остаётся мало — будьте осторожнее" : "Большая нагрузка — рискованно"}</div>)}
+        {c.income === 0 && <div style={{ padding: "12px 14px", background: "var(--surface-2)", borderRadius: 10, fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>Укажите доход в профиле (⚙️) — тогда покажу нагрузку на бюджет и дам точные советы.</div>}
+      </div>
+    );
+    if (slide === 1) { const pct = c.load_pct || 0; return (
+      <div style={slideStyle}>
+        <div className="card">
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>Сколько дохода уходит на кредиты</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: loadColor, margin: "4px 0 12px" }}>{c.load_pct != null ? c.load_pct + "%" : "—"}</div>
+          <div style={{ position: "relative", height: 12, borderRadius: 99, background: "linear-gradient(to right, #1F8A5B 0%, #1F8A5B 30%, #C77A20 30%, #C77A20 50%, #D14343 50%)", marginBottom: 8 }}>{c.load_pct != null && <div style={{ position: "absolute", left: "calc(" + Math.min(pct, 100) + "% - 10px)", top: -4, width: 20, height: 20, borderRadius: "50%", background: "#fff", border: "3px solid " + loadColor, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }}/>}</div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10 }}><span style={{ color: "var(--success)" }}>✓ Хорошо</span><span style={{ color: "var(--warn)" }}>⚠ Осторожно</span><span style={{ color: "var(--danger)" }}>✕ Опасно</span></div>
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 8 }}>Что и сколько плачу</div>
+          {[...c.credits, ...c.loans].filter(x => x.payment > 0).sort((a,b) => b.payment - a.payment).map((x, i) => { const tot = c.total_payment || 1; return (<div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}><div style={{ width: 10, height: 10, borderRadius: 3, background: accent, flexShrink: 0, opacity: 1 - i*0.15 }}/><div style={{ flex: 1, fontSize: 13, color: "var(--text-muted)" }}>{x.name || "Кредит"}</div><div style={{ fontSize: 13, fontWeight: 700 }}>{x.payment.toLocaleString("ru")} ₽</div><div style={{ fontSize: 11, color: "var(--text-subtle)" }}>{Math.round(x.payment/tot*100)}%</div></div>); })}
+          {c.credits.length === 0 && c.loans.length === 0 && <div style={{ fontSize: 13, color: "var(--text-subtle)" }}>Добавьте кредиты в профиле (⚙️)</div>}
+        </div>
+      </div>
+    ); }
+    if (slide === 2) return (
+      <div style={slideStyle}>
+        <div className="card">
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 12 }}>Мои кредиты и займы</div>
+          {[...c.credits.map(x=>({...x,type:"Кредит"})), ...c.loans.map(x=>({...x,type:"Займ"}))].map((x, i) => (<div key={i} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid var(--border)" }}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}><div style={{ fontSize: 14, fontWeight: 700 }}>{x.name || x.type}</div>{x.rate && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>ставка {x.rate}%</div>}</div><div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)" }}><span>Долг: {x.amount ? x.amount.toLocaleString("ru") + " ₽" : "—"}</span><span>Платёж: {x.payment ? x.payment.toLocaleString("ru") + " ₽/мес" : "—"}</span></div></div>))}
+          {c.credits.length === 0 && c.loans.length === 0 && <div style={{ fontSize: 13, color: "var(--text-subtle)", textAlign: "center", padding: 20 }}>Кредитов пока нет.<br/>Добавьте их в профиле через ⚙️</div>}
+        </div>
+      </div>
+    );
+    if (slide === 3) return (
+      <div style={slideStyle}>
+        <div className="card">
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>История платежей</div>
+          {records.length === 0 && <div style={{ fontSize: 13, color: "var(--text-subtle)", padding: 16, textAlign: "center" }}>Платежей пока нет</div>}
+          {records.map((r, i) => (<div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: i < records.length-1 ? "0.5px solid var(--border)" : "none" }}><div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--danger-tint)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><IconCreditCard size={18} color="var(--danger)"/></div><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{r.comment || "Платёж"}</div><div style={{ fontSize: 12, color: "var(--text-muted)" }}>{fmt(r.recorded_at)}</div></div><div style={{ fontSize: 15, fontWeight: 700, color: "var(--danger)" }}>−{r.amount ? r.amount.toLocaleString("ru") : 0} ₽</div></div>))}
+        </div>
+      </div>
+    );
+    return renderAISlide();
+  };
+
+  const renderExpenseSlide = () => {
+    const d = detail;
+    if (!d) return <div style={{ ...slideStyle, alignItems: "center", justifyContent: "center" }}><div style={{ color: "var(--text-muted)" }}>Загрузка…</div></div>;
+    if (slide === 0) { const diff = d.prev_total > 0 ? Math.round((d.month_total - d.prev_total) / d.prev_total * 100) : null; return (
+      <div style={slideStyle}>
+        <div className="card"><div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>{cat.label} за этот месяц</div><div style={{ fontSize: 28, fontWeight: 800, color: accent }}>{Math.round(d.month_total).toLocaleString("ru")} ₽</div><div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>{d.income_pct != null ? d.income_pct + "% от дохода" : ""}{diff != null && <span style={{ color: diff > 0 ? "var(--danger)" : "var(--success)", marginLeft: 8 }}>{diff > 0 ? "↑" : "↓"}{Math.abs(diff)}% к прошлому</span>}</div></div>
+        <div style={{ display: "flex", gap: 8 }}><div className="card" style={{ flex: 1 }}><div style={{ fontSize: 11, color: "var(--text-muted)" }}>Покупок</div><div style={{ fontSize: 20, fontWeight: 800 }}>{d.count}</div></div><div className="card" style={{ flex: 1 }}><div style={{ fontSize: 11, color: "var(--text-muted)" }}>Средняя покупка</div><div style={{ fontSize: 20, fontWeight: 800 }}>{d.avg_check.toLocaleString("ru")} ₽</div></div></div>
+        {d.top_items.length > 0 && (<div className="card"><div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 8 }}>Что покупали чаще всего</div>{d.top_items.map((it, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: i < d.top_items.length-1 ? "0.5px solid var(--border)" : "none" }}><div><div style={{ fontSize: 13, fontWeight: 600 }}>{it.name}</div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{it.count} раз</div></div><div style={{ fontSize: 13, fontWeight: 700, color: accent }}>{Math.round(it.total).toLocaleString("ru")} ₽</div></div>))}</div>)}
+      </div>
+    ); }
+    if (slide === 1) { const subs = d.subcategories; const tot = subs.reduce((a,s) => a + s.total, 0) || 1; return (
+      <div style={slideStyle}>
+        <div className="card"><div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 10 }}>На что уходят деньги</div>{subs.length > 0 ? <><div style={{ display: "flex", height: 20, borderRadius: 99, overflow: "hidden", marginBottom: 12 }}>{subs.map((s, i) => <div key={i} style={{ flex: s.total, background: accent, opacity: 1 - i*0.18 }}/>)}</div>{subs.map((s, i) => (<div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}><div style={{ width: 10, height: 10, borderRadius: 3, background: accent, opacity: 1 - i*0.18, flexShrink: 0 }}/><div style={{ flex: 1, fontSize: 13, color: "var(--text-muted)" }}>{subcatLabels[s.key] || s.key}</div><div style={{ fontSize: 13, fontWeight: 700 }}>{Math.round(s.total).toLocaleString("ru")} ₽</div><div style={{ fontSize: 11, color: "var(--text-subtle)" }}>{Math.round(s.total/tot*100)}%</div></div>))}</> : <div style={{ fontSize: 13, color: "var(--text-subtle)", padding: 12, textAlign: "center" }}>Пока нет разбивки.<br/>Добавьте расходы — AI разделит их по типам.</div>}</div>
+      </div>
+    ); }
+    if (slide === 2) { const m = d.monthly; const max = Math.max(...m.map(x => x.total), 1); const monthNames = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"]; return (
+      <div style={slideStyle}>
+        <div className="card"><div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 12 }}>Расходы по месяцам</div>{m.length > 0 ? <><svg width="100%" height="100" viewBox="0 0 300 100" style={{ overflow: "visible" }}>{m.map((x, i) => { const bw = 300 / m.length; const h = (x.total / max) * 80; return <rect key={i} x={i*bw + bw*0.2} y={90-h} width={bw*0.6} height={h} rx={4} fill={accent} opacity={0.85}/>; })}</svg><div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>{m.map((x, i) => <span key={i} style={{ fontSize: 10, color: "var(--text-subtle)", flex: 1, textAlign: "center" }}>{monthNames[parseInt(x.month.split("-")[1])-1]}</span>)}</div></> : <div style={{ fontSize: 13, color: "var(--text-subtle)", padding: 16, textAlign: "center" }}>Накопится за пару месяцев</div>}</div>
+      </div>
+    ); }
+    if (slide === 3) return (
+      <div style={slideStyle}>
+        <div className="card"><div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>История</div>{records.length === 0 && <div style={{ fontSize: 13, color: "var(--text-subtle)", padding: 16, textAlign: "center" }}>Расходов пока нет</div>}{records.map((r, i) => (<div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: i < records.length-1 ? "0.5px solid var(--border)" : "none" }}><div style={{ width: 36, height: 36, borderRadius: 10, background: accent + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CI size={18} color={accent}/></div><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{r.item_name || r.comment || cat.label}</div><div style={{ fontSize: 12, color: "var(--text-muted)" }}>{fmt(r.recorded_at)}{r.subcategory ? " · " + (subcatLabels[r.subcategory] || r.subcategory) : ""}</div></div><div style={{ fontSize: 15, fontWeight: 700, color: "var(--danger)" }}>−{r.amount ? r.amount.toLocaleString("ru") : 0} ₽</div></div>))}</div>
+      </div>
+    );
+    return renderAISlide();
+  };
+
+  const renderSlide = () => isCredit ? renderCreditSlide() : renderExpenseSlide();
+
   return (
-    <div className="screen">
-      <div style={{ display: "flex", alignItems: "center", padding: "14px 18px 8px", gap: 12, position: "sticky", top: 0, background: "var(--bg)", zIndex: 10 }}>
-        <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: "var(--surface-2)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <IconChevronLeft size={20} stroke="var(--text)"/>
-        </button>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)" }}>{cat.label}</div>
+    <div className="screen" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ display: "flex", alignItems: "center", padding: "14px 16px 8px", gap: 10, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ width: 36, height: 36, borderRadius: 10, background: "var(--surface-2)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><IconChevronLeft size={20} stroke="var(--text)"/></button>
+        <div style={{ flex: 1 }}><div style={{ fontSize: 18, fontWeight: 800 }}>{cat.label}</div></div>
+        <div style={{ fontSize: 12, color: "var(--text-subtle)" }}>{SLIDE_NAMES[slide]}</div>
       </div>
-      <div style={{ margin: "4px 18px 0" }}>
-        <div className="hero indigo" style={{ borderRadius: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <CI size={26} color="white"/>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.7 }}>Расходы за май</div>
-              <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em" }}>{amount > 0 ? amount.toLocaleString("ru") + " ₽" : "0 ₽"}</div>
-            </div>
-          </div>
-          <div style={{ fontSize: 13, opacity: 0.75 }}>{records.length > 0 ? records.length + " операций" : "Нет операций за май"}</div>
-        </div>
-      </div>
-      {records.length > 0 && (
-        <div style={{ padding: "16px 18px 0" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 10 }}>Последние расходы</div>
-          <div className="card" style={{ padding: 6 }}>
-            {records.map((rec, i) => (
-              <div key={i} className="list-row" style={{ padding: "12px 14px", borderBottom: i < records.length - 1 ? undefined : "none" }}>
-                <div className="list-row-icon" style={{ background: "var(--primary-tint)", color: "var(--primary)" }}><CI size={18}/></div>
-                <div className="list-row-text">
-                  <div className="list-row-title">{rec.comment || cat.label}</div>
-                  <div className="list-row-sub">{fmt(rec.recorded_at)}</div>
-                </div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", flexShrink: 0 }}>{rec.amount ? rec.amount.toLocaleString("ru") + " ₽" : ""}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      <div style={{ padding: "16px 18px 0" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-subtle)", marginBottom: 10 }}>Анализ расходов</div>
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)" }}/>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-muted)" }}>AI готов помочь</div>
-          </div>
-          <div style={{ maxHeight: 280, overflowY: "auto", padding: "8px 0" }}>
-            {chatMsgs.map((m, i) => (
-              <div key={i} style={ m.role === "user"
-                ? { margin: "6px 14px", background: "var(--primary)", borderRadius: 12, padding: "10px 14px", fontSize: 14, color: "white", lineHeight: 1.5 }
-                : { padding: "8px 14px", fontSize: 14, color: "var(--text)", lineHeight: 1.5, borderBottom: "1px solid var(--border)" }
-              }>{m.text}</div>
-            ))}
-            {pending && <div style={{ padding: "8px 14px", fontSize: 14, color: "var(--text-muted)" }}>Думаю…</div>}
-          </div>
-        </div>
-      </div>
-      <div style={{ padding: "12px 18px 0" }}>
-        <div className="modes" style={{ marginBottom: 8, display: "flex", gap: 8 }}>
-          <button className="mode" onClick={handlePhoto}><span className="mode-icon"><IconCamera size={22}/></span><span className="mode-label">Фото чека</span></button>
-          <VoiceButton onResult={(text) => { setInput(text); }} />
-        </div>
+      <div style={{ display: "flex", gap: 5, justifyContent: "center", padding: "4px 0", flexShrink: 0 }}>{Array.from({ length: SLIDES }).map((_, i) => (<button key={i} onClick={() => setSlide(i)} style={{ height: 6, width: i === slide ? 22 : 6, borderRadius: 99, border: "none", padding: 0, cursor: "pointer", background: i === slide ? accent : "var(--border)", transition: "all 0.2s" }}/>))}</div>
+      <div style={{ textAlign: "center", fontSize: 11, color: "var(--text-subtle)", marginBottom: 4, flexShrink: 0 }}>свайп для переключения</div>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", touchAction: "pan-y", padding: "0 16px" }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>{renderSlide()}</div>
+      <div style={{ padding: "10px 16px calc(12px + env(safe-area-inset-bottom))", borderTop: "0.5px solid var(--border)", flexShrink: 0, background: "var(--bg)" }}>
         <div className="composer" style={{ margin: 0 }}>
-          <textarea value={input} rows={1} onChange={e => { setInput(e.target.value); e.target.style.height="auto"; e.target.style.height=e.target.scrollHeight+"px"; }} onKeyDown={e => { if (e.key==="Enter" && e.shiftKey===false && input.trim() !== "") { e.preventDefault(); sendMsg(); } }} placeholder="Спросите про расходы…" style={{ resize:"none", overflow:"hidden", minHeight:24 }}/>
-          <button className="composer-send" disabled={input.trim() === "" || pending} onClick={sendMsg}><IconSend size={18} sw={2}/></button>
+          <textarea value={input} rows={1} onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && input.trim()) { e.preventDefault(); slide === 4 ? sendMsg() : sendExpense(input); } }} placeholder={isCredit ? "Спросите про кредиты…" : "Добавьте расход или спросите…"} style={{ resize: "none", overflow: "hidden", minHeight: 24, flex: 1, border: "none", outline: "none", background: "transparent", font: "inherit", fontSize: 15 }}/>
+          <button className="composer-send" disabled={!input.trim() || pending} onClick={() => slide === 4 ? sendMsg() : sendExpense(input)}><IconSend size={18} sw={2}/></button>
+        </div>
+        {chips.length > 0 && (<div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "8px 0 0", scrollbarWidth: "none" }}>{chips.map(([key, label]) => (<button key={key} onClick={() => setActiveChip(activeChip === key ? null : key)} style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 99, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "0.5px solid " + (activeChip === key ? accent : "var(--border)"), background: activeChip === key ? accent + "22" : "var(--surface)", color: activeChip === key ? accent : "var(--text-muted)" }}>{label}</button>))}</div>)}
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button onClick={handleDoc} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 0", borderRadius: 12, border: "0.5px solid var(--border)", background: "var(--surface)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: "var(--text-muted)", cursor: "pointer" }}><IconDoc size={18}/>Документ</button>
+          <button onClick={handlePhoto} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 0", borderRadius: 12, border: "0.5px solid var(--border)", background: "var(--surface)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: "var(--text-muted)", cursor: "pointer" }}><IconCamera size={18}/>Фото</button>
+          <VoiceButton onResult={(text) => { setInput(text); setTimeout(() => slide === 4 ? sendMsg() : sendExpense(text), 800); }} />
         </div>
       </div>
     </div>
   );
 }
+
 
 
 function VoiceButton({ onResult, onError }) {

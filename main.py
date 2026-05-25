@@ -98,6 +98,8 @@ async def init_db():
                 id          SERIAL PRIMARY KEY,
                 user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
                 category    VARCHAR(50),
+                subcategory VARCHAR(50),
+                item_name   TEXT,
                 amount      FLOAT,
                 comment     TEXT,
                 recorded_at TIMESTAMP DEFAULT NOW()
@@ -171,6 +173,8 @@ async def init_db():
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking_years INTEGER;
             ALTER TABLE loans ADD COLUMN IF NOT EXISTS monthly_payment REAL;
+            ALTER TABLE finance_records ADD COLUMN IF NOT EXISTS subcategory VARCHAR(50);
+            ALTER TABLE finance_records ADD COLUMN IF NOT EXISTS item_name TEXT;
         """)
 
         # Insert default feature flags
@@ -400,70 +404,90 @@ async def build_profile_context(user_id: int) -> str:
     try:
         async with db_pool.acquire() as conn:
             p = await conn.fetchrow("SELECT * FROM user_profile WHERE user_id=$1", user_id)
-        if not p:
-            return ""
+            credits = await conn.fetch(
+                "SELECT name, amount, monthly_payment, rate FROM credits WHERE user_id=$1", user_id)
+            loans = await conn.fetch(
+                "SELECT name, amount, due_date, monthly_payment FROM loans WHERE user_id=$1", user_id)
+
         parts = []
-        if p.get("age"):
-            parts.append(f"Возраст: {p['age']} лет")
-        if p.get("gender"):
-            parts.append(f"Пол: {'мужской' if p['gender'] == 'м' else 'женский'}")
-        if p.get("height") and p.get("weight"):
-            parts.append(f"Рост: {p['height']} см, вес: {p['weight']} кг")
-        elif p.get("height"):
-            parts.append(f"Рост: {p['height']} см")
-        elif p.get("weight"):
-            parts.append(f"Вес: {p['weight']} кг")
-        if p.get("profession"):
-            parts.append(f"Профессия: {p['profession']}")
-        if p.get("hobbies"):
-            parts.append(f"Хобби и интересы: {p['hobbies']}")
-        if p.get("work_pressure_1") and p.get("work_pressure_2"):
-            parts.append(f"Рабочее (нормальное) давление: {p['work_pressure_1']}/{p['work_pressure_2']} мм рт.ст.")
-        if p.get("work_pulse"):
-            parts.append(f"Обычный пульс: {p['work_pulse']} уд/мин")
-        if p.get("base_sugar"):
-            parts.append(f"Базовый сахар: {p['base_sugar']} ммоль/л")
-        alcohol_labels = ["не употребляет алкоголь", "употребляет раз в месяц или реже",
-                          "употребляет 2-4 раза в месяц", "употребляет 2-3 раза в неделю",
-                          "употребляет 4+ раза в неделю"]
-        smoke_labels = ["не курит", "курит до 5 сигарет в день", "курит около 10 сигарет в день",
-                        "курит около 15 сигарет в день", "курит 20+ сигарет в день"]
-        alc = p.get("alcohol", 0) or 0
-        smk = p.get("smoking", 0) or 0
-        if alc > 0:
-            parts.append(f"Алкоголь: {alcohol_labels[min(alc, 4)]}")
-        if smk > 0:
-            label = smoke_labels[min(smk, 4)]
-            stazh = p.get("smoking_years")
-            parts.append(f"Курение: {label}" + (f", стаж {stazh} лет" if stazh else ""))
-        if alc == 0 and smk == 0:
-            parts.append("Вредные привычки: нет")
-        activity_map = {"низкая": "низкая физическая активность", "средняя": "средняя физическая активность", "высокая": "высокая физическая активность"}
-        if p.get("activity"):
-            parts.append(f"Физическая активность: {activity_map.get(p['activity'], p['activity'])}")
-        if p.get("heredity"):
-            parts.append(f"Наследственность: {p['heredity']}")
-        if p.get("chronic"):
-            parts.append(f"Хронические заболевания: {p['chronic']}")
-        if p.get("income"):
-            parts.append(f"Ежемесячный доход: {int(p['income'])} руб.")
 
-        # Кредиты
-        credits = await conn.fetch("SELECT name, amount, monthly_payment, rate FROM credits WHERE user_id=$1", user_id)
+        # Личные данные (если профиль заполнен)
+        if p:
+            if p.get("age"):
+                parts.append(f"Возраст: {p['age']} лет")
+            if p.get("gender"):
+                parts.append(f"Пол: {'мужской' if p['gender'] == 'м' else 'женский'}")
+            if p.get("height") and p.get("weight"):
+                parts.append(f"Рост: {p['height']} см, вес: {p['weight']} кг")
+            elif p.get("height"):
+                parts.append(f"Рост: {p['height']} см")
+            elif p.get("weight"):
+                parts.append(f"Вес: {p['weight']} кг")
+            if p.get("profession"):
+                parts.append(f"Профессия: {p['profession']}")
+            if p.get("hobbies"):
+                parts.append(f"Хобби и интересы: {p['hobbies']}")
+            if p.get("work_pressure_1") and p.get("work_pressure_2"):
+                parts.append(f"Рабочее давление: {p['work_pressure_1']}/{p['work_pressure_2']} мм рт.ст.")
+            if p.get("work_pulse"):
+                parts.append(f"Обычный пульс: {p['work_pulse']} уд/мин")
+            if p.get("base_sugar"):
+                parts.append(f"Базовый сахар: {p['base_sugar']} ммоль/л")
+            alcohol_labels = ["не употребляет алкоголь", "употребляет раз в месяц или реже",
+                              "употребляет 2-4 раза в месяц", "употребляет 2-3 раза в неделю",
+                              "употребляет 4+ раза в неделю"]
+            smoke_labels = ["не курит", "курит до 5 сигарет в день", "курит около 10 сигарет в день",
+                            "курит около 15 сигарет в день", "курит 20+ сигарет в день"]
+            alc = p.get("alcohol", 0) or 0
+            smk = p.get("smoking", 0) or 0
+            if alc > 0:
+                parts.append(f"Алкоголь: {alcohol_labels[min(alc, 4)]}")
+            if smk > 0:
+                label = smoke_labels[min(smk, 4)]
+                stazh = p.get("smoking_years")
+                parts.append(f"Курение: {label}" + (f", стаж {stazh} лет" if stazh else ""))
+            if alc == 0 and smk == 0:
+                parts.append("Вредные привычки: нет")
+            activity_map = {"низкая": "низкая физическая активность",
+                            "средняя": "средняя физическая активность",
+                            "высокая": "высокая физическая активность"}
+            if p.get("activity"):
+                parts.append(f"Физическая активность: {activity_map.get(p['activity'], p['activity'])}")
+            if p.get("heredity"):
+                parts.append(f"Наследственность: {p['heredity']}")
+            if p.get("chronic"):
+                parts.append(f"Хронические заболевания: {p['chronic']}")
+            if p.get("income"):
+                income = int(p['income'])
+                parts.append(f"Ежемесячный доход: {income} руб.")
+
+        # Кредиты — грузятся всегда, независимо от профиля
         if credits:
-            total_credit = sum(r["monthly_payment"] or 0 for r in credits)
-            credit_list = ", ".join(f"{r['name'] or 'Кредит'} ({int(r['monthly_payment'] or 0)} ₽/мес)" for r in credits)
-            parts.append(f"Кредиты: {credit_list}. Итого платежей: {int(total_credit)} руб./мес.")
+            total_payment = sum(r["monthly_payment"] or 0 for r in credits)
+            credit_list = "; ".join(
+                f"{r['name'] or 'Кредит'}: {int(r['amount'] or 0)} ₽, платёж {int(r['monthly_payment'] or 0)} ₽/мес"
+                for r in credits
+            )
+            parts.append(f"Кредиты: {credit_list}. Суммарный платёж: {int(total_payment)} руб./мес.")
+            # Кредитная нагрузка от дохода
+            if p and p.get("income") and p["income"] > 0:
+                load_pct = round(total_payment / p["income"] * 100)
+                parts.append(f"Кредитная нагрузка: {load_pct}% от дохода")
 
-        # Займы
-        loans = await conn.fetch("SELECT name, amount, due_date, monthly_payment FROM loans WHERE user_id=$1", user_id)
+        # Займы — грузятся всегда
         if loans:
-            loan_list = ", ".join(f"{r['name'] or 'Займ'} {int(r['amount'] or 0)} ₽" + (f" до {r['due_date']}" if r['due_date'] else "") for r in loans)
+            loan_list = "; ".join(
+                f"{r['name'] or 'Займ'}: {int(r['amount'] or 0)} ₽" +
+                (f" до {r['due_date']}" if r['due_date'] else "") +
+                (f", платёж {int(r['monthly_payment'])} ₽/мес" if r['monthly_payment'] else "")
+                for r in loans
+            )
             parts.append(f"Займы: {loan_list}")
 
         if not parts:
             return ""
-        return "\n\nДанные пользователя (используй для персонального ответа):\n" + "\n".join(f"— {x}" for x in parts)
+        return "\n\nДанные пользователя (используй для персонального ответа):\n" + \
+               "\n".join(f"— {x}" for x in parts)
     except Exception:
         return ""
 
@@ -1332,10 +1356,25 @@ async def finance_parse(req: FinanceParseRequest, user=Depends(get_current_user)
         
         FINANCE_PROMPT = """Ты финансовый помощник. Извлеки из текста или фото чека информацию о расходе.
 
-Категории: shop (магазины/продукты), pharmacy (медицина/аптека/врач), utility (ЖКУ/коммуналка/свет/газ/вода), credit (кредит/ипотека/займ), transport (транспорт/такси/бензин/проезд), leisure (досуг/кафе/ресторан/развлечения), other (прочее)
+Категории (category):
+- shop — магазины, продукты, одежда, хозтовары
+- pharmacy — медицина: аптека, врач, анализы, больница
+- utility — ЖКУ: свет, газ, вода, отопление, интернет
+- credit — кредит, ипотека, займ
+- transport — транспорт: такси, метро, бензин, парковка, авиа, ж/д
+- leisure — досуг: кафе, ресторан, кино, театр, подписки, спорт
+- other — прочее
+
+Подкатегория (subcategory) — уточнение внутри категории:
+- transport: taxi (такси), public (метро/автобус/трамвай/троллейбус), fuel (бензин), parking (парковка), service (ТО/ремонт/страховка), other_transport (авиа/ж.д.)
+- pharmacy: drugs (лекарства из аптеки), doctor (врач/клиника), tests (анализы), hospital (стационар)
+- shop: groceries (продукты), clothes (одежда), household (хозтовары)
+Для остальных категорий subcategory = null.
+
+item_name — если это лекарство из аптеки, укажи его название (например "Нурофен"). Для остального null.
 
 Ответь ТОЛЬКО валидным JSON:
-{"amount": число, "category": "код категории", "comment": "краткое описание", "merchant": "название магазина если есть"}
+{"amount": число, "category": "код", "subcategory": "код или null", "item_name": "название или null", "comment": "краткое описание", "merchant": "название места если есть"}
 
 Если не удалось определить сумму — верни {"error": "no_amount"}"""
 
@@ -1363,9 +1402,13 @@ async def finance_parse(req: FinanceParseRequest, user=Depends(get_current_user)
         # Сохраняем в БД
         if db_pool:
             async with db_pool.acquire() as conn:
+                sub = parsed.get("subcategory")
+                if sub in (None, "null", ""): sub = None
+                item = parsed.get("item_name")
+                if item in (None, "null", ""): item = None
                 row_id = await conn.fetchval(
-                    "INSERT INTO finance_records (user_id, category, amount, comment) VALUES ($1,$2,$3,$4) RETURNING id",
-                    user["id"], parsed.get("category", "other"), float(parsed["amount"]), 
+                    "INSERT INTO finance_records (user_id, category, subcategory, item_name, amount, comment) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id",
+                    user["id"], parsed.get("category", "other"), sub, item, float(parsed["amount"]),
                     parsed.get("comment", "") + (" · " + parsed.get("merchant", "") if parsed.get("merchant") else "")
                 )
                 parsed["id"] = row_id
@@ -1392,5 +1435,83 @@ async def get_finance_summary_me(user=Depends(get_current_user)):
             GROUP BY category
         """, user["id"])
         return {"month": datetime.now().strftime("%Y-%m"), "categories": [dict(r) for r in rows]}
+
+@app.get("/api/v1/finance/category/{category}")
+async def get_finance_category_detail(category: str, user=Depends(get_current_user)):
+    """Детальная статистика по категории: суммы, подкатегории, топ товаров, помесячно"""
+    if not db_pool:
+        return {}
+    async with db_pool.acquire() as conn:
+        uid = user["id"]
+        # Сумма за текущий месяц
+        month_total = await conn.fetchval(
+            "SELECT COALESCE(SUM(amount),0) FROM finance_records WHERE user_id=$1 AND category=$2 AND recorded_at >= date_trunc('month', NOW())",
+            uid, category) or 0
+        # Сумма за прошлый месяц
+        prev_total = await conn.fetchval(
+            "SELECT COALESCE(SUM(amount),0) FROM finance_records WHERE user_id=$1 AND category=$2 AND recorded_at >= date_trunc('month', NOW()) - interval '1 month' AND recorded_at < date_trunc('month', NOW())",
+            uid, category) or 0
+        # Количество операций за месяц
+        count = await conn.fetchval(
+            "SELECT COUNT(*) FROM finance_records WHERE user_id=$1 AND category=$2 AND recorded_at >= date_trunc('month', NOW())",
+            uid, category) or 0
+        # Разбивка по подкатегориям (текущий месяц)
+        subcats = await conn.fetch(
+            "SELECT subcategory, SUM(amount) as total, COUNT(*) as cnt FROM finance_records WHERE user_id=$1 AND category=$2 AND recorded_at >= date_trunc('month', NOW()) AND subcategory IS NOT NULL GROUP BY subcategory ORDER BY total DESC",
+            uid, category)
+        # Топ товаров/лекарств (item_name)
+        items = await conn.fetch(
+            "SELECT item_name, COUNT(*) as cnt, SUM(amount) as total FROM finance_records WHERE user_id=$1 AND category=$2 AND item_name IS NOT NULL AND recorded_at >= date_trunc('month', NOW()) GROUP BY item_name ORDER BY cnt DESC, total DESC LIMIT 5",
+            uid, category)
+        # Помесячная динамика (6 месяцев)
+        monthly = await conn.fetch(
+            "SELECT to_char(date_trunc('month', recorded_at), 'YYYY-MM') as month, SUM(amount) as total FROM finance_records WHERE user_id=$1 AND category=$2 AND recorded_at >= date_trunc('month', NOW()) - interval '5 months' GROUP BY 1 ORDER BY 1",
+            uid, category)
+        # Профиль для расчёта % от дохода
+        prof = await conn.fetchrow("SELECT income FROM user_profile WHERE user_id=$1", uid)
+        income = (prof["income"] if prof and prof["income"] else 0) or 0
+
+        return {
+            "month_total": float(month_total),
+            "prev_total": float(prev_total),
+            "count": count,
+            "avg_check": round(float(month_total) / count) if count > 0 else 0,
+            "income": float(income),
+            "income_pct": round(float(month_total) / income * 100) if income > 0 else None,
+            "subcategories": [{"key": r["subcategory"], "total": float(r["total"]), "count": r["cnt"]} for r in subcats],
+            "top_items": [{"name": r["item_name"], "count": r["cnt"], "total": float(r["total"])} for r in items],
+            "monthly": [{"month": r["month"], "total": float(r["total"])} for r in monthly],
+        }
+
+@app.get("/api/v1/finance/credits-overview")
+async def get_credits_overview(user=Depends(get_current_user)):
+    """Сводка по кредитам и займам для дашборда нагрузки"""
+    if not db_pool:
+        return {}
+    async with db_pool.acquire() as conn:
+        uid = user["id"]
+        credits = await conn.fetch("SELECT name, amount, monthly_payment, rate, term_months FROM credits WHERE user_id=$1", uid)
+        loans = await conn.fetch("SELECT name, amount, monthly_payment, due_date FROM loans WHERE user_id=$1", uid)
+        prof = await conn.fetchrow("SELECT income FROM user_profile WHERE user_id=$1", uid)
+        income = (prof["income"] if prof and prof["income"] else 0) or 0
+        # Расходы за текущий месяц (для расчёта свободных денег)
+        expenses = await conn.fetchval(
+            "SELECT COALESCE(SUM(amount),0) FROM finance_records WHERE user_id=$1 AND recorded_at >= date_trunc('month', NOW())", uid) or 0
+
+        total_payment = sum((c["monthly_payment"] or 0) for c in credits) + sum((l["monthly_payment"] or 0) for l in loans)
+        total_debt = sum((c["amount"] or 0) for c in credits) + sum((l["amount"] or 0) for l in loans)
+        load_pct = round(total_payment / income * 100) if income > 0 else None
+        free_money = income - float(expenses) - total_payment if income > 0 else None
+
+        return {
+            "income": float(income),
+            "expenses": float(expenses),
+            "total_payment": float(total_payment),
+            "total_debt": float(total_debt),
+            "load_pct": load_pct,
+            "free_money": free_money,
+            "credits": [{"name": c["name"], "amount": float(c["amount"] or 0), "payment": float(c["monthly_payment"] or 0), "rate": c["rate"], "term": c["term_months"]} for c in credits],
+            "loans": [{"name": l["name"], "amount": float(l["amount"] or 0), "payment": float(l["monthly_payment"] or 0), "due": l["due_date"]} for l in loans],
+        }
 
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
