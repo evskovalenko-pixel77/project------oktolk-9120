@@ -2633,7 +2633,7 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
     setChatMsgs(m => [...m, { role: "user", text: txt }]);
     setPending(true);
     try {
-      const res = await fetch("/api/v1/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "Категория: " + cat.label + ", сумма: " + amount + " руб. Вопрос: " + txt }) });
+      const res = await apiFetch("/api/v1/chat", { method: "POST", body: JSON.stringify({ message: "Категория: " + cat.label + ", сумма: " + amount + " руб. Вопрос: " + txt, mode: "finance" }) });
       const data = await res.json();
       setChatMsgs(m => [...m, { role: "ai", text: data.reply || "Не удалось получить ответ." }]);
     } catch(e) {
@@ -4692,6 +4692,7 @@ function App() {
 
   const onAsk = (text) => { setChatMode(null); setChat(text || ''); };
   const onAskHealth = (text) => { setChatMode('health'); setChat(text || ''); };
+  const onAskFinance = (text) => { setChatMode('finance'); setChat(text || ''); };
   const onMode = (m) => {
     if (m === 'stop') setOverlay('stop');
     else if (m === 'voice') setOverlay('voice');
@@ -4713,7 +4714,7 @@ function App() {
             onSettings={() => setOverlay('settings')}
           />
           {tab === 'home'    && <HomeScreen onAsk={onAsk} onMode={onMode} voiceText={voiceText} onVoiceClear={() => setVoiceText(null)}/>}
-          {tab === 'finance' && <FinanceScreen onAsk={onAsk}/>}
+          {tab === 'finance' && <FinanceScreen onAsk={onAskFinance}/>}
           {tab === 'health'  && <HealthScreen onAsk={onAskHealth} onMode={onMode}/>}
           {tab === 'news'    && <NewsScreen onAsk={onAsk}/>}
           {tab === 'sites'   && <SitesScreen/>}
