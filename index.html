@@ -4566,19 +4566,38 @@ function App() {
   React.useEffect(() => {
     if (!user && !authLoading) {
       setAuthLoading(true);
+      const timeout = setTimeout(() => {
+        // Таймаут 8 сек — создаём локального гостя если сервер не отвечает
+        const localUser = { token: 'local_demo', user_id: 1, name: 'Гость', tariff: 'demo', is_demo: true };
+        localStorage.setItem('oktolk_token', 'local_demo');
+        localStorage.setItem('oktolk_user_id', '1');
+        localStorage.setItem('oktolk_name', 'Гость');
+        localStorage.setItem('oktolk_tariff', 'demo');
+        setUser(localUser);
+        setAuthLoading(false);
+      }, 8000);
+
       fetch('/api/v1/auth/demo', { method: 'POST' })
-        .then(r => r.json())
+        .then(r => r.ok ? r.json() : null)
         .then(d => {
+          clearTimeout(timeout);
           if (d && d.token) {
             localStorage.setItem('oktolk_token', d.token);
             localStorage.setItem('oktolk_user_id', String(d.user_id));
             localStorage.setItem('oktolk_name', d.name || 'Гость');
             localStorage.setItem('oktolk_tariff', d.tariff || 'demo');
             setUser({ token: d.token, user_id: d.user_id, name: d.name || 'Гость', tariff: d.tariff || 'demo', is_demo: true });
+          } else {
+            // Сервер ответил но без токена — локальный гость
+            setUser({ token: 'local_demo', user_id: 1, name: 'Гость', tariff: 'demo', is_demo: true });
           }
           setAuthLoading(false);
         })
-        .catch(() => setAuthLoading(false));
+        .catch(() => {
+          clearTimeout(timeout);
+          setUser({ token: 'local_demo', user_id: 1, name: 'Гость', tariff: 'demo', is_demo: true });
+          setAuthLoading(false);
+        });
     }
   }, [user]);
 

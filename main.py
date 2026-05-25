@@ -334,12 +334,19 @@ async def auth_demo():
     if not db_pool:
         raise HTTPException(status_code=503, detail="БД недоступна")
     async with db_pool.acquire() as conn:
-        # Анонимный пользователь: телефон уникальный технический, без ПД
-        demo_phone = "demo_" + secrets.token_hex(8)
-        user_id = await conn.fetchval(
-            "INSERT INTO users (phone, name, password_hash, tariff, is_demo) VALUES ($1,$2,$3,$4,$5) RETURNING id",
-            demo_phone, "Гость", None, "demo", True
-        )
+        try:
+            demo_phone = "demo_" + secrets.token_hex(8)
+            user_id = await conn.fetchval(
+                "INSERT INTO users (phone, name, password_hash, tariff, is_demo) VALUES ($1,$2,$3,$4,$5) RETURNING id",
+                demo_phone, "Гость", "demo_no_password", "demo", True
+            )
+        except Exception:
+            # Fallback: без is_demo колонки (если миграция не прошла)
+            demo_phone = "demo_" + secrets.token_hex(8)
+            user_id = await conn.fetchval(
+                "INSERT INTO users (phone, name, password_hash, tariff) VALUES ($1,$2,$3,$4) RETURNING id",
+                demo_phone, "Гость", "demo_no_password", "demo"
+            )
         token = generate_token()
         expires = datetime.now() + timedelta(days=90)
         await conn.execute(
