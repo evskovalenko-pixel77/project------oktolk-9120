@@ -443,7 +443,7 @@ async def analyze_v1(req: AnalyzeRequest):
 # ── User Profile ─────────────────────────────────────────────────
 
 class ProfileRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None
     gender: Optional[str] = None
     age: Optional[int] = None
     height: Optional[int] = None
@@ -500,7 +500,7 @@ async def save_profile(req: ProfileRequest, user=Depends(get_current_user)):
 
 class CreditRequest(BaseModel):
     id: Optional[int] = None
-    user_id: int
+    user_id: Optional[int] = None
     name: Optional[str] = None
     amount: Optional[float] = None
     rate: Optional[float] = None
@@ -510,7 +510,7 @@ class CreditRequest(BaseModel):
 
 class LoanRequest(BaseModel):
     id: Optional[int] = None
-    user_id: int
+    user_id: Optional[int] = None
     name: Optional[str] = None
     amount: Optional[float] = None
     due_date: Optional[str] = None
@@ -588,14 +588,14 @@ async def delete_loan(loan_id: int, user=Depends(get_current_user)):
 # ── Health ───────────────────────────────────────────────────────
 
 class HealthParseRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None  # берётся из токена, не нужен в теле
     type: str
     image_base64: Optional[str] = None
     mime_type: str = "image/jpeg"
     text: Optional[str] = None
 
 class HealthRecordCreateRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None  # берётся из токена
     type: str
     value_1: float
     value_2: Optional[float] = None
@@ -1198,7 +1198,7 @@ class FinanceParseRequest(BaseModel):
     text: Optional[str] = None
     image_base64: Optional[str] = None
     mime_type: str = "image/jpeg"
-    user_id: int
+    user_id: Optional[int] = None  # берётся из токена
 
 @app.post("/api/v1/finance/parse")
 async def finance_parse(req: FinanceParseRequest, user=Depends(get_current_user)):
