@@ -2886,11 +2886,17 @@ function HealthDetailScreen({ metric, onBack }) {
   const [aiText, setAiText] = React.useState('');
   const [aiLoading, setAiLoading] = React.useState(false);
   const [input, setInput] = React.useState('');
+  const [profile, setProfile] = React.useState({});
   const startX = React.useRef(null);
   const startY = React.useRef(null);
   const SLIDES = 5;
 
   const userId = parseInt(localStorage.getItem('oktolk_user_id') || '1');
+
+  // Загружаем профиль для шкалы и AI-анализа
+  React.useEffect(() => {
+    authGet('/api/v1/profile').then(d => { if (d) setProfile(d); }).catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     setLoading(true);
@@ -2912,7 +2918,18 @@ function HealthDetailScreen({ metric, onBack }) {
         const comment = r.comment ? ', заметка: ' + r.comment : '';
         return d.toLocaleDateString('ru-RU') + ' (' + day + '): ' + (r.value_2 ? r.value_1 + '/' + r.value_2 : r.value_1) + ' ' + metric.unit + comment;
       }).join('\n');
-      const prompt = 'Ты — аналитик данных здоровья. Проанализируй показатели ' + metric.label + ' пользователя. Только анализ фактических данных — когда были отклонения, паттерны по дням недели/времени суток, как часто норма нарушалась. БЕЗ диагнозов, БЕЗ рекомендаций по лекарствам, БЕЗ советов по лечению. Если в заметках есть упоминания причин (стресс, физнагрузка и т.д.) — учитывай их в анализе. Ответ лаконичный, 3-5 предложений, понятным языком.\n\nДанные:\n' + summary;
+      const profileInfo = [];
+      if (profile.age) profileInfo.push('Возраст: ' + profile.age + ' лет');
+      if (profile.gender) profileInfo.push('Пол: ' + (profile.gender === 'м' ? 'мужской' : 'женский'));
+      if (metric.type === 'pressure' && profile.work_pressure_1) profileInfo.push('Рабочее давление: ' + profile.work_pressure_1 + '/' + profile.work_pressure_2 + ' мм рт.ст.');
+      if (metric.type === 'pulse' && profile.work_pulse) profileInfo.push('Обычный пульс: ' + profile.work_pulse + ' уд/мин');
+      if (metric.type === 'sugar' && profile.base_sugar) profileInfo.push('Базовый сахар: ' + profile.base_sugar + ' ммоль/л');
+      if (profile.smoking > 0) profileInfo.push('Курение: ' + ['','до 5','около 10','около 15','20+'][Math.min(profile.smoking||0,4)] + ' сигарет в день');
+      if (profile.alcohol > 0) profileInfo.push('Алкоголь: ' + ['','раз в месяц','2-4 раза в месяц','2-3 раза в неделю','4+ раза в неделю'][Math.min(profile.alcohol||0,4)]);
+      if (profile.chronic) profileInfo.push('Хронические: ' + profile.chronic);
+      const profileCtx = profileInfo.length > 0 ? '\n\nДанные пользователя:\n' + profileInfo.map(x => '— ' + x).join('\n') : '';
+
+      const prompt = 'Ты — аналитик данных здоровья. Проанализируй показатели ' + metric.label + ' пользователя.' + profileCtx + '\n\nТолько анализ фактических данных — когда были отклонения, паттерны по дням недели/времени суток, как часто норма нарушалась, связь с рабочим давлением если указано. БЕЗ диагнозов, БЕЗ рекомендаций по лекарствам. Если в заметках есть упоминания причин — учитывай. Ответ 3-5 предложений, понятным языком.\n\nДанные:\n' + summary;
       const data = await authSend('/api/v1/chat', 'POST', { message: prompt, mode: 'health' });
       setAiText((data && (data.reply || data.message)) || 'Недостаточно данных для анализа.');
     } catch(e) { setAiText('Не удалось загрузить анализ. Попробуйте позже.'); }
@@ -3040,13 +3057,22 @@ function HealthDetailScreen({ metric, onBack }) {
   const Slide1 = () => {
     const val1 = lastRec ? parseFloat(lastRec.value_1) : null;
     const val2 = lastRec ? parseFloat(lastRec.value_2) : null;
-    const getPosition = (val, min, max, absMin, absMax) => {
-      if (val === null || isNaN(val)) return 50;
+
+    // Возрастная норма давления
+    const age = profile.age || null;
+    const ageNormMax1 = age ? Math.min(130 + Math.max(0, age - 40) * 0.5, 145) : 130;
+    const workP1 = profile.work_pressure_1 || null;
+    const workP2 = profile.work_pressure_2 || null;
+
+    const getPosition = (val, absMin, absMax) => {
+      if (val === null || isNaN(val)) return null;
       const clamp = Math.max(absMin, Math.min(absMax, val));
       return ((clamp - absMin) / (absMax - absMin)) * 100;
     };
-    const renderGauge = (label, val, minNorm, maxNorm, absMin, absMax, unitLabel) => {
-      const pos = getPosition(val, minNorm, maxNorm, absMin, absMax);
+
+    const renderGauge = (label, val, minNorm, maxNorm, absMin, absMax, unitLabel, workVal) => {
+      const pos = getPosition(val, absMin, absMax);
+      const workPos = workVal ? getPosition(workVal, absMin, absMax) : null;
       const normStart = ((minNorm - absMin) / (absMax - absMin)) * 100;
       const normEnd = ((maxNorm - absMin) / (absMax - absMin)) * 100;
       const isN = val !== null && val >= minNorm && val <= maxNorm;
@@ -3059,26 +3085,37 @@ function HealthDetailScreen({ metric, onBack }) {
               {val !== null ? val : '—'} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-subtle)' }}>{unitLabel}</span>
             </span>
           </div>
-          <div style={{ position: 'relative', height: 12, borderRadius: 99, overflow: 'hidden', background: 'linear-gradient(to right, #3B8BF0 ' + normStart + '%, #1F8A5B ' + normStart + '%, #1F8A5B ' + normEnd + '%, var(--danger) ' + normEnd + '%)' }}>
-            {val !== null && <div style={{ position: 'absolute', left: 'calc(' + pos + '% - 6px)', top: -2, width: 16, height: 16, borderRadius: '50%', background: '#fff', border: '3px solid ' + (isH ? 'var(--danger)' : !isN ? '#C77A20' : 'var(--success)'), boxShadow: '0 2px 6px rgba(0,0,0,0.2)', zIndex: 2 }}/>}
+          <div style={{ position: 'relative', height: 12, borderRadius: 99, overflow: 'visible', background: 'linear-gradient(to right, #3B8BF0 ' + normStart + '%, #1F8A5B ' + normStart + '%, #1F8A5B ' + normEnd + '%, var(--danger) ' + normEnd + '%)' }}>
+            {/* Текущее измерение */}
+            {pos !== null && <div style={{ position: 'absolute', left: 'calc(' + pos + '% - 6px)', top: -2, width: 16, height: 16, borderRadius: '50%', background: '#fff', border: '3px solid ' + (isH ? 'var(--danger)' : !isN ? '#C77A20' : 'var(--success)'), boxShadow: '0 2px 6px rgba(0,0,0,0.2)', zIndex: 2 }}/>}
+            {/* Рабочее давление из профиля — зелёный ромб */}
+            {workPos !== null && <div style={{ position: 'absolute', left: 'calc(' + workPos + '% - 5px)', top: -3, width: 10, height: 10, background: '#1F8A5B', border: '2px solid #fff', transform: 'rotate(45deg)', zIndex: 3, boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}/>}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
             <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>{absMin}</span>
             <span style={{ fontSize: 10, color: 'var(--success)' }}>Норма {minNorm}–{maxNorm}</span>
             <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>{absMax}</span>
           </div>
+          {workVal !== null && workVal !== undefined && (
+            <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 8, height: 8, background: '#1F8A5B', transform: 'rotate(45deg)', flexShrink: 0 }}/>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Ваше рабочее: {workVal} {unitLabel}</span>
+            </div>
+          )}
         </div>
       );
     };
+
     return (
       <div style={slideStyle}>
         <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 4, paddingBottom: 4 }}>Шкала нормы — последнее измерение</div>
+        {age && <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-subtle)', marginBottom: 6 }}>Ваш возраст: {age} лет · норма скорректирована</div>}
         {metric.type === 'pressure' && <>
-          {renderGauge('Систолическое (верхнее)', val1, 90, 130, 60, 200, 'мм рт.ст.')}
-          {renderGauge('Диастолическое (нижнее)', val2, 60, 85, 40, 130, 'мм рт.ст.')}
+          {renderGauge('Систолическое (верхнее)', val1, 90, Math.round(ageNormMax1), 60, 200, 'мм рт.ст.', workP1)}
+          {renderGauge('Диастолическое (нижнее)', val2, 60, 85, 40, 130, 'мм рт.ст.', workP2)}
         </>}
-        {metric.type === 'pulse' && renderGauge('Пульс', val1, 60, 100, 30, 180, 'уд/мин')}
-        {metric.type === 'sugar' && renderGauge('Сахар крови', val1, 3.9, 5.6, 1.0, 15.0, 'ммоль/л')}
+        {metric.type === 'pulse' && renderGauge('Пульс', val1, 60, 100, 30, 180, 'уд/мин', profile.work_pulse || null)}
+        {metric.type === 'sugar' && renderGauge('Сахар крови', val1, 3.9, 5.6, 1.0, 15.0, 'ммоль/л', profile.base_sugar || null)}
         {metric.type === 'weight' && (
           <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)', fontSize: 14 }}>
             Норма веса индивидуальна и зависит от роста и возраста.
@@ -3088,7 +3125,7 @@ function HealthDetailScreen({ metric, onBack }) {
           </div>
         )}
         <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '10px 12px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          {metric.type === 'pressure' && '📋 Нормальное давление: 90–130 / 60–85 мм рт.ст. Повышенное (гипертония): от 140/90.'}
+          {metric.type === 'pressure' && `📋 Норма: 90–${Math.round(ageNormMax1)} / 60–85 мм рт.ст.${age && age > 40 ? ' (скорректировано для вашего возраста)' : ''} Гипертония: от 140/90.`}
           {metric.type === 'pulse' && '📋 Нормальный пульс в покое: 60–100 уд/мин. Спортсмены — от 40–60.'}
           {metric.type === 'sugar' && '📋 Норма сахара натощак: 3.9–5.6 ммоль/л. Нарушение: 5.7–6.0. Диабет: от 6.1.'}
           {metric.type === 'weight' && '📋 Индекс массы тела (ИМТ) рассчитывается индивидуально. Проконсультируйтесь с врачом.'}

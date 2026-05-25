@@ -1,6 +1,6 @@
 import sys, os, requests, json, re, hashlib, secrets
 from datetime import datetime, timedelta
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -255,16 +255,23 @@ SYSTEM_PROMPT = """Ты помощник OkTolk. Говори просто, бе
 Заканчивай: Если не получилось - напишите мне снова!"""
 
 HEALTH_PROMPT = """Ты — грамотный помощник по здоровью в приложении OkTolk.
-Отвечай как знающий человек, который умеет объяснять сложное простым языком — живо, по-человечески, но без болтовни.
+Отвечай как знающий человек, который умеет объяснять сложное простым языком — живо, по-человечески, без болтовни.
 
 Правила:
-- Коротко и по делу: 2-5 предложений для простых вопросов.
-- Объясняй понятно, как образованный собеседник, а не сухая инструкция.
-- Если перечисляешь — каждый пункт с новой строки, начинай с «— ».
-- Не ставь диагнозы, не назначай лекарства и дозировки.
-- При тревожных симптомах мягко советуй обратиться к врачу.
-- Не используй ** ## и markdown-разметку, пиши обычным текстом.
-- Опирайся на проверенную медицинскую информацию."""
+— Коротко и по делу: 2-5 предложений для простых вопросов.
+— Объясняй понятно, как образованный собеседник, а не сухая инструкция.
+— Если перечисляешь — каждый пункт с новой строки, начинай с «— ».
+— Не ставь диагнозы, не назначай лекарства и дозировки.
+— При тревожных симптомах мягко советуй обратиться к врачу.
+— Не используй ** ## и markdown-разметку, пиши обычным текстом.
+— Опирайся на проверенную медицинскую информацию.
+
+Если предоставлены данные пользователя — обязательно учитывай их:
+— Рабочее давление — это его личная норма, сравнивай измерения с ней, а не только с общей нормой.
+— Учитывай возраст, вредные привычки, физическую активность при оценке показателей.
+— Если пользователь курит или употребляет алкоголь — можешь мягко упомянуть связь с показателями, без нравоучений.
+— Профессию и хобби используй чтобы ответ был ближе к его жизни (например, «для водителя важно следить за давлением»).
+— Не пересказывай все данные пользователя обратно — просто используй их в ответе."""
 
 SYSTEM_PROMPTS = {
     "health": HEALTH_PROMPT,
@@ -373,11 +380,90 @@ async def get_features():
         rows = await conn.fetch("SELECT name FROM features WHERE enabled=TRUE")
         return {"features": [r["name"] for r in rows]}
 
-# Chat (без авторизации — публичный)
-@app.post("/api/v1/chat")
-async def chat_v1(req: ChatRequest):
+async def build_profile_context(user_id: int) -> str:
+    """Строит текстовый контекст профиля пользователя для AI"""
+    if not db_pool:
+        return ""
     try:
-        sys_prompt = req.system or SYSTEM_PROMPTS.get(req.mode or "", SYSTEM_PROMPT)
+        async with db_pool.acquire() as conn:
+            p = await conn.fetchrow("SELECT * FROM user_profile WHERE user_id=$1", user_id)
+        if not p:
+            return ""
+        parts = []
+        if p.get("age"):
+            parts.append(f"Возраст: {p['age']} лет")
+        if p.get("gender"):
+            parts.append(f"Пол: {'мужской' if p['gender'] == 'м' else 'женский'}")
+        if p.get("height") and p.get("weight"):
+            parts.append(f"Рост: {p['height']} см, вес: {p['weight']} кг")
+        elif p.get("height"):
+            parts.append(f"Рост: {p['height']} см")
+        elif p.get("weight"):
+            parts.append(f"Вес: {p['weight']} кг")
+        if p.get("profession"):
+            parts.append(f"Профессия: {p['profession']}")
+        if p.get("hobbies"):
+            parts.append(f"Хобби и интересы: {p['hobbies']}")
+        if p.get("work_pressure_1") and p.get("work_pressure_2"):
+            parts.append(f"Рабочее (нормальное) давление: {p['work_pressure_1']}/{p['work_pressure_2']} мм рт.ст.")
+        if p.get("work_pulse"):
+            parts.append(f"Обычный пульс: {p['work_pulse']} уд/мин")
+        if p.get("base_sugar"):
+            parts.append(f"Базовый сахар: {p['base_sugar']} ммоль/л")
+        alcohol_labels = ["не употребляет алкоголь", "употребляет раз в месяц или реже",
+                          "употребляет 2-4 раза в месяц", "употребляет 2-3 раза в неделю",
+                          "употребляет 4+ раза в неделю"]
+        smoke_labels = ["не курит", "курит до 5 сигарет в день", "курит около 10 сигарет в день",
+                        "курит около 15 сигарет в день", "курит 20+ сигарет в день"]
+        alc = p.get("alcohol", 0) or 0
+        smk = p.get("smoking", 0) or 0
+        if alc > 0:
+            parts.append(f"Алкоголь: {alcohol_labels[min(alc, 4)]}")
+        if smk > 0:
+            label = smoke_labels[min(smk, 4)]
+            stazh = p.get("smoking_years")
+            parts.append(f"Курение: {label}" + (f", стаж {stazh} лет" if stazh else ""))
+        if alc == 0 and smk == 0:
+            parts.append("Вредные привычки: нет")
+        activity_map = {"низкая": "низкая физическая активность", "средняя": "средняя физическая активность", "высокая": "высокая физическая активность"}
+        if p.get("activity"):
+            parts.append(f"Физическая активность: {activity_map.get(p['activity'], p['activity'])}")
+        if p.get("heredity"):
+            parts.append(f"Наследственность: {p['heredity']}")
+        if p.get("chronic"):
+            parts.append(f"Хронические заболевания: {p['chronic']}")
+        if p.get("income"):
+            parts.append(f"Ежемесячный доход: {int(p['income'])} руб.")
+        if not parts:
+            return ""
+        return "\n\nДанные пользователя (используй для персонального ответа):\n" + "\n".join(f"— {x}" for x in parts)
+    except Exception:
+        return ""
+
+# Chat (с опциональной авторизацией — берём профиль если токен есть)
+@app.post("/api/v1/chat")
+async def chat_v1(req: ChatRequest, request: Request):
+    try:
+        # Получаем user_id из токена если он есть
+        user_id = None
+        try:
+            token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+            if token and token not in ("demo", "local_demo", ""):
+                if db_pool:
+                    async with db_pool.acquire() as conn:
+                        row = await conn.fetchrow(
+                            "SELECT user_id FROM sessions WHERE token=$1 AND expires_at > NOW()", token
+                        )
+                        if row:
+                            user_id = row["user_id"]
+        except Exception:
+            pass
+
+        # Строим системный промпт с профилем
+        base_prompt = req.system or SYSTEM_PROMPTS.get(req.mode or "", SYSTEM_PROMPT)
+        profile_ctx = await build_profile_context(user_id) if user_id else ""
+        sys_prompt = base_prompt + profile_ctx
+
         messages = [{"role": "system", "content": sys_prompt}]
         for h in req.history[-10:]:
             messages.append(h)
