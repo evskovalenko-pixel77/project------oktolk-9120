@@ -2633,9 +2633,9 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
   const PASTEL = ["#A8B5F0", "#F5C99B", "#9BD4C0", "#E0A8C8", "#C9B8E8", "#F0D78B", "#A8D8E8"];
 
   const subcatChips = {
-    transport: [["taxi","🚕 Такси"],["public","🚇 Метро/автобус"],["fuel","⛽ Бензин"],["parking","🅿️ Парковка"],["service","🔧 ТО"],["other_transport","✈️ Авиа/ж.д."]],
-    pharmacy: [["drugs","💊 Аптека"],["doctor","👨‍⚕️ Врач"],["tests","🔬 Анализы"],["hospital","🏥 Стационар"]],
-    shop: [["groceries","🛒 Продукты"],["clothes","👕 Одежда"],["household","🏠 Хозтовары"]],
+    transport: [["taxi","Такси"],["public","Метро/автобус"],["fuel","Бензин"],["parking","Парковка"],["service","ТО"],["other_transport","Авиа/ж.д."]],
+    pharmacy: [["drugs","Аптека"],["doctor","Врач"],["tests","Анализы"],["hospital","Стационар"]],
+    shop: [["groceries","Продукты"],["clothes","Одежда"],["household","Хозтовары"]],
   };
   const chips = subcatChips[catKey] || [];
   const [activeChip, setActiveChip] = React.useState(null);
@@ -2679,19 +2679,25 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
     } catch(e) { setChatMsgs(m => [...m, { role: "ai", text: "Ошибка соединения." }]); } finally { setPending(false); }
   };
 
+  const [expenseMsgs, setExpenseMsgs] = React.useState([]); // отдельно от AI чата
+
   const sendExpense = async (text, imageBase64, mimeType) => {
+    if (!text && !imageBase64) return;
     try {
       const body = {};
       if (imageBase64) { body.image_base64 = imageBase64; body.mime_type = mimeType; }
-      else if (text) { body.text = (activeChip ? subcatLabels[activeChip] + ": " : "") + text; }
-      else return;
+      else { body.text = (activeChip ? subcatLabels[activeChip] + ": " : "") + text; }
       const res = await apiFetch("/api/v1/finance/parse", { method: "POST", body: JSON.stringify(body) });
       const data = await res.json();
-      if (data.status === "saved") {
-        setChatMsgs(m => [...m, { role: "ai", text: "✅ Записал: " + data.amount.toLocaleString("ru") + " ₽" }]);
+      if (data.status === "saved" && data.items && data.items.length > 0) {
+        // Показываем каждую запись отдельно
+        const msgs = data.items.map(it => "✓ " + (it.comment || "Трата") + " — " + it.amount.toLocaleString("ru") + " ₽");
+        setExpenseMsgs(m => [...m, ...msgs]);
         if (!isCredit) authGet("/api/v1/finance/category/" + catKey).then(d => { if (d) setDetail(d); });
-        const r2 = await apiFetch("/api/v1/finance/records?category=" + catKey); const d2 = await r2.json();
-        setRecords((d2.records || d2 || []).slice(0, 20)); setInput(""); setActiveChip(null);
+        const r2 = await apiFetch("/api/v1/finance/records?category=" + catKey);
+        const d2 = await r2.json();
+        setRecords((d2.records || d2 || []).slice(0, 20));
+        setInput(""); setActiveChip(null);
       }
     } catch(e) {}
   };
@@ -2716,9 +2722,23 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
     startX.current = null; startY.current = null;
   };
 
-  const fmt = (dt) => { try { const d = new Date(dt); return d.toLocaleDateString("ru", { day: "numeric", month: "short" }); } catch(e) { return ""; } };
+  const fmt = (dt) => { try { const d = new Date(dt); return d.toLocaleDateString("ru", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" }); } catch(e) { return ""; } };
   const slideStyle = { display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", flex: 1, minHeight: 0 };
   const SLIDE_NAMES = isCredit ? ["Обзор", "Нагрузка", "Кредиты", "История", "AI совет"] : ["Обзор", "Разбивка", "График", "История", "AI анализ"];
+
+  // Пастельные hero-цвета (полупрозрачный фон)
+  const heroBg = { shop: "rgba(245,158,11,0.07)", pharmacy: "rgba(239,68,68,0.07)", utility: "rgba(16,185,129,0.07)", credit: "rgba(209,67,67,0.07)", transport: "rgba(59,79,224,0.07)", leisure: "rgba(139,92,246,0.07)", other: "rgba(107,114,128,0.07)" };
+  const heroStyle = { background: heroBg[catKey] || "rgba(59,79,224,0.07)", borderRadius: 14, padding: "18px 16px", textAlign: "center", border: "0.5px solid " + accent + "22", marginBottom: 0 };
+
+  // Удаление записи
+  const deleteRecord = async (id) => {
+    if (!window.confirm("Удалить эту запись?")) return;
+    try {
+      await apiFetch("/api/v1/finance/records/" + id, { method: "DELETE" });
+      setRecords(r => r.filter(x => x.id !== id));
+      if (!isCredit) authGet("/api/v1/finance/category/" + catKey).then(d => { if (d) setDetail(d); });
+    } catch(e) {}
+  };
 
   const renderAISlide = () => (
     <div style={slideStyle}>
@@ -2726,7 +2746,9 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
       {aiLoading && (<div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: 32 }}><div style={{ width: 36, height: 36, borderRadius: "50%", border: "3px solid var(--primary-tint)", borderTopColor: "var(--primary)", animation: "spin 1s linear infinite" }}/><div style={{ fontSize: 13, color: "var(--text-muted)" }}>Анализирую…</div></div>)}
       {!aiLoading && aiText && (<div style={{ background: "linear-gradient(135deg, " + accent + "CC, " + accent + ")", borderRadius: 14, padding: "18px 16px", color: "#fff" }}><div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"/></svg><span style={{ fontSize: 13, fontWeight: 700, opacity: 0.9 }}>{isCredit ? "Совет по кредитам" : "Анализ расходов"}</span></div><div style={{ fontSize: 14, lineHeight: 1.65, opacity: 0.96, whiteSpace: "pre-wrap" }}>{aiText}</div></div>)}
       {!aiLoading && aiText && (<button onClick={() => { setAiText(""); loadAI(); }} style={{ padding: 10, borderRadius: 12, background: "var(--surface-2)", color: "var(--text-muted)", border: "none", fontSize: 13, cursor: "pointer" }}>Обновить анализ</button>)}
-      <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>ℹ️ AI смотрит только на ваши данные. Это не финансовая консультация.</div>
+      {!aiLoading && !aiText && !aiLoading && (<button onClick={loadAI} style={{ padding: 12, borderRadius: 12, background: "var(--primary-tint)", color: "var(--primary)", border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Запустить анализ</button>)}
+      <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>Это не финансовая консультация — AI смотрит только на ваши данные.</div>
+      {/* Чат-вопросы — отдельно от записей расходов */}
       {chatMsgs.length > 0 && (<div className="card" style={{ padding: "8px 0" }}>{chatMsgs.map((m, i) => (<div key={i} style={ m.role === "user" ? { margin: "6px 14px", background: "var(--primary)", borderRadius: 12, padding: "10px 14px", fontSize: 14, color: "white", lineHeight: 1.5 } : { padding: "8px 14px", fontSize: 14, color: "var(--text)", lineHeight: 1.5 } }>{m.text}</div>))}{pending && <div style={{ padding: "8px 14px", fontSize: 14, color: "var(--text-muted)" }}>Думаю…</div>}</div>)}
     </div>
   );
@@ -2793,9 +2815,20 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
     if (!d) return <div style={{ ...slideStyle, alignItems: "center", justifyContent: "center" }}><div style={{ color: "var(--text-muted)" }}>Загрузка…</div></div>;
     if (slide === 0) { const diff = d.prev_total > 0 ? Math.round((d.month_total - d.prev_total) / d.prev_total * 100) : null; return (
       <div style={slideStyle}>
-        <div className="card"><div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6, textAlign: "center" }}>{cat.label} за этот месяц</div><div style={{ fontSize: 28, fontWeight: 800, color: "var(--text)", textAlign: "center" }}>{Math.round(d.month_total).toLocaleString("ru")} ₽</div><div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4, textAlign: "center" }}>{d.income_pct != null ? d.income_pct + "% от дохода" : ""}{diff != null && <span style={{ color: diff > 0 ? "var(--danger)" : "var(--success)", marginLeft: 8 }}>{diff > 0 ? "↑" : "↓"}{Math.abs(diff)}% к прошлому</span>}</div></div>
-        <div style={{ display: "flex", gap: 8 }}><div className="card" style={{ flex: 1 }}><div style={{ fontSize: 11, color: "var(--text-muted)" }}>Покупок</div><div style={{ fontSize: 20, fontWeight: 800 }}>{d.count}</div></div><div className="card" style={{ flex: 1 }}><div style={{ fontSize: 11, color: "var(--text-muted)" }}>Средняя покупка</div><div style={{ fontSize: 20, fontWeight: 800 }}>{d.avg_check.toLocaleString("ru")} ₽</div></div></div>
-        {d.top_items.length > 0 && (<div className="card"><div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 8 }}>Что покупали чаще всего</div>{d.top_items.map((it, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: i < d.top_items.length-1 ? "0.5px solid var(--border)" : "none" }}><div><div style={{ fontSize: 13, fontWeight: 600 }}>{it.name}</div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{it.count} раз</div></div><div style={{ fontSize: 13, fontWeight: 700, color: accent }}>{Math.round(it.total).toLocaleString("ru")} ₽</div></div>))}</div>)}
+        <div style={heroStyle}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: accent, marginBottom: 6 }}>{cat.label} за этот месяц</div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "var(--text)", letterSpacing: "-0.02em" }}>{Math.round(d.month_total).toLocaleString("ru")} ₽</div>
+          {(d.income_pct != null || diff != null) && <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>
+            {d.income_pct != null ? d.income_pct + "% от дохода" : ""}
+            {diff != null && <span style={{ color: diff > 0 ? "var(--danger)" : "var(--success)", marginLeft: 8 }}>{diff > 0 ? "↑" : "↓"}{Math.abs(diff)}% к прошлому</span>}
+          </div>}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div className="card" style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Трат</div><div style={{ fontSize: 22, fontWeight: 800 }}>{d.count}</div></div>
+          <div className="card" style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Средние траты</div><div style={{ fontSize: 20, fontWeight: 800 }}>{d.avg_check.toLocaleString("ru")} ₽</div></div>
+        </div>
+        {d.top_items.length > 0 && (<div className="card"><div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 8, textAlign: "center" }}>Покупали чаще всего</div>{d.top_items.map((it, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: i < d.top_items.length-1 ? "0.5px solid var(--border)" : "none" }}><div><div style={{ fontSize: 13, fontWeight: 600 }}>{it.name}</div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{it.count} раз{it.count === 1 ? "" : "а"}</div></div><div style={{ fontSize: 13, fontWeight: 700 }}>{Math.round(it.total).toLocaleString("ru")} ₽</div></div>))}</div>)}
+        {expenseMsgs.length > 0 && (<div className="card" style={{ background: "var(--success-tint)", border: "0.5px solid var(--success)" }}>{expenseMsgs.slice(-5).map((m, i) => (<div key={i} style={{ fontSize: 13, color: "var(--success)", padding: "3px 0" }}>{m}</div>))}</div>)}
       </div>
     ); }
     if (slide === 1) { const subs = d.subcategories; const tot = subs.reduce((a,s) => a + s.total, 0) || 1; return (
@@ -2805,12 +2838,37 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
     ); }
     if (slide === 2) { const m = d.monthly; const max = Math.max(...m.map(x => x.total), 1); const monthNames = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"]; return (
       <div style={slideStyle}>
-        <div className="card"><div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 12, textAlign: "center" }}>Расходы по месяцам</div>{m.length >= 3 ? <><svg width="100%" height="120" viewBox="0 0 300 120" style={{ overflow: "visible" }}>{[20,55,90].map(y => <line key={y} x1="0" y1={y} x2="300" y2={y} stroke="rgba(15,15,20,0.05)" strokeWidth="1"/>)}{m.map((x, i) => { const bw = 300 / m.length; const h = Math.max((x.total / max) * 70, 4); const isLast = i === m.length - 1; const cx = i*bw + bw*0.5; return <g key={i}><rect x={i*bw + bw*0.25} y={90-h} width={bw*0.5} height={h} rx={5} fill={accent} opacity={isLast ? 1 : 0.55}/><text x={cx} y={90-h-6} textAnchor="middle" fontSize="9" fontWeight="700" fill={isLast ? "var(--text)" : "var(--text-muted)"}>{x.total >= 1000 ? (x.total/1000).toFixed(1) + "к" : Math.round(x.total)}</text></g>; })}</svg><div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>{m.map((x, i) => <span key={i} style={{ fontSize: 10, color: "var(--text-subtle)", flex: 1, textAlign: "center" }}>{monthNames[parseInt(x.month.split("-")[1])-1]}</span>)}</div></> : <div style={{ textAlign: "center", padding: "20px 0 10px" }}><div style={{ fontSize: 28, fontWeight: 800, color: accent }}>{Math.round(d.month_total).toLocaleString("ru")} ₽</div><div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>за этот месяц</div><div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, marginTop: 14 }}>График по месяцам появится, когда накопятся данные за 2-3 месяца</div></div>}</div>
+        <div className="card">
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 12, textAlign: "center" }}>Расходы по месяцам</div>
+          {m.length >= 1 ? <>
+            <svg width="100%" height="120" viewBox="0 0 300 120" style={{ overflow: "visible" }}>
+              {[20,55,90].map(y => <line key={y} x1="0" y1={y} x2="300" y2={y} stroke="rgba(15,15,20,0.05)" strokeWidth="1"/>)}
+              {m.map((x, i) => { const n = Math.max(m.length, 2); const bw = 300/n; const h = Math.max((x.total/max)*70,6); const isLast = i===m.length-1; const cx = i*bw+bw*0.5; return <g key={i}><rect x={i*bw+bw*0.2} y={90-h} width={bw*0.6} height={h} rx={5} fill={accent} opacity={isLast?1:0.55}/><text x={cx} y={90-h-6} textAnchor="middle" fontSize="9" fontWeight="700" fill={isLast?"var(--text)":"var(--text-muted)"}>{x.total>=1000?(x.total/1000).toFixed(1)+"к":Math.round(x.total)}</text></g>; })}
+            </svg>
+            <div style={{ display: "flex", marginTop: 4 }}>{m.map((x, i) => <span key={i} style={{ fontSize: 10, color: "var(--text-subtle)", flex: 1, textAlign: "center" }}>{monthNames[parseInt(x.month.split("-")[1])-1]}</span>)}</div>
+          </> : <div style={{ textAlign: "center", padding: "20px 0" }}><div style={{ fontSize: 28, fontWeight: 800, color: "var(--text)" }}>{Math.round(d.month_total).toLocaleString("ru")} ₽</div><div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>первая запись</div></div>}
+        </div>
       </div>
     ); }
     if (slide === 3) return (
       <div style={slideStyle}>
-        <div className="card"><div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>История</div>{records.length === 0 && <div style={{ fontSize: 13, color: "var(--text-subtle)", padding: 16, textAlign: "center" }}>Расходов пока нет</div>}{records.map((r, i) => (<div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: i < records.length-1 ? "0.5px solid var(--border)" : "none" }}><div style={{ width: 36, height: 36, borderRadius: 10, background: accent + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CI size={18} color={accent}/></div><div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>{r.item_name || r.comment || cat.label}</div><div style={{ fontSize: 12, color: "var(--text-muted)" }}>{fmt(r.recorded_at)}{r.subcategory ? " · " + (subcatLabels[r.subcategory] || r.subcategory) : ""}</div></div><div style={{ fontSize: 15, fontWeight: 700, color: "var(--danger)" }}>−{r.amount ? r.amount.toLocaleString("ru") : 0} ₽</div></div>))}</div>
+        <div className="card">
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6, textAlign: "center" }}>История трат</div>
+          {records.length === 0 && <div style={{ fontSize: 13, color: "var(--text-subtle)", padding: 16, textAlign: "center" }}>Трат пока нет</div>}
+          {records.map((r, i) => (
+            <div key={r.id||i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: i < records.length-1 ? "0.5px solid var(--border)" : "none" }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: accent+"18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CI size={18} color={accent}/></div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.item_name || r.comment || cat.label}</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{fmt(r.recorded_at)}{r.subcategory ? " · "+(subcatLabels[r.subcategory]||r.subcategory) : ""}</div>
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--danger)", flexShrink: 0 }}>−{r.amount?r.amount.toLocaleString("ru"):0} ₽</div>
+              <button onClick={() => deleteRecord(r.id)} title="Удалить" style={{ width: 28, height: 28, borderRadius: 8, background: "var(--danger-tint)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     );
     return renderAISlide();
@@ -2863,9 +2921,9 @@ function VoiceButton({ onResult, onError }) {
     );
   };
   return (
-    <button className="mode" onClick={handle} style={{ background: active ? 'var(--danger-tint)' : undefined }}>
-      <span className="mode-icon" style={{ color: active ? 'var(--danger)' : undefined, animation: active ? 'micPulse 1s ease-in-out infinite' : 'none' }}><IconMic size={22}/></span>
-      <span className="mode-label" style={{ color: active ? 'var(--danger)' : undefined }}>{active ? 'Стоп' : 'Голос'}</span>
+    <button onClick={handle} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 0", borderRadius: 12, border: "0.5px solid " + (active ? "var(--danger)" : "var(--border)"), background: active ? "var(--danger-tint)" : "var(--surface)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: active ? "var(--danger)" : "var(--text-muted)", cursor: "pointer" }}>
+      <IconMic size={18} color={active ? "var(--danger)" : undefined}/>
+      {active ? "Стоп" : "Голос"}
     </button>
   );
 }
