@@ -942,20 +942,49 @@ async def analyze_text(req: AnalyzeRequest):
 TAVILY_API_KEY = "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"
 _news_cache = {"data": [], "at": 0}
 
+async def simplify_news_ai(title: str, body: str) -> dict:
+    """AI переводит на русский и упрощает новость для людей 40+"""
+    prompt = (
+        "Ты редактор новостей для обычных людей. Перепиши новость простым русским языком, как будто рассказываешь соседу.\n"
+        "ПРАВИЛА:\n"
+        "- ВСЕГДА на русском языке (если исходник на английском — переведи на русский)\n"
+        "- Заголовок: коротко и понятно, максимум 8 слов\n"
+        "- Текст: 2-3 простых предложения, без сложных слов и терминов\n"
+        "- Только суть: что произошло и что это значит для обычного человека\n\n"
+        f"Исходный заголовок: {title}\n"
+        f"Исходный текст: {body}\n\n"
+        "Ответь ТОЛЬКО валидным JSON без markdown:\n"
+        '{"title": "простой заголовок", "body": "простой текст 2-3 предложения"}'
+    )
+    try:
+        import asyncio, json as _json, re as _re
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, lambda: call_ai([{"role": "user", "content": prompt}]))
+        # Вырезаем JSON из ответа
+        cleaned = result.strip()
+        m = _re.search(r'\{.*\}', cleaned, _re.DOTALL)
+        if m:
+            cleaned = m.group(0)
+        parsed = _json.loads(cleaned)
+        return {"title": str(parsed.get("title", title))[:120], "body": str(parsed.get("body", body))[:300]}
+    except Exception:
+        return {"title": title[:120], "body": body[:300]}
+
 async def fetch_tavily_news() -> list:
-    """Получить новости через Tavily Search API — актуальные для людей 40+"""
+    """Получить новости через Tavily с официальных источников + AI упрощение"""
     import time, aiohttp
     now = time.time()
     if _news_cache["data"] and now - _news_cache["at"] < 3600:  # кеш 1 час
         return _news_cache["data"]
+    # Запросы с упором на официальные русские источники
     queries = [
-        ("мошенники телефонные звонки банки 2026", "danger", "Опасно"),
-        ("пенсии льготы пенсионеры 2026", "success", "Льготы"),
-        ("изменения ЖКХ коммуналка 2026", "warn", "Важно"),
-        ("бесплатные лекарства медицина льготники 2026", "success", "Льготы"),
-        ("мошенничество интернет госуслуги предупреждение", "danger", "Опасно"),
+        ("телефонные мошенники банки предупреждение МВД", "danger", "Опасно"),
+        ("пенсии индексация выплаты пенсионерам СФР", "success", "Льготы"),
+        ("новые правила ЖКХ коммунальные услуги", "warn", "Важно"),
+        ("льготные лекарства бесплатные препараты Минздрав", "success", "Льготы"),
+        ("мошенничество госуслуги фишинг безопасность", "danger", "Опасно"),
     ]
-    results = []
+    raw = []
     try:
         async with aiohttp.ClientSession() as session:
             for i, (q, cat, tag) in enumerate(queries):
@@ -963,37 +992,42 @@ async def fetch_tavily_news() -> list:
                     "api_key": TAVILY_API_KEY,
                     "query": q,
                     "search_depth": "basic",
-                    "max_results": 1,
+                    "max_results": 2,
                     "include_answer": True,
-                    "days": 30
+                    "days": 30,
+                    "country": "russia"
                 }
-                async with session.post("https://api.tavily.com/search", json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status != 200:
-                        continue
-                    data = await resp.json()
-                    items = data.get("results", [])
-                    if not items:
-                        continue
-                    item = items[0]
-                    title = item.get("title", "").strip()[:120]
-                    body = (data.get("answer") or item.get("content", "")).strip()[:300]
-                    url = item.get("url", "")
-                    source = url.split("/")[2].replace("www.", "").split(".")[0].upper() if url else "Источник"
-                    if title and body:
-                        results.append({
-                            "id": i + 1,
-                            "cat": cat,
-                            "tag": tag,
-                            "title": title,
-                            "body": body,
-                            "source": source,
-                            "url": url,
-                            "age": "сегодня"
-                        })
-    except Exception as e:
+                try:
+                    async with session.post("https://api.tavily.com/search", json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status != 200:
+                            continue
+                        data = await resp.json()
+                        items = data.get("results", [])
+                        if not items:
+                            continue
+                        item = items[0]
+                        title = item.get("title", "").strip()
+                        body = (data.get("answer") or item.get("content", "")).strip()
+                        url = item.get("url", "")
+                        source = url.split("/")[2].replace("www.", "").split(".")[0].upper() if url and "/" in url else "Источник"
+                        if title and body:
+                            raw.append({"id": i+1, "cat": cat, "tag": tag, "raw_title": title, "raw_body": body, "source": source, "url": url, "age": "сегодня"})
+                except Exception:
+                    continue
+    except Exception:
         pass
 
-    # Fallback если Tavily не вернул данные
+    # AI упрощает и переводит каждую новость
+    results = []
+    for r in raw:
+        simple = await simplify_news_ai(r["raw_title"], r["raw_body"])
+        results.append({
+            "id": r["id"], "cat": r["cat"], "tag": r["tag"],
+            "title": simple["title"], "body": simple["body"],
+            "source": r["source"], "url": r["url"], "age": r["age"]
+        })
+
+    # Fallback
     if not results:
         results = [
             {"id": 1, "cat": "danger", "tag": "Опасно", "title": "Мошенники звонят от имени банков", "body": "Участились случаи звонков мошенников, представляющихся сотрудниками банков. Никогда не сообщайте код из СМС.", "source": "МВД", "url": "https://mvd.ru", "age": "сегодня"},
@@ -1013,7 +1047,7 @@ async def get_news():
 
 @app.get("/api/v1/news")
 async def get_news_v1():
-    """Новости через Tavily API с кешем 1 час"""
+    """Новости через Tavily API с AI-упрощением, кеш 1 час"""
     return await fetch_tavily_news()
 
 @app.get("/sites")
