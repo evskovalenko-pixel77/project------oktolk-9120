@@ -5083,6 +5083,13 @@ Object.assign(window, { ChatOverlay, ProfileSheet, ProfileSettingsSheet, PField,
 </script>
 <script type="text/babel" data-presets="react">// app.jsx — OkTolk PWA orchestrator. Theme, state, navigation, tweaks.
 
+// Явно берём компоненты из window — они зарегистрированы screens.jsx через Object.assign
+const {
+  ChatOverlay, ProfileSheet, ProfileSettingsSheet,
+  PField, PChoice, PArea, PSlider,
+  VoiceModal, NotifSheet
+} = window;
+
 const PALETTES = {
   cobalt: {
     label: 'Cobalt',

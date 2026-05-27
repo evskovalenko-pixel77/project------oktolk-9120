@@ -1084,101 +1084,115 @@ async def get_news():
 
 @app.post("/api/v1/search")
 async def search_agent(request: Request):
-    """Агент-поисковик: Wildberries + Tavily + Gemini Vision + AI форматирование"""
+    """Агент-поисковик: Wildberries + Tavily + AI"""
     import aiohttp, json as _json, re as _re, asyncio as _asyncio
     data = await request.json()
     query = data.get("query", "").strip()
     image_base64 = data.get("image_base64")
     mime_type = data.get("mime_type", "image/jpeg")
 
-    # ── 1. ФОТО → QUERY через Gemini Vision ──────────────────────
+    # ── 1. ФОТО → QUERY ──────────────────────────────────────────
     if image_base64 and not query:
         try:
-            import httpx
-            r = httpx.post(
-                f"{os.getenv('AITUNNEL_BASE_URL','https://api.aitunnel.ru/v1/')}chat/completions",
-                headers={"Authorization": f"Bearer {os.getenv('AITUNNEL_API_KEY','')}", "Content-Type": "application/json"},
-                json={"model": "gemini-2.5-flash-lite", "max_tokens": 100, "messages": [{"role": "user", "content": [
+            resp = requests.post(
+                f"{AITUNNEL_BASE_URL}chat/completions",
+                headers={"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"},
+                json={"model": "gemini-2.5-flash-lite", "max_tokens": 80, "messages": [{"role": "user", "content": [
                     {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_base64}"}},
-                    {"type": "text", "text": "Что на фото? Дай поисковый запрос 3-5 слов для поиска этого товара на маркетплейсе. Только запрос, без пояснений."}
+                    {"type": "text", "text": "Что на фото? Дай поисковый запрос 3-5 слов. Только запрос."}
                 ]}]}, timeout=10
             )
-            query = r.json()["choices"][0]["message"]["content"].strip() or "товар с фото"
+            query = resp.json()["choices"][0]["message"]["content"].strip() or "товар с фото"
         except:
             query = "товар с фото"
 
     if not query:
         return {"results": [], "query": ""}
 
-    # ── 2. КЛАССИФИКАЦИЯ ЗАПРОСА ──────────────────────────────────
-    loop = _asyncio.get_event_loop()
-    cat_prompt = (
-        f"Запрос: '{query}'\n"
-        "Категория: goods (товары, купить, маркетплейс), leisure (кино, театр, музей, ресторан, концерт, экскурсия), services (мастер, услуга, ремонт, доставка). "
-        "Ответь одним словом из: goods, leisure, services"
-    )
-    try:
-        cat_raw = await loop.run_in_executor(None, lambda: call_ai([{"role": "user", "content": cat_prompt}]))
-        cat = next((c for c in ["goods", "leisure", "services"] if c in (cat_raw or "").lower()), "goods")
-    except:
+    # ── 2. КЛАССИФИКАЦИЯ ──────────────────────────────────────────
+    # Простая эвристика — быстро без AI
+    q_lower = query.lower()
+    if any(w in q_lower for w in ["кино", "театр", "музей", "ресторан", "концерт", "выставк", "экскурс", "афиша", "билет", "шоу", "спектакль"]):
+        cat = "leisure"
+    elif any(w in q_lower for w in ["мастер", "сантехник", "электрик", "ремонт", "клинер", "грузчик", "курьер", "доставка", "услуга", "няня", "репетитор"]):
+        cat = "services"
+    else:
         cat = "goods"
 
     raw_results = []
 
-    # ── 3. ПОИСК ПО ИСТОЧНИКАМ ───────────────────────────────────
     async with aiohttp.ClientSession() as session:
 
-        # ── Товары: Wildberries API (бесплатно, лучший для РФ) ──
+        # ── ТОВАРЫ: Wildberries ───────────────────────────────────
         if cat == "goods":
-            try:
-                async with session.get(
-                    "https://search.wb.ru/exactmatch/ru/common/v4/search",
-                    params={"query": query, "resultset": "catalog", "limit": 6, "sort": "popular", "lang": "ru", "curr": "rub"},
-                    headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
-                    timeout=aiohttp.ClientTimeout(total=8)
-                ) as resp:
-                    if resp.status == 200:
-                        wb_data = await resp.json()
-                        products = wb_data.get("data", {}).get("products", [])
-                        for p in products[:6]:
-                            pid = p.get("id", "")
-                            brand = p.get("brand", "")
-                            name = p.get("name", "")
-                            price = p.get("salePriceU", p.get("priceU", 0))
-                            price_old = p.get("priceU", 0)
-                            rating = p.get("rating", 0)
-                            reviews = p.get("feedbacks", 0)
-                            raw_results.append({
-                                "title": f"{brand} {name}".strip(),
-                                "description": f"Рейтинг {rating}/5, {reviews} отзывов" if reviews else "",
-                                "price": f"{int(price/100):,} ₽".replace(",", " ") if price else None,
-                                "old_price": f"{int(price_old/100):,} ₽".replace(",", " ") if price_old and price_old > price else None,
-                                "source": "Wildberries",
-                                "url": f"https://www.wildberries.ru/catalog/{pid}/detail.aspx",
-                                "cat": "goods"
-                            })
-            except Exception as e:
-                pass
+            wb_urls = [
+                "https://search.wb.ru/exactmatch/ru/common/v5/search",
+                "https://search.wb.ru/exactmatch/ru/common/v4/search",
+            ]
+            for wb_url in wb_urls:
+                if raw_results:
+                    break
+                try:
+                    async with session.get(
+                        wb_url,
+                        params={"query": query, "resultset": "catalog", "limit": 6,
+                                "sort": "popular", "lang": "ru", "curr": "rub", "spp": "27"},
+                        headers={
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                            "Accept": "application/json",
+                            "Origin": "https://www.wildberries.ru",
+                            "Referer": "https://www.wildberries.ru/"
+                        },
+                        timeout=aiohttp.ClientTimeout(total=10)
+                    ) as resp:
+                        if resp.status == 200:
+                            wb_data = await resp.json()
+                            products = (wb_data.get("data") or {}).get("products", [])
+                            if not products:
+                                # Попробуем другой ключ
+                                products = wb_data.get("products", [])
+                            for p in products[:6]:
+                                pid = p.get("id", "")
+                                brand = p.get("brand", "")
+                                name = p.get("name", "")
+                                price = p.get("salePriceU", p.get("priceU", 0)) or 0
+                                price_old = p.get("priceU", 0) or 0
+                                rating = p.get("rating", 0)
+                                reviews = p.get("feedbacks", 0)
+                                if not pid or not name:
+                                    continue
+                                raw_results.append({
+                                    "title": f"{brand} {name}".strip()[:120],
+                                    "description": f"Рейтинг {rating:.1f}/5 · {reviews} отзывов" if reviews else "Wildberries",
+                                    "price": f"{int(price/100):,} ₽".replace(",", " ") if price > 0 else None,
+                                    "old_price": f"{int(price_old/100):,} ₽".replace(",", " ") if price_old > price else None,
+                                    "source": "wildberries.ru",
+                                    "url": f"https://www.wildberries.ru/catalog/{pid}/detail.aspx",
+                                    "cat": "goods"
+                                })
+                except Exception:
+                    continue
 
-        # ── Досуг и услуги: Tavily с таргетингом по сайтам ──────
+        # ── ДОСУГ И УСЛУГИ: Tavily с таргетингом ─────────────────
         if not raw_results or cat in ["leisure", "services"]:
-            site_hints = {
-                "leisure": "site:afisha.ru OR site:kinopoisk.ru OR site:kassir.ru OR site:mos.ru OR site:kudago.com",
+            site_map = {
+                "leisure": "site:afisha.ru OR site:kinopoisk.ru OR site:kassir.ru OR site:kudago.com OR site:mos.ru",
                 "services": "site:profi.ru OR site:youdo.ru OR site:remontnik.ru",
-                "goods": ""
+                "goods":    "site:ozon.ru OR site:wildberries.ru OR site:market.yandex.ru",
             }
-            tavily_query = f"{query} {site_hints.get(cat, '')}".strip()
+            tq = f"{query} {site_map.get(cat, '')}".strip()
             try:
                 async with session.post(
                     "https://api.tavily.com/search",
-                    json={"api_key": TAVILY_API_KEY, "query": tavily_query, "search_depth": "basic", "max_results": 6, "include_answer": False},
+                    json={"api_key": TAVILY_API_KEY, "query": tq,
+                          "search_depth": "basic", "max_results": 6, "include_answer": False},
                     timeout=aiohttp.ClientTimeout(total=12)
                 ) as resp:
                     if resp.status == 200:
-                        tavily_data = await resp.json()
-                        for r in tavily_data.get("results", []):
+                        td = await resp.json()
+                        for r in td.get("results", []):
                             url = r.get("url", "")
-                            domain = url.split("/")[2].replace("www.", "") if url and url.startswith("http") else "Источник"
+                            domain = url.split("/")[2].replace("www.", "") if url.startswith("http") else "источник"
                             raw_results.append({
                                 "title": r.get("title", "")[:120],
                                 "description": r.get("content", "")[:250],
@@ -1189,22 +1203,22 @@ async def search_agent(request: Request):
                 pass
 
     if not raw_results:
-        return {"results": [], "query": query}
+        return {"results": [], "query": query, "error": "Ничего не нашлось"}
 
-    # ── 4. AI ФОРМАТИРУЕТ КАРТОЧКИ ──────────────────────────────
-    # Для Wildberries карточки уже готовы — только досуг/услуги обрабатываем
-    if cat in ["leisure", "services"]:
+    # ── 3. AI ФОРМАТИРУЕТ (только досуг/услуги — товары уже готовы) ──
+    if cat in ["leisure", "services"] and AITUNNEL_API_KEY:
         items_text = "\n".join([
-            f"{i+1}. Заголовок: {r['title']}\nURL: {r['url']}\nОписание: {r['description'][:200]}"
+            f"{i+1}. {r['title']}\nURL: {r['url']}\n{r['description'][:180]}"
             for i, r in enumerate(raw_results[:6])
         ])
         fmt_prompt = (
-            f"Пользователь искал: '{query}'\n\nРезультаты поиска:\n{items_text}\n\n"
-            "Для каждого пункта сделай карточку. Ответь ТОЛЬКО JSON массивом, без markdown:\n"
-            f'[{{"title":"название","description":"что это, 1-2 простых предложения","price":"цена или null","old_price":null,"source":"сайт (домен)","url":"url","cat":"{cat}"}}]\n'
-            "Описание — простым языком. Если цена не указана явно — null. Не придумывай цену."
+            f"Пользователь искал: '{query}'. Отформатируй результаты.\n"
+            f"Ответь ТОЛЬКО JSON массивом без markdown:\n"
+            f'[{{"title":"название","description":"1-2 простых предложения","price":"цена или null","old_price":null,"source":"домен сайта","url":"url","cat":"{cat}"}}]\n'
+            f"Данные:\n{items_text}"
         )
         try:
+            loop = _asyncio.get_event_loop()
             ai_raw = await loop.run_in_executor(None, lambda: call_ai([{"role": "user", "content": fmt_prompt}]))
             m = _re.search(r'\[.*\]', ai_raw or "", _re.DOTALL)
             if m:
