@@ -3817,16 +3817,18 @@ function NewsScreen({ onAsk }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
-      {/* Hero — идентичен Здоровью */}
-      <div className="hero news">
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Что нового</div>
-        <div className="hero-title" style={{ fontSize: 18, textAlign: 'center' }}>Лента за вас</div>
-        <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>проверенные источники</div>
-        <button className="btn-primary" onClick={playFeed} disabled={radioStatus === 'loading'}
-          style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff', opacity: radioStatus === 'loading' ? 0.6 : 1 }}>
-          <IconHeadphones size={18}/>{radioStatus === 'playing' ? 'Остановить' : radioStatus === 'loading' ? 'Загрузка…' : 'Слушать ленту как радио'}{radioStatus === 'idle' && <IconArrowRight size={16}/>}
-        </button>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, boxSizing: 'border-box' }}>
+      {/* Hero */}
+      <div style={{ padding: '4px 14px 0' }}>
+        <div className="hero news">
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Что нового</div>
+          <div className="hero-title" style={{ fontSize: 18, textAlign: 'center' }}>Лента за вас</div>
+          <div style={{ fontSize: 13, opacity: 0.85, marginTop: 3, textAlign: 'center' }}>проверенные источники</div>
+          <button className="btn-primary" onClick={playFeed} disabled={radioStatus === 'loading'}
+            style={{ marginTop: 10, background: 'rgba(255,255,255,0.16)', border: '0.5px solid rgba(255,255,255,0.24)', color: '#fff', opacity: radioStatus === 'loading' ? 0.6 : 1 }}>
+            <IconHeadphones size={18}/>{radioStatus === 'playing' ? 'Остановить' : radioStatus === 'loading' ? 'Загрузка…' : 'Слушать ленту как радио'}{radioStatus === 'idle' && <IconArrowRight size={16}/>}
+          </button>
+        </div>
       </div>
 
       {/* Фильтры */}
@@ -3843,8 +3845,8 @@ function NewsScreen({ onAsk }) {
         })}
       </div>
 
-      {/* Список новостей */}
-      <div className="app-scroll" style={{ flex: 1, padding: '0 14px 14px' }}>
+      {/* Список — скроллится */}
+      <div className="app-scroll" style={{ padding: '0 14px' }}>
         {news === null && (
           <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 14 }}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid var(--primary-tint)', borderTopColor: 'var(--primary)', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }}/>
@@ -3914,7 +3916,6 @@ function AudioButton({ text }) {
 }
 
 function NewsCard({ n, onAsk }) {
-  const [open, setOpen] = React.useState(false);
   const badge = { danger: 'danger', success: 'success', warn: 'warn' }[n.cat];
   const btnStyle = {
     flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -3924,6 +3925,7 @@ function NewsCard({ n, onAsk }) {
   };
   return (
     <div className="news-card">
+      {/* Бейдж + дата */}
       <div className="article-meta">
         <span className={'badge ' + badge}>
           {n.cat === 'danger' && <IconAlert size={12}/>}
@@ -3933,26 +3935,38 @@ function NewsCard({ n, onAsk }) {
         </span>
         <span style={{ fontSize: 12, color: 'var(--text-subtle)' }}>{n.age}</span>
       </div>
-      <h3 className="article-title">{n.title}</h3>
-      <p className="article-body" style={{
-        marginBottom: 0,
-        display: open ? 'block' : '-webkit-box',
-        WebkitLineClamp: open ? 'none' : 3,
-        WebkitBoxOrient: 'vertical',
-        overflow: 'hidden',
-      }}>{n.body}</p>
 
-      {n.url && (
-        <div className="article-source" style={{ marginTop: 10, marginBottom: 0 }}>
-          <IconPin size={14}/> {n.source}
-          <span style={{ flex: 1 }}/>
-          <IconChevronRight size={14}/>
-        </div>
+      {/* Заголовок */}
+      <h3 className="article-title">{n.title}</h3>
+
+      {/* Текст новости */}
+      <p className="article-body" style={{ marginBottom: 0 }}>{n.body}</p>
+
+      {/* Источник — кликабельная ссылка */}
+      {(n.source || n.url) && (
+        <a
+          href={n.url || '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            marginTop: 10, padding: '8px 10px',
+            background: 'var(--surface-2)', borderRadius: 8,
+            border: '0.5px solid var(--border)',
+            textDecoration: 'none', color: 'var(--text-muted)',
+            fontSize: 12, fontWeight: 500
+          }}
+        >
+          <IconPin size={13} color="var(--text-subtle)"/>
+          <span style={{ flex: 1 }}>{n.source || 'Источник'}</span>
+          <IconChevronRight size={13} color="var(--text-subtle)"/>
+        </a>
       )}
 
-      {/* Кнопки действий */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button style={btnStyle} onClick={() => onAsk(`Объясни простыми словами новость: ${n.title}. ${n.body}`)}>
+      {/* Кнопки — всегда видны */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button style={btnStyle}
+          onClick={() => onAsk(`Объясни простыми словами эту новость: ${n.title}. ${n.body}`)}>
           <IconSparkles size={15}/>
           Объясни просто
         </button>
