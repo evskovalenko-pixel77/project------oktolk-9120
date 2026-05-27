@@ -1084,12 +1084,14 @@ async def get_news():
 
 @app.post("/api/v1/search")
 async def search_agent(request: Request):
-    """Агент-поисковик: Wildberries + Tavily + AI"""
-    import aiohttp, json as _json, re as _re, asyncio as _asyncio
+    """Агент-поисковик: Wildberries + Tavily + AI (синхронный, надёжный)"""
+    import json as _json, re as _re, asyncio as _asyncio
     data = await request.json()
-    query = data.get("query", "").strip()
+    query = (data.get("query") or "").strip()
     image_base64 = data.get("image_base64")
     mime_type = data.get("mime_type", "image/jpeg")
+
+    print(f"[search] query='{query}', image={bool(image_base64)}")
 
     # ── 1. ФОТО → QUERY ──────────────────────────────────────────
     if image_base64 and not query:
@@ -1102,134 +1104,134 @@ async def search_agent(request: Request):
                     {"type": "text", "text": "Что на фото? Дай поисковый запрос 3-5 слов. Только запрос."}
                 ]}]}, timeout=10
             )
-            query = resp.json()["choices"][0]["message"]["content"].strip() or "товар с фото"
-        except:
-            query = "товар с фото"
+            query = resp.json()["choices"][0]["message"]["content"].strip() or "товар"
+        except Exception as e:
+            print(f"[search] photo recognition failed: {e}")
+            query = "товар"
 
     if not query:
-        return {"results": [], "query": ""}
+        return {"results": [], "query": "", "error": "Пустой запрос"}
 
-    # ── 2. КЛАССИФИКАЦИЯ ──────────────────────────────────────────
-    # Простая эвристика — быстро без AI
+    # ── 2. КЛАССИФИКАЦИЯ — быстро без AI ─────────────────────────
     q_lower = query.lower()
-    if any(w in q_lower for w in ["кино", "театр", "музей", "ресторан", "концерт", "выставк", "экскурс", "афиша", "билет", "шоу", "спектакль"]):
+    if any(w in q_lower for w in ["кино", "театр", "музе", "ресторан", "концерт", "выставк", "экскурс", "афиша", "билет", "шоу", "спектакль"]):
         cat = "leisure"
-    elif any(w in q_lower for w in ["мастер", "сантехник", "электрик", "ремонт", "клинер", "грузчик", "курьер", "доставка", "услуга", "няня", "репетитор"]):
+    elif any(w in q_lower for w in ["мастер", "сантехник", "электрик", "ремонт", "клинер", "грузчик", "курьер", "услуг", "няня", "репетитор"]):
         cat = "services"
     else:
         cat = "goods"
 
+    print(f"[search] category={cat}")
+
     raw_results = []
 
-    async with aiohttp.ClientSession() as session:
-
-        # ── ТОВАРЫ: Wildberries ───────────────────────────────────
-        if cat == "goods":
-            wb_urls = [
-                "https://search.wb.ru/exactmatch/ru/common/v5/search",
-                "https://search.wb.ru/exactmatch/ru/common/v4/search",
-            ]
-            for wb_url in wb_urls:
-                if raw_results:
-                    break
-                try:
-                    async with session.get(
-                        wb_url,
-                        params={"query": query, "resultset": "catalog", "limit": 6,
-                                "sort": "popular", "lang": "ru", "curr": "rub", "spp": "27"},
-                        headers={
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                            "Accept": "application/json",
-                            "Origin": "https://www.wildberries.ru",
-                            "Referer": "https://www.wildberries.ru/"
-                        },
-                        timeout=aiohttp.ClientTimeout(total=10)
-                    ) as resp:
-                        if resp.status == 200:
-                            wb_data = await resp.json()
-                            products = (wb_data.get("data") or {}).get("products", [])
-                            if not products:
-                                # Попробуем другой ключ
-                                products = wb_data.get("products", [])
-                            for p in products[:6]:
-                                pid = p.get("id", "")
-                                brand = p.get("brand", "")
-                                name = p.get("name", "")
-                                price = p.get("salePriceU", p.get("priceU", 0)) or 0
-                                price_old = p.get("priceU", 0) or 0
-                                rating = p.get("rating", 0)
-                                reviews = p.get("feedbacks", 0)
-                                if not pid or not name:
-                                    continue
-                                raw_results.append({
-                                    "title": f"{brand} {name}".strip()[:120],
-                                    "description": f"Рейтинг {rating:.1f}/5 · {reviews} отзывов" if reviews else "Wildberries",
-                                    "price": f"{int(price/100):,} ₽".replace(",", " ") if price > 0 else None,
-                                    "old_price": f"{int(price_old/100):,} ₽".replace(",", " ") if price_old > price else None,
-                                    "source": "wildberries.ru",
-                                    "url": f"https://www.wildberries.ru/catalog/{pid}/detail.aspx",
-                                    "cat": "goods"
-                                })
-                except Exception:
-                    continue
-
-        # ── ДОСУГ И УСЛУГИ: Tavily с таргетингом ─────────────────
-        if not raw_results or cat in ["leisure", "services"]:
-            site_map = {
-                "leisure": "site:afisha.ru OR site:kinopoisk.ru OR site:kassir.ru OR site:kudago.com OR site:mos.ru",
-                "services": "site:profi.ru OR site:youdo.ru OR site:remontnik.ru",
-                "goods":    "site:ozon.ru OR site:wildberries.ru OR site:market.yandex.ru",
-            }
-            tq = f"{query} {site_map.get(cat, '')}".strip()
+    # ── 3. WILDBERRIES (для товаров) ─────────────────────────────
+    if cat == "goods":
+        wb_urls = [
+            "https://search.wb.ru/exactmatch/ru/common/v5/search",
+            "https://search.wb.ru/exactmatch/ru/common/v4/search",
+        ]
+        for wb_url in wb_urls:
+            if raw_results:
+                break
             try:
-                async with session.post(
-                    "https://api.tavily.com/search",
-                    json={"api_key": TAVILY_API_KEY, "query": tq,
-                          "search_depth": "basic", "max_results": 6, "include_answer": False},
-                    timeout=aiohttp.ClientTimeout(total=12)
-                ) as resp:
-                    if resp.status == 200:
-                        td = await resp.json()
-                        for r in td.get("results", []):
-                            url = r.get("url", "")
-                            domain = url.split("/")[2].replace("www.", "") if url.startswith("http") else "источник"
-                            raw_results.append({
-                                "title": r.get("title", "")[:120],
-                                "description": r.get("content", "")[:250],
-                                "price": None, "old_price": None,
-                                "source": domain, "url": url, "cat": cat
-                            })
-            except:
-                pass
+                r = requests.get(
+                    wb_url,
+                    params={
+                        "query": query, "resultset": "catalog", "limit": 6,
+                        "sort": "popular", "lang": "ru", "curr": "rub",
+                        "dest": "-1257786",  # Москва
+                        "spp": "30",
+                        "appType": "1",
+                    },
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+                        "Accept": "*/*",
+                        "Accept-Language": "ru-RU,ru;q=0.9",
+                        "Origin": "https://www.wildberries.ru",
+                        "Referer": "https://www.wildberries.ru/",
+                    },
+                    timeout=10
+                )
+                print(f"[search] WB {wb_url.split('/')[-2]} status={r.status_code}")
+                if r.status_code == 200:
+                    wb_data = r.json()
+                    products = (wb_data.get("data") or {}).get("products", []) or wb_data.get("products", [])
+                    print(f"[search] WB products: {len(products)}")
+                    for p in products[:6]:
+                        pid = p.get("id")
+                        name = p.get("name", "")
+                        brand = p.get("brand", "")
+                        if not pid or not name:
+                            continue
+                        # Цены: проверяем разные форматы
+                        price = p.get("salePriceU") or p.get("priceU") or 0
+                        price_old = p.get("priceU") or 0
+                        # В новом v5 цены могут быть в sizes[0].price
+                        if not price and p.get("sizes"):
+                            sz = p["sizes"][0]
+                            price = (sz.get("price") or {}).get("product", 0)
+                            price_old = (sz.get("price") or {}).get("basic", 0)
+                        rating = p.get("rating") or p.get("reviewRating") or 0
+                        reviews = p.get("feedbacks", 0)
+                        raw_results.append({
+                            "title": f"{brand} {name}".strip()[:120],
+                            "description": f"Рейтинг {rating:.1f}/5 · {reviews} отзывов" if reviews else "Wildberries",
+                            "price": f"{int(price/100):,} ₽".replace(",", " ") if price > 0 else None,
+                            "old_price": f"{int(price_old/100):,} ₽".replace(",", " ") if price_old > price else None,
+                            "source": "wildberries.ru",
+                            "url": f"https://www.wildberries.ru/catalog/{pid}/detail.aspx",
+                            "cat": "goods"
+                        })
+            except Exception as e:
+                print(f"[search] WB error: {e}")
+                continue
+
+    # ── 4. TAVILY (всегда как fallback или для досуга/услуг) ─────
+    if not raw_results or cat in ["leisure", "services"]:
+        site_map = {
+            "leisure": "site:afisha.ru OR site:kinopoisk.ru OR site:kassir.ru OR site:kudago.com",
+            "services": "site:profi.ru OR site:youdo.ru",
+            "goods":    "site:ozon.ru OR site:wildberries.ru OR site:market.yandex.ru",
+        }
+        tq = f"{query} {site_map.get(cat, '')}".strip()
+        try:
+            r = requests.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": TAVILY_API_KEY,
+                    "query": tq,
+                    "search_depth": "basic",
+                    "max_results": 6,
+                    "include_answer": False,
+                    "country": "russia",
+                },
+                timeout=15
+            )
+            print(f"[search] Tavily status={r.status_code}")
+            if r.status_code == 200:
+                td = r.json()
+                items = td.get("results", [])
+                print(f"[search] Tavily results: {len(items)}")
+                for it in items:
+                    url = it.get("url", "")
+                    domain = url.split("/")[2].replace("www.", "") if url.startswith("http") else "источник"
+                    raw_results.append({
+                        "title": (it.get("title") or "")[:120],
+                        "description": (it.get("content") or "")[:250],
+                        "price": None, "old_price": None,
+                        "source": domain, "url": url, "cat": cat
+                    })
+            else:
+                print(f"[search] Tavily error body: {r.text[:200]}")
+        except Exception as e:
+            print(f"[search] Tavily error: {e}")
 
     if not raw_results:
         return {"results": [], "query": query, "error": "Ничего не нашлось"}
 
-    # ── 3. AI ФОРМАТИРУЕТ (только досуг/услуги — товары уже готовы) ──
-    if cat in ["leisure", "services"] and AITUNNEL_API_KEY:
-        items_text = "\n".join([
-            f"{i+1}. {r['title']}\nURL: {r['url']}\n{r['description'][:180]}"
-            for i, r in enumerate(raw_results[:6])
-        ])
-        fmt_prompt = (
-            f"Пользователь искал: '{query}'. Отформатируй результаты.\n"
-            f"Ответь ТОЛЬКО JSON массивом без markdown:\n"
-            f'[{{"title":"название","description":"1-2 простых предложения","price":"цена или null","old_price":null,"source":"домен сайта","url":"url","cat":"{cat}"}}]\n'
-            f"Данные:\n{items_text}"
-        )
-        try:
-            loop = _asyncio.get_event_loop()
-            ai_raw = await loop.run_in_executor(None, lambda: call_ai([{"role": "user", "content": fmt_prompt}]))
-            m = _re.search(r'\[.*\]', ai_raw or "", _re.DOTALL)
-            if m:
-                formatted = _json.loads(m.group(0))
-                for item in formatted:
-                    item["cat"] = cat
-                return {"results": formatted[:6], "query": query}
-        except:
-            pass
-
-    return {"results": raw_results[:6], "query": query}
+    print(f"[search] returning {len(raw_results)} results")
+    return {"results": raw_results[:6], "query": query, "cat": cat}
 
 @app.get("/sites")
 async def get_sites():
