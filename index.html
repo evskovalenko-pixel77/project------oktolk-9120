@@ -3766,8 +3766,9 @@ const NEWS = [
 
 function NewsScreen({ onAsk }) {
   const [filter, setFilter] = React.useState('all');
-  const [news, setNews] = React.useState(null); // null = loading
+  const [news, setNews] = React.useState(null);
   const [error, setError] = React.useState(false);
+  const scrollRef = React.useRef(null);
 
   React.useEffect(() => {
     fetch('/api/v1/news')
@@ -3783,17 +3784,20 @@ function NewsScreen({ onAsk }) {
     success: items.filter(n => n.cat === 'success').length,
     warn: items.filter(n => n.cat === 'warn').length,
   };
+
   const filters = [
     { id: 'all', label: 'Все' },
     { id: 'danger', label: 'Опасное', icon: IconAlert },
     { id: 'success', label: 'Льготы', icon: IconCheck },
     { id: 'warn', label: 'Важно', icon: IconPin },
   ];
+
   const visible = filter === 'all' ? items : items.filter(n => n.cat === filter);
 
   // Озвучка всей ленты
   const [radioStatus, setRadioStatus] = React.useState('idle');
   const radioRef = React.useRef(null);
+
   const playFeed = async () => {
     if (radioStatus === 'playing') {
       if (radioRef.current) { radioRef.current.pause(); radioRef.current = null; }
@@ -3804,7 +3808,11 @@ function NewsScreen({ onAsk }) {
     setRadioStatus('loading');
     try {
       const fullText = visible.map((n, i) => `Новость ${i+1}. ${n.title}. ${n.body}`).join(' ... ');
-      const resp = await fetch('/api/v1/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: fullText.slice(0, 2000), voice: 'alena' }) });
+      const resp = await fetch('/api/v1/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: fullText.slice(0, 2000), voice: 'alena' })
+      });
       if (!resp.ok) throw new Error();
       const blob = await resp.blob();
       const audio = new Audio(URL.createObjectURL(blob));
@@ -3817,9 +3825,9 @@ function NewsScreen({ onAsk }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, boxSizing: 'border-box' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, height: '100%', boxSizing: 'border-box' }}>
       {/* Hero */}
-      <div style={{ padding: '4px 14px 0' }}>
+      <div style={{ padding: '4px 14px 0', flexShrink: 0 }}>
         <div className="hero news">
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 4, textAlign: 'center' }}>Что нового</div>
           <div className="hero-title" style={{ fontSize: 18, textAlign: 'center' }}>Лента за вас</div>
@@ -3832,21 +3840,23 @@ function NewsScreen({ onAsk }) {
       </div>
 
       {/* Фильтры */}
-      <div className="filters">
+      <div style={{ display: 'flex', gap: 8, padding: '10px 14px', overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none', flexShrink: 0, background: 'var(--bg)', zIndex: 5, position: 'relative' }}>
         {filters.map(f => {
           const FI = f.icon;
+          const isActive = filter === f.id;
           return (
-            <button key={f.id} className="filter" data-active={filter === f.id} onClick={() => setFilter(f.id)}>
+            <button key={f.id} onClick={() => setFilter(f.id)}
+              style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 14px', borderRadius: 999, background: isActive ? 'var(--text)' : 'var(--surface)', border: '0.5px solid ' + (isActive ? 'var(--text)' : 'var(--border)'), color: isActive ? 'var(--bg)' : 'var(--text-muted)', fontSize: 13.5, fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit' }}>
               {FI && <FI size={14}/>}
               {f.label}
-              <span className="count">{counts[f.id]}</span>
+              <span style={{ fontSize: 12, opacity: 0.65, fontVariantNumeric: 'tabular-nums' }}>{counts[f.id]}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Список — скроллится */}
-      <div className="app-scroll" style={{ padding: '0 14px' }}>
+      {/* Список новостей — скроллится */}
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 14px 14px', scrollbarWidth: 'none' }}>
         {news === null && (
           <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 14 }}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid var(--primary-tint)', borderTopColor: 'var(--primary)', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }}/>
@@ -3855,6 +3865,9 @@ function NewsScreen({ onAsk }) {
         )}
         {error && <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: 13 }}>Не удалось загрузить новости</div>}
         {visible.map(n => <NewsCard key={n.id} n={n} onAsk={onAsk}/>)}
+        {visible.length === 0 && news !== null && !error && (
+          <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 14 }}>Нет новостей в этой категории</div>
+        )}
       </div>
     </div>
   );
@@ -3915,19 +3928,32 @@ function AudioButton({ text }) {
   );
 }
 
+
+
 function NewsCard({ n, onAsk }) {
-  const badge = { danger: 'danger', success: 'success', warn: 'warn' }[n.cat];
-  const btnStyle = {
-    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-    padding: '9px 0', borderRadius: 10, border: '0.5px solid var(--border)',
-    background: 'var(--surface-2)', fontFamily: 'inherit', fontSize: 13,
-    fontWeight: 600, color: 'var(--text-muted)', cursor: 'pointer'
+  const badgeColors = {
+    danger: { bg: 'var(--danger-tint)', color: 'var(--danger)' },
+    success: { bg: 'var(--success-tint)', color: 'var(--success)' },
+    warn: { bg: 'var(--warn-tint)', color: 'var(--warn)' }
   };
+  const badge = badgeColors[n.cat] || badgeColors.warn;
+
+  const getShortSource = (source, url) => {
+    if (!source && !url) return 'Источник';
+    if (source) return source;
+    try {
+      const domain = new URL(url).hostname.replace('www.', '').split('.')[0];
+      return domain.toUpperCase();
+    } catch { return 'Источник'; }
+  };
+
+  const shortSource = getShortSource(n.source, n.url);
+
   return (
-    <div className="news-card">
+    <div className="news-card" style={{ marginBottom: 12 }}>
       {/* Бейдж + дата */}
-      <div className="article-meta">
-        <span className={'badge ' + badge}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 24, padding: '0 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', background: badge.bg, color: badge.color }}>
           {n.cat === 'danger' && <IconAlert size={12}/>}
           {n.cat === 'success' && <IconCheck size={12}/>}
           {n.cat === 'warn' && <IconPin size={12}/>}
@@ -3937,37 +3963,37 @@ function NewsCard({ n, onAsk }) {
       </div>
 
       {/* Заголовок */}
-      <h3 className="article-title">{n.title}</h3>
+      <h3 style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.25, margin: '0 0 8px', letterSpacing: '-0.02em', color: 'var(--text)' }}>{n.title}</h3>
 
-      {/* Текст новости */}
-      <p className="article-body" style={{ marginBottom: 0 }}>{n.body}</p>
+      {/* Текст */}
+      <p style={{ fontSize: 14.5, lineHeight: 1.5, color: 'var(--text-muted)', margin: '0 0 12px' }}>{n.body}</p>
 
-      {/* Источник — кликабельная ссылка */}
-      {(n.source || n.url) && (
-        <a
-          href={n.url || '#'}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            marginTop: 10, padding: '8px 10px',
-            background: 'var(--surface-2)', borderRadius: 8,
-            border: '0.5px solid var(--border)',
-            textDecoration: 'none', color: 'var(--text-muted)',
-            fontSize: 12, fontWeight: 500
-          }}
-        >
-          <IconPin size={13} color="var(--text-subtle)"/>
-          <span style={{ flex: 1 }}>{n.source || 'Источник'}</span>
-          <IconChevronRight size={13} color="var(--text-subtle)"/>
-        </a>
-      )}
+      {/* Плашка источника */}
+      <div style={{ marginBottom: 12 }}>
+        {n.url ? (
+          <a href={n.url} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '0.5px solid var(--border)', textDecoration: 'none', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500, transition: 'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary-tint)'; e.currentTarget.style.color = 'var(--primary)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+            <IconPin size={13} color="currentColor"/>
+            <span>{shortSource}</span>
+            <IconExternal size={13} color="currentColor" style={{ marginLeft: 2 }}/>
+          </a>
+        ) : (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '0.5px solid var(--border)', color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>
+            <IconPin size={13} color="var(--text-subtle)"/>
+            <span>{shortSource}</span>
+          </span>
+        )}
+      </div>
 
-      {/* Кнопки — всегда видны */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-        <button style={btnStyle}
-          onClick={() => onAsk(`Объясни простыми словами эту новость: ${n.title}. ${n.body}`)}>
-          <IconSparkles size={15}/>
+      {/* Кнопки */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => onAsk(`Объясни простыми словами эту новость: ${n.title}. ${n.body}`)}
+          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 0', borderRadius: 10, border: '0.5px solid var(--border)', background: 'var(--surface-2)', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', cursor: 'pointer', transition: 'all 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary-tint)'; e.currentTarget.style.color = 'var(--primary)'; e.currentTarget.style.borderColor = 'var(--primary)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)'; }}>
+          <IconSparkles size={15} color="currentColor"/>
           Объясни просто
         </button>
         <AudioButton text={n.title + '. ' + n.body}/>
@@ -3975,18 +4001,6 @@ function NewsCard({ n, onAsk }) {
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────
-// Sites screen
-// ─────────────────────────────────────────────────────────────
-const CATEGORIES = [
-  { id: 'gov',   name: 'Госорганы', count: 7, icon: IconBuilding, tint: '#5B5FCF', bg: 'rgba(91,95,207,0.12)' },
-  { id: 'shop',  name: 'Магазины', count: 6, icon: IconCart, tint: '#C77A20', bg: 'rgba(199,122,32,0.12)' },
-  { id: 'meds',  name: 'Аптеки', count: 6, icon: IconPill, tint: '#D14367', bg: 'rgba(209,67,103,0.12)' },
-  { id: 'fun',   name: 'Досуг', count: 6, icon: IconMasks, tint: '#1F8A5B', bg: 'rgba(31,138,91,0.12)' },
-  { id: 'banks', name: 'Банки', count: 5, icon: IconWallet, tint: '#3B4FE0', bg: 'rgba(59,79,224,0.12)' },
-  { id: 'med',   name: 'Медцентры', count: 4, icon: IconStethoscope, tint: '#7A5AE0', bg: 'rgba(122,90,224,0.12)' },
-];
 
 function SitesScreen() {
   return (
