@@ -2111,7 +2111,7 @@ const TABS = [
   { id: 'health',  label: 'Здоровье', icon: IconActivity },
   { id: 'home',    label: 'Ok', center: true },
   { id: 'news',    label: 'Новости', icon: IconNews },
-  { id: 'sites',   label: 'Сайты', icon: IconGlobe },
+  { id: 'sites',   label: 'Поиск', icon: IconSearch },
 ];
 
 function TabBar({ active, onChange }) {
@@ -4002,528 +4002,295 @@ function NewsCard({ n, onAsk }) {
   );
 }
 
-function SitesScreen() {
-  return (
-    <div className="screen">
-      <div style={{ padding: '4px 0' }}>
-        <div className="hero sites">
-          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', opacity: 0.78, marginBottom: 6 }}>
-            Сайты
-          </div>
-          <div className="hero-title">Проверенные ресурсы</div>
-          <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>{CATEGORIES.reduce((a, c) => a + c.count, 0)} сайтов в 6 категориях</div>
-        </div>
-      </div>
+function SitesScreen({ onAsk }) {
+  // ─── состояния ───
+  const [curTab, setCurTab]       = React.useState('all');
+  const [state, setState2]        = React.useState('empty'); // empty|searching|results
+  const [query, setQuery]         = React.useState('');
+  const [input, setInput]         = React.useState('');
+  const [results, setResults]     = React.useState([]);
+  const [saved, setSaved]         = React.useState([]);  // сохранённые результаты
+  const [stageIdx, setStageIdx]   = React.useState(0);
+  const taRef                     = React.useRef(null);
 
-      <div className="cat-grid">
-        {CATEGORIES.map(c => {
-          const I = c.icon;
-          return (
-            <button key={c.id} className="cat-card">
-              <div className="cat-icon" style={{ background: c.bg, color: c.tint }}>
-                <I size={22}/>
-              </div>
-              <div>
-                <h3 className="cat-name">{c.name}</h3>
-                <div className="cat-count" style={{ marginTop: 4 }}>{c.count} сайтов</div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+  // фильтры вкладок
+  const TABS = [
+    { id: 'all',      label: 'Все' },
+    { id: 'goods',    label: 'Товары' },
+    { id: 'services', label: 'Услуги' },
+    { id: 'leisure',  label: 'Досуг' },
+    { id: 'saved',    label: 'Сохранённое' },
+  ];
 
-      <div className="section">
-        <h3 className="section-title">Часто посещаемые</h3>
-        <div className="card">
-          {[
-            { t: 'Госуслуги', sub: 'gosuslugi.ru', icon: IconBuilding, color: '#5B5FCF' },
-            { t: 'Сбербанк Онлайн', sub: 'online.sberbank.ru', icon: IconWallet, color: '#1F8A5B' },
-            { t: 'Аптека.ру', sub: 'apteka.ru', icon: IconPill, color: '#D14367' },
-          ].map((s, i, arr) => {
-            const I = s.icon;
-            return (
-              <div key={i} className="list-row" style={{ borderBottom: i < arr.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
-                <div className="list-row-icon" style={{ background: 'color-mix(in srgb, ' + s.color + ' 14%, transparent)', color: s.color }}>
-                  <I size={18}/>
-                </div>
-                <div className="list-row-text">
-                  <div className="list-row-title">{s.t}</div>
-                  <div className="list-row-sub">{s.sub}</div>
-                </div>
-                <IconExternal size={16} stroke="var(--text-subtle)"/>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// AI Q&A card — shared
-// ─────────────────────────────────────────────────────────────
-function AskAICard({ title, placeholder, prompts, onAsk }) {
-  const [q, setQ] = React.useState('');
-  return (
-    <div className="section">
-      <div className="card card-pad">
-        <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px', letterSpacing: '-0.01em' }}>
-          <IconSparkles size={16} style={{ verticalAlign: -3, marginRight: 6, color: 'var(--primary)' }}/>
-          {title}
-        </h3>
-        <div className="prompts">
-          {prompts.map((p, i) => {
-            const I = p.icon;
-            return (
-              <button key={i} className="prompt" onClick={() => onAsk(p.t)}>
-                <span className="glyph"><I size={16}/></span>
-                {p.t}
-              </button>
-            );
-          })}
-        </div>
-        <div className="composer" style={{ margin: '14px 0 0' }}>
-          <input value={q} onChange={e => setQ(e.target.value)}
-                 onKeyDown={e => { if (e.key === 'Enter' && q.trim()) { onAsk(q); setQ(''); } }}
-                 placeholder={placeholder}/>
-          <button className="composer-send" disabled={!q.trim()}
-                  onClick={() => { if (q.trim()) { onAsk(q); setQ(''); } }}>
-            <IconSend size={18} sw={2}/>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-Object.assign(window, {
-  TopBar, TabBar, HomeScreen, FinanceScreen, HealthScreen, NewsScreen, SitesScreen,
-});
-</script>
-<script type="text/babel" data-presets="react">// overlays.jsx — Chat, Profile sheet, Voice modal
-
-function ChatOverlay({ initialMsg, onClose, mode }) {
-  const [messages, setMessages] = React.useState(() => initialMsg
-    ? [{ role: 'user', text: initialMsg }]
-    : []
-  );
-  const [pending, setPending] = React.useState(false);
-  const [input, setInput] = React.useState('');
-  const [voiceActive, setVoiceActive] = React.useState(false);
-  const streamRef = React.useRef(null);
+  const stages = [
+    'Понял запрос',
+    'Ищу на сайтах…',
+    'Сортирую по цене и отзывам',
+    'Готовлю результаты',
+  ];
 
   React.useEffect(() => {
-    if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
-  }, [messages, pending]);
-
-  // auto-send the initial message
-  React.useEffect(() => {
-    if (initialMsg && messages.length === 1 && !pending) {
-      askClaude(initialMsg);
+    let t;
+    if (state === 'searching') {
+      setStageIdx(0);
+      let i = 0;
+      t = setInterval(() => { i++; if (i < stages.length) setStageIdx(i); else clearInterval(t); }, 900);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => clearInterval(t);
+  }, [state]);
 
-  const askClaude = async (text) => {
-    setPending(true);
+  const doSearch = async (q) => {
+    const text = (q || input).trim();
+    if (!text) return;
+    setQuery(text);
+    setState2('searching');
     try {
-      const res = await fetch('/chat', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ message: text, history: [], mode: mode || null })
-      });
-      const data = await res.json();
-      setMessages(m => [...m, { role: 'ai', text: data.reply, source: 'OkTolk AI' }]);
-    } catch (e) {
-      setMessages(m => [...m, { role: 'ai', text: 'Не удалось получить ответ. Проверьте подключение к интернету.', source: 'OkTolk AI' }]);
-    } finally {
-      setPending(false);
-    }
-  };
-
-  const askClaudeWithImage = async (base64, mimeType) => {
-    setPending(true);
-    try {
-      const res = await fetch('/api/v1/chat/image', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ image_base64: base64, mime_type: mimeType })
-      });
-      const data = await res.json();
-      setMessages(m => [...m, { role: 'ai', text: data.reply, source: 'OkTolk AI' }]);
-    } catch(e) {
-      setMessages(m => [...m, { role: 'ai', text: 'Не удалось проанализировать файл.', source: 'OkTolk AI' }]);
-    } finally {
-      setPending(false);
-    }
-  };
-  const send = () => {
-    const t = input.trim();
-    if (!t || pending) return;
-    setMessages(m => [...m, { role: 'user', text: t }]);
-    setInput('');
-    askClaude(t);
-  };
-
-  return (
-    <div className="chat-overlay">
-      <div className="chat-header">
-        <button className="topbar-icon" onClick={onClose} aria-label="Закрыть">
-          <IconChevronLeft size={20} sw={2}/>
-        </button>
-        <div style={{
-          width: 36, height: 36, borderRadius: '50%',
-          background: 'var(--primary)', color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 700, fontSize: 13, letterSpacing: '-0.03em',
-        }}>Ok</div>
-        <div className="chat-header-info">
-          <p className="chat-header-title">OkTolk AI</p>
-          <p className="chat-header-sub">
-            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 999, background: 'var(--success)', marginRight: 6, verticalAlign: 2 }}/>
-            готов помочь
-          </p>
-        </div>
-      </div>
-
-      <div className="chat-stream" ref={streamRef}>
-        {messages.length === 0 && (
-          <div style={{ textAlign: 'center', color: 'var(--text-subtle)', padding: '40px 20px', fontSize: 14 }}>
-            Задайте любой вопрос — отвечу простым языком.
-          </div>
-        )}
-        {messages.map((m, i) => (
-          <div key={i} className={'msg ' + m.role}>
-            {m.text}
-            {m.role === 'ai' && m.source && (
-              <div className="source"><IconSparkles size={11}/> {m.source}</div>
-            )}
-          </div>
-        ))}
-        {pending && (
-          <div className="msg ai">
-            <div className="typing"><i/><i/><i/></div>
-          </div>
-        )}
-      </div>
-
-  
-      <div className="chat-composer">
-        <div className="composer" style={{ margin: 0 }}>
-          <textarea value={input}
-                 onChange={e => setInput(e.target.value)}
-                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }}}
-                 onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
-                 placeholder="Спросите что-нибудь…"
-                 rows={1}
-                 style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', font: 'inherit', fontSize: 15, color: 'var(--text)', resize: 'none', minHeight: 22, maxHeight: 120, overflowY: 'auto', padding: '2px 0' }}
-          />
-          <button className="composer-send" disabled={!input.trim() || pending} onClick={send}>
-            <IconSend size={18} sw={2}/>
-          </button>
-        </div>
-        <div className="modes" style={{ marginTop: 8 }}>
-          <button className="mode" onClick={() => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.pdf,.doc,.docx,.txt,image/*';
-            input.onchange = async (e) => {
-              const file = e.target.files[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64 = reader.result.split(',')[1];
-                setMessages(m => [...m, { role: 'user', text: '📄 Документ отправлен на анализ: ' + file.name }]);
-                askClaudeWithImage(base64, file.type);
-              };
-              reader.readAsDataURL(file);
-            };
-            input.click();
-          }}>
-            <span className="mode-icon"><IconDoc size={22}/></span>
-            <span className="mode-label">Документ</span>
-          </button>
-          <button className="mode" onClick={() => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.capture = 'environment';
-            input.onchange = async (e) => {
-              const file = e.target.files[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64 = reader.result.split(',')[1];
-                setMessages(m => [...m, { role: 'user', text: '📷 Фото отправлено на анализ' }]);
-                askClaudeWithImage(base64, file.type);
-              };
-              reader.readAsDataURL(file);
-            };
-            input.click();
-          }}>
-            <span className="mode-icon"><IconCamera size={22}/></span>
-            <span className="mode-label">Фото</span>
-          </button>
-          <VoiceButton onResult={(text) => { setInput(prev => (prev ? prev + " " : "") + text); }} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-// ── Auth Screen ──────────────────────────────────────────────────
-function AuthScreen({ onAuth }) {
-  const [mode, setMode] = React.useState('login');
-  const [phone, setPhone] = React.useState('');
-  const [name, setName] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [error, setError] = React.useState('');
-  const [pending, setPending] = React.useState(false);
-
-  const formatPhone = (v) => {
-    const digits = v.replace(/\D/g, '');
-    if (digits.length <= 1) return digits ? '+7' : '';
-    const d = digits.startsWith('7') ? digits.slice(1) : digits;
-    let r = '+7';
-    if (d.length > 0) r += ' (' + d.slice(0, 3);
-    if (d.length >= 3) r += ') ' + d.slice(3, 6);
-    if (d.length >= 6) r += '-' + d.slice(6, 8);
-    if (d.length >= 8) r += '-' + d.slice(8, 10);
-    return r;
-  };
-
-  const getRawPhone = (v) => '+7' + v.replace(/\D/g, '').slice(1);
-
-  const submit = async () => {
-    setError('');
-    setPending(true);
-    try {
-      const endpoint = mode === 'login' ? '/api/v1/auth/login' : '/api/v1/auth/register';
-      const body = mode === 'login'
-        ? { phone: getRawPhone(phone), password }
-        : { phone: getRawPhone(phone), name: name.trim(), password };
-      const resp = await fetch(endpoint, {
+      const res = await fetch('/api/v1/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ query: text })
       });
-      const data = await resp.json();
-      localStorage.setItem('oktolk_token', data.token);
-      localStorage.setItem('oktolk_user_id', String(data.user_id));
-      localStorage.setItem('oktolk_name', data.name);
-      localStorage.setItem('oktolk_tariff', data.tariff || 'demo');
-      onAuth({ token: data.token, user_id: data.user_id, name: data.name, tariff: data.tariff });
+      const data = await res.json();
+      setResults(Array.isArray(data.results) ? data.results : []);
     } catch(e) {
-      setError('Нет соединения с сервером');
-    } finally {
-      setPending(false);
+      setResults([]);
     }
+    setState2('results');
+    setInput('');
   };
 
+  const saveResult = (item) => {
+    setSaved(s => s.find(x => x.url === item.url) ? s : [...s, { ...item, savedAt: new Date() }]);
+  };
+
+  const removeFromSaved = (url) => setSaved(s => s.filter(x => x.url !== url));
+
+  const getVisible = () => {
+    if (curTab === 'saved') return saved;
+    const pool = state === 'results' ? results : [];
+    if (curTab === 'all') return pool;
+    return pool.filter(r => r.cat === curTab);
+  };
+
+  const handlePhoto = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
+    inp.onchange = async (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      const base64 = await new Promise(res => { const r = new FileReader(); r.onloadend = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
+      setInput(''); setQuery('Поиск по фото');
+      setState2('searching');
+      try {
+        const res = await fetch('/api/v1/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_base64: base64, mime_type: file.type }) });
+        const data = await res.json();
+        setResults(Array.isArray(data.results) ? data.results : []);
+      } catch(e) { setResults([]); }
+      setState2('results');
+    };
+    inp.click();
+  };
+
+  const handleLink = () => {
+    const url = prompt('Вставьте ссылку на товар:');
+    if (url && url.startsWith('http')) doSearch('Найди похожие: ' + url);
+  };
+
+  // ─── рендер ───
+  const btnStyle = { flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'11px 0', borderRadius:12, border:'0.5px solid var(--border)', background:'var(--surface)', fontFamily:'inherit', fontSize:13, fontWeight:600, color:'var(--text-muted)', cursor:'pointer' };
+  const accentColor = '#8B5CF6';
+
   return (
-    <div style={{
-      minHeight: '100dvh', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      background: 'var(--bg)', padding: '24px 20px'
-    }}>
-      <div style={{ marginBottom: 32, textAlign: 'center' }}>
-        <div style={{
-          width: 72, height: 72, borderRadius: 20,
-          background: 'var(--primary)', color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 28, fontWeight: 800, margin: '0 auto 16px'
-        }}>Ok</div>
-        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em' }}>OkTolk</div>
-        <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4 }}>
-          {mode === 'login' ? 'Войдите в свой аккаунт' : 'Создайте аккаунт'}
+    <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0 }}>
+
+      {/* Hero */}
+      <div style={{ padding:'4px 14px 0', flexShrink:0 }}>
+        <div style={{ borderRadius:18, padding:'14px 18px', background:'linear-gradient(135deg,#3A2A6E 0%,#5340A8 60%,#6B53C9 100%)', color:'#fff', textAlign:'center', position:'relative', overflow:'hidden' }}>
+          <div style={{ fontSize:10, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', opacity:0.7, marginBottom:4 }}>Поиск для вас</div>
+          <div style={{ fontSize:18, fontWeight:800 }}>Найдём что угодно</div>
+          <div style={{ fontSize:12, opacity:0.75, marginTop:2 }}>товары, услуги, мероприятия</div>
+          <div style={{ display:'flex', gap:8, marginTop:10, justifyContent:'center' }}>
+            {[['🔍', String(results.length || 0), 'найдено'], ['🔖', String(saved.length), 'сохранено']].map(([ic,n,l]) => (
+              <div key={l} style={{ background:'rgba(255,255,255,0.14)', borderRadius:10, padding:'6px 14px', textAlign:'center' }}>
+                <div style={{ fontSize:17, fontWeight:800 }}>{n}</div>
+                <div style={{ fontSize:10, opacity:0.7 }}>{l}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-      <div style={{
-        width: '100%', maxWidth: 360,
-        background: 'var(--surface)', borderRadius: 20,
-        padding: '24px 20px', boxShadow: 'var(--shadow-card)'
-      }}>
-        {mode === 'register' && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Ваше имя</div>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Евгений"
-              style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
-                border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
-                fontSize: 16, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}/>
+
+      {/* Tabs-фильтры */}
+      <div style={{ display:'flex', gap:6, padding:'8px 14px 0', overflowX:'auto', flexShrink:0, scrollbarWidth:'none' }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setCurTab(t.id)} style={{
+            flexShrink:0, padding:'7px 14px', fontSize:13, fontWeight:600, borderRadius:99,
+            border: t.id === 'saved' ? '0.5px solid ' + (curTab===t.id ? 'var(--success)' : 'var(--border)') : '0.5px solid ' + (curTab===t.id ? accentColor : 'var(--border)'),
+            background: curTab===t.id ? (t.id==='saved' ? 'var(--success)' : accentColor) : 'var(--surface)',
+            color: curTab===t.id ? '#fff' : 'var(--text-muted)', cursor:'pointer', fontFamily:'inherit'
+          }}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* Контент — скроллится */}
+      <div style={{ flex:1, minHeight:0, overflowY:'auto', overflowX:'hidden', padding:'10px 14px 120px', display:'flex', flexDirection:'column', gap:10, scrollbarWidth:'none', WebkitOverflowScrolling:'touch' }}>
+
+        {/* Пустой экран */}
+        {(state === 'empty' && curTab !== 'saved') && (
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'28px 0', gap:12, textAlign:'center' }}>
+            <div style={{ width:60, height:60, borderRadius:18, background:'rgba(139,92,246,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </div>
+            <div style={{ fontSize:16, fontWeight:700 }}>Агент готов искать</div>
+            <div style={{ fontSize:13, color:'var(--text-muted)', lineHeight:1.6 }}>Напишите, скажите голосом или отправьте фото — агент найдёт нужное и покажет ссылки</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:6, width:'100%', marginTop:4 }}>
+              {['Бесплатные музеи в эту субботу','Кофемашина до 20 000 рублей','Сантехник на дом сегодня'].map(ex => (
+                <button key={ex} onClick={() => { setInput(ex); doSearch(ex); }} style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px', borderRadius:12, background:'var(--surface)', border:'0.5px solid var(--border)', fontSize:13, color:'var(--text-muted)', cursor:'pointer', fontFamily:'inherit', textAlign:'left' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  {ex}
+                </button>
+              ))}
+            </div>
           </div>
         )}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Телефон</div>
-          <input value={phone} onChange={e => setPhone(formatPhone(e.target.value))}
-            placeholder="+7 (999) 000-00-00" type="tel"
-            style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
-              border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
-              fontSize: 16, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}/>
-        </div>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>Пароль</div>
-          <input value={password} onChange={e => setPassword(e.target.value)}
-            placeholder="Минимум 6 символов" type="password"
-            onKeyDown={e => e.key === 'Enter' && submit()}
-            style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
-              border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
-              fontSize: 16, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }}/>
-        </div>
-        {error && (
-          <div style={{ background: 'var(--danger-tint)', color: 'var(--danger)',
-            borderRadius: 10, padding: '10px 14px', fontSize: 14,
-            marginBottom: 16, textAlign: 'center' }}>{error}</div>
-        )}
-        <button onClick={submit} disabled={pending} style={{
-          width: '100%', padding: '14px', borderRadius: 14,
-          background: pending ? 'var(--text-subtle)' : 'var(--primary)',
-          color: '#fff', border: 'none', fontSize: 16, fontWeight: 700,
-          cursor: pending ? 'not-allowed' : 'pointer'
-        }}>
-          {pending ? 'Подождите...' : (mode === 'login' ? 'Войти' : 'Зарегистрироваться')}
-        </button>
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-            {mode === 'login' ? 'Нет аккаунта? ' : 'Уже есть аккаунт? '}
-          </span>
-          <span onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
-            style={{ fontSize: 14, color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>
-            {mode === 'login' ? 'Зарегистрироваться' : 'Войти'}
-          </span>
-        </div>
-      </div>
-      <div style={{ marginTop: 24, textAlign: 'center', fontSize: 12, color: 'var(--text-subtle)' }}>
-        Входя в приложение, вы соглашаетесь с{' '}
-        <a href="/terms.html" style={{ color: 'var(--primary)' }}>Условиями</a>
-        {' '}и{' '}
-        <a href="/privacy.html" style={{ color: 'var(--primary)' }}>Политикой конфиденциальности</a>
-      </div>
-    </div>
-  );
-}
 
-function SubscriptionScreen({ onClose }) {
-  const tariff = localStorage.getItem('oktolk_tariff') || 'demo';
-  const plans = [
-    { id: 'demo', name: 'Демо', price: '0', features: ['AI чат', 'Антискам', 'Новости', 'Проверенные сайты'] },
-    { id: 'standard', name: 'Стандарт', price: '390', features: ['AI чат', 'Антискам', 'Новости', 'Голос', 'TTS'], recommended: true },
-    { id: 'pro', name: 'Про', price: '590', features: ['Всё из Стандарт', 'Здоровье', 'Документы'] }
-  ];
-  return (
-    <>
-      <div className="sheet-backdrop" onClick={onClose}/>
-      <div className="sheet" style={{ maxHeight: '90dvh', overflowY: 'auto' }}>
-        <div className="sheet-handle"/>
-        <div style={{ padding: '8px 20px 24px' }}>
-          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>Тариф</div>
-          <div style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>Выберите подходящий план</div>
-          {plans.map(plan => (
-            <div key={plan.id} style={{ border: plan.recommended ? '2px solid var(--primary)' : '1px solid var(--border)', borderRadius: 16, padding: '16px 18px', marginBottom: 12, background: plan.recommended ? 'var(--primary-tint)' : 'var(--surface)', position: 'relative' }}>
-              {plan.recommended && <div style={{ position: 'absolute', top: -12, right: 16, background: 'var(--primary)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999 }}>ПОПУЛЯРНЫЙ</div>}
-              {tariff === plan.id && <div style={{ position: 'absolute', top: -12, left: 16, background: 'var(--success)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999 }}>ТЕКУЩИЙ</div>}
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{plan.name}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: plan.recommended ? 'var(--primary)' : 'var(--text)' }}>{plan.price === '0' ? 'Бесплатно' : plan.price + ' ₽/мес'}</div>
+        {/* Поиск идёт */}
+        {state === 'searching' && (
+          <>
+            <div style={{ background:'var(--primary)', borderRadius:14, padding:'10px 14px', fontSize:14, color:'#fff', textAlign:'center' }}>{query}</div>
+            <div style={{ background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:14, padding:'12px 14px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'var(--text-subtle)', marginBottom:10 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                Агент ищет
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-                {plan.features.map((f, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-                    <span style={{ color: 'var(--success)' }}>✓</span>
-                    <span style={{ color: 'var(--text-muted)' }}>{f}</span>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {stages.map((s, i) => (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:10, background: i < stageIdx ? 'var(--success-tint)' : i === stageIdx ? 'var(--primary-tint)' : 'var(--surface-2)', fontSize:13, color: i < stageIdx ? 'var(--success)' : i === stageIdx ? 'var(--primary)' : 'var(--text-muted)', fontWeight: i === stageIdx ? 600 : 400 }}>
+                    {i < stageIdx
+                      ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      : i === stageIdx
+                        ? <div style={{ width:11, height:11, borderRadius:'50%', border:'2px solid var(--primary)', borderTopColor:'transparent', animation:'spin 0.8s linear infinite', flexShrink:0 }}/>
+                        : <div style={{ width:11, height:11, borderRadius:'50%', border:'1.5px solid var(--border)', flexShrink:0 }}/>
+                    }
+                    {s}
                   </div>
                 ))}
               </div>
-              {tariff !== plan.id && plan.price !== '0' && (
-                <button onClick={() => alert('Оплата через ЮKassa — скоро!')} style={{ width: '100%', padding: '12px', borderRadius: 12, background: plan.recommended ? 'var(--primary)' : 'var(--surface-2)', color: plan.recommended ? '#fff' : 'var(--text)', border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
-                  Подключить за {plan.price} ₽/мес
-                </button>
-              )}
-              {tariff === plan.id && plan.id !== 'demo' && (
-                <button onClick={() => { localStorage.setItem('oktolk_tariff','demo'); alert('Подписка отменена'); onClose(); }} style={{ width: '100%', padding: '12px', borderRadius: 12, background: 'var(--danger-tint)', color: 'var(--danger)', border: 'none', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
-                  Отменить подписку
-                </button>
-              )}
             </div>
-          ))}
-          <div style={{ marginTop: 16, textAlign: 'center', fontSize: 12, color: 'var(--text-subtle)' }}>
-            Оплата через ЮKassa. Отменить можно в любой момент.<br/>
-            <a href="/terms.html" style={{ color: 'var(--primary)' }}>Условия</a>{' · '}
-            <a href="/privacy.html" style={{ color: 'var(--primary)' }}>Политика</a>
-          </div>
-        </div>
+          </>
+        )}
+
+        {/* Результаты */}
+        {state === 'results' && curTab !== 'saved' && (
+          <>
+            <div style={{ background:'var(--primary)', borderRadius:14, padding:'10px 14px', fontSize:14, color:'#fff', textAlign:'center' }}>{query}</div>
+            {getVisible().length === 0 && (
+              <div style={{ background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:14, padding:'16px 14px', textAlign:'center' }}>
+                <div style={{ fontSize:14, fontWeight:600, marginBottom:6 }}>Ничего не нашлось</div>
+                <div style={{ fontSize:13, color:'var(--text-muted)' }}>Попробуйте другой запрос</div>
+              </div>
+            )}
+            {getVisible().length > 0 && (
+              <div style={{ background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:14, padding:'12px 14px', fontSize:14 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'var(--text-subtle)', marginBottom:8 }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  Нашёл {getVisible().length} {getVisible().length === 1 ? 'вариант' : 'варианта'}
+                </div>
+                <div style={{ fontSize:14, color:'var(--text)', lineHeight:1.5 }}>Смотрите ниже — можно пролистать, открыть или сохранить</div>
+              </div>
+            )}
+            {getVisible().map((item, idx) => (
+              <SearchResultCard key={idx} item={item} isSaved={saved.some(x => x.url === item.url)} onSave={() => saveResult(item)} onRemove={() => removeFromSaved(item.url)}/>
+            ))}
+          </>
+        )}
+
+        {/* Сохранённое */}
+        {curTab === 'saved' && (
+          saved.length === 0
+            ? <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'40px 0', gap:12, textAlign:'center' }}>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-subtle)" strokeWidth="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                <div style={{ fontSize:15, fontWeight:700 }}>Сохранённого нет</div>
+                <div style={{ fontSize:13, color:'var(--text-muted)', lineHeight:1.6 }}>Найдите нужный товар или услугу и нажмите «Сохранить»</div>
+              </div>
+            : saved.map((item, idx) => (
+                <SearchResultCard key={idx} item={item} isSaved={true} onSave={() => {}} onRemove={() => removeFromSaved(item.url)}/>
+              ))
+        )}
       </div>
-    </>
-  );
-}
 
-// Стабильные поля профиля (вынесены наружу, чтобы не терять фокус при вводе)
-const PF_STYLE = { width: '100%', boxSizing: 'border-box', padding: '13px 14px', minHeight: 48, borderRadius: 12, border: '0.5px solid var(--border)', background: 'var(--surface)', fontSize: 16, color: 'var(--text)', fontFamily: 'inherit', outline: 'none' };
-const PF_LABEL = { fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' };
-const PF_GROUP = { marginBottom: 14 };
-
-function PField({ p, upd, label, k, type = 'text', placeholder, unit }) {
-  return (
-    <div style={PF_GROUP}>
-      <label style={PF_LABEL}>{label}</label>
-      <div style={{ position: 'relative' }}>
-        <input type={type} value={p[k] ?? ''} placeholder={placeholder || ''}
-          onChange={e => upd(k, type === 'number' ? (e.target.value === '' ? null : Number(e.target.value)) : e.target.value)}
-          style={{ ...PF_STYLE, paddingRight: unit ? 48 : 14 }} inputMode={type === 'number' ? 'decimal' : 'text'}/>
-        {unit && <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-subtle)', pointerEvents: 'none' }}>{unit}</span>}
-      </div>
-    </div>
-  );
-}
-
-function PChoice({ p, upd, label, k, options }) {
-  return (
-    <div style={PF_GROUP}>
-      <label style={PF_LABEL}>{label}</label>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {options.map(opt => (
-          <button key={opt.v} onClick={() => upd(k, opt.v)}
-            style={{ padding: '11px 16px', borderRadius: 10, fontSize: 15, fontWeight: 500, cursor: 'pointer', border: '0.5px solid ' + (p[k] === opt.v ? 'var(--primary)' : 'var(--border)'), background: p[k] === opt.v ? 'var(--primary-tint)' : 'var(--surface)', color: p[k] === opt.v ? 'var(--primary)' : 'var(--text-muted)' }}>
-            {opt.l}
+      {/* Bottom input */}
+      <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'var(--bg)', borderTop:'0.5px solid var(--border)', padding:'10px 14px calc(16px + env(safe-area-inset-bottom))' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:14, padding:'10px 14px', marginBottom:8 }}>
+          <textarea ref={taRef} value={input} rows={1}
+            onChange={e => { setInput(e.target.value); e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
+            onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); doSearch(); } }}
+            placeholder="Найдите товар, услугу, мероприятие…"
+            style={{ flex:1, border:'none', outline:'none', font:'inherit', fontSize:15, resize:'none', overflow:'hidden', minHeight:24, background:'transparent' }}/>
+          <button onClick={() => doSearch()} disabled={!input.trim()} style={{ width:36, height:36, borderRadius:10, background:input.trim()?'var(--primary)':'var(--surface-2)', border:'none', cursor:input.trim()?'pointer':'default', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={input.trim()?'white':'var(--text-subtle)'} strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PArea({ p, upd, label, k, placeholder }) {
-  return (
-    <div style={PF_GROUP}>
-      <label style={PF_LABEL}>{label}</label>
-      <textarea value={p[k] ?? ''} placeholder={placeholder || ''} rows={2}
-        onChange={e => upd(k, e.target.value)}
-        style={{ ...PF_STYLE, resize: 'vertical', minHeight: 64, lineHeight: 1.4 }}/>
-    </div>
-  );
-}
-
-function PSlider({ p, upd, label, k, labels, ticks }) {
-  const val = Number(p[k] ?? 0);
-  const pct = (val / (labels.length - 1)) * 100;
-  return (
-    <div style={PF_GROUP}>
-      <label style={PF_LABEL}>{label}</label>
-      <div style={{ background: 'var(--surface)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '16px 16px 12px' }}>
-        <div style={{ textAlign: 'center', fontSize: 16, fontWeight: 700, color: '#1F6E54', marginBottom: 14, minHeight: 22 }}>{labels[val]}</div>
-        <input type="range" className="h-slider" min={0} max={labels.length - 1} step={1} value={val}
-          onChange={e => upd(k, Number(e.target.value))}
-          style={{ background: 'linear-gradient(to right, #1F6E54 0%, #1F6E54 ' + pct + '%, var(--surface-2) ' + pct + '%)' }}/>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-          {ticks.map((t, i) => (
-            <span key={i} style={{ fontSize: 10, color: 'var(--text-subtle)', flex: 1, textAlign: i === 0 ? 'left' : i === ticks.length - 1 ? 'right' : 'center' }}>{t}</span>
-          ))}
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={handleLink} style={btnStyle}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            Ссылка
+          </button>
+          <button onClick={handlePhoto} style={btnStyle}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Фото
+          </button>
+          <VoiceButton onResult={(text) => { setInput(text); doSearch(text); }}/>
         </div>
       </div>
     </div>
   );
 }
+
+function SearchResultCard({ item, isSaved, onSave, onRemove }) {
+  const catColors = { goods:'var(--primary)', services:'var(--success)', leisure:'#8B5CF6', gov:'var(--warn)' };
+  const catLabels = { goods:'Товары', services:'Услуги', leisure:'Досуг', gov:'Госорганы' };
+  const clr = catColors[item.cat] || 'var(--primary)';
+  const isSavedNow = isSaved;
+  return (
+    <div style={{ background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:14, overflow:'hidden' }}>
+      {/* Тело */}
+      <div style={{ padding:'14px 14px 0' }}>
+        {/* Категория */}
+        <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:6, fontSize:11, fontWeight:600, background:clr+'18', color:clr, marginBottom:8 }}>
+          {catLabels[item.cat] || 'Результат'}
+        </div>
+        <div style={{ fontSize:15, fontWeight:700, lineHeight:1.35, marginBottom:5 }}>{item.title}</div>
+        {item.description && <div style={{ fontSize:13, color:'var(--text-muted)', lineHeight:1.55, marginBottom:8 }}>{item.description}</div>}
+        {item.price && <div style={{ fontSize:20, fontWeight:800, marginBottom:8 }}>{item.price}{item.old_price && <span style={{ fontSize:13, color:'var(--text-subtle)', textDecoration:'line-through', marginLeft:6, fontWeight:500 }}>{item.old_price}</span>}</div>}
+        {/* Источник — кликабельная ссылка */}
+        <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 10px', background:'var(--surface-2)', borderRadius:8, border:'0.5px solid var(--border)', textDecoration:'none', color:'var(--text-muted)', fontSize:12, fontWeight:500, marginBottom:12 }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          <span style={{ flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.source || item.url}</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+      {/* Кнопки */}
+      <div style={{ display:'flex', borderTop:'0.5px solid var(--border)' }}>
+        <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'12px', fontSize:13, fontWeight:600, color:'var(--text-muted)', textDecoration:'none', borderRight:'0.5px solid var(--border)' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Открыть
+        </a>
+        {isSavedNow
+          ? <button onClick={onRemove} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'12px', fontSize:13, fontWeight:600, color:'var(--danger)', background:'none', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+              Удалить
+            </button>
+          : <button onClick={onSave} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'12px', fontSize:13, fontWeight:600, color:'var(--success)', background:'none', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              Сохранить
+            </button>
+        }
+      </div>
+    </div>
+  );
+}
+
+
 
 function ProfileSettingsSheet({ onClose }) {
   const [tab, setTab] = React.useState('personal');
@@ -4943,23 +4710,23 @@ function authHeaders(extra) {
 }
 async function authGet(url) {
   const token = localStorage.getItem('oktolk_token') || '';
-  if (!token || token === 'local_demo') return null; // нет реального токена — молча возвращаем null
-  const r = await fetch(url, { headers: authHeaders() });
-  if (r.status === 401) {
-    // Диспатчим только если токен был реальным (не local_demo)
-    if (token !== 'local_demo') window.dispatchEvent(new Event('oktolk-unauth'));
-    return null;
-  }
+  if (!token) return null;
+  // Для demo-пользователей используем real demo token с бэкенда
+  const demoToken = localStorage.getItem('oktolk_demo_token') || '';
+  const effectiveToken = (token === 'local_demo' && demoToken) ? demoToken : token;
+  if (!effectiveToken || effectiveToken === 'local_demo') return null;
+  const r = await fetch(url, { headers: { 'Authorization': 'Bearer ' + effectiveToken } });
+  if (r.status === 401) { window.dispatchEvent(new Event('oktolk-unauth')); return null; }
   return r.json();
 }
 async function authSend(url, method, body) {
   const token = localStorage.getItem('oktolk_token') || '';
-  if (!token || token === 'local_demo') return null;
-  const r = await fetch(url, { method, headers: authHeaders({ 'Content-Type': 'application/json' }), body: body ? JSON.stringify(body) : undefined });
-  if (r.status === 401) {
-    if (token !== 'local_demo') window.dispatchEvent(new Event('oktolk-unauth'));
-    return null;
-  }
+  if (!token) return null;
+  const demoToken = localStorage.getItem('oktolk_demo_token') || '';
+  const effectiveToken = (token === 'local_demo' && demoToken) ? demoToken : token;
+  if (!effectiveToken || effectiveToken === 'local_demo') return null;
+  const r = await fetch(url, { method, headers: { 'Authorization': 'Bearer ' + effectiveToken, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { window.dispatchEvent(new Event('oktolk-unauth')); return null; }
   return r.json();
 }
 

@@ -1045,8 +1045,99 @@ async def fetch_tavily_news() -> list:
 async def get_news():
     return await fetch_tavily_news()
 
-@app.get("/api/v1/news")
-async def get_news_v1():
+@app.post("/api/v1/search")
+async def search_agent(request: Request):
+    """Агент-поисковик: Tavily Search + AI форматирование результатов"""
+    import time, aiohttp, json as _json, re as _re
+    data = await request.json()
+    query = data.get("query", "").strip()
+    image_base64 = data.get("image_base64")
+    mime_type = data.get("mime_type", "image/jpeg")
+
+    # Если фото — сначала распознаём через AI
+    if image_base64 and not query:
+        try:
+            messages = [{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_base64}"}},
+                {"type": "text", "text": "Определи что изображено на фото. Дай короткий поисковый запрос (3-5 слов) для поиска этого товара в интернете. Ответь только запросом, без пояснений."}
+            ]}]
+            query = call_ai(messages) or "товар с фото"
+        except:
+            query = "товар с фото"
+
+    if not query:
+        return {"results": [], "query": ""}
+
+    # Определяем категорию запроса
+    cat_prompt = f"Запрос: '{query}'. Определи категорию: goods (товары, покупки), services (услуги, мастера), leisure (досуг, мероприятия, музеи, кино, рестораны), gov (госуслуги, банки, МФЦ). Ответь одним словом."
+    try:
+        loop = __import__('asyncio').get_event_loop()
+        cat_result = await loop.run_in_executor(None, lambda: call_ai([{"role": "user", "content": cat_prompt}]))
+        cat = "goods"
+        for c in ["goods", "services", "leisure", "gov"]:
+            if c in (cat_result or "").lower():
+                cat = c
+                break
+    except:
+        cat = "goods"
+
+    # Поиск через Tavily
+    raw_results = []
+    try:
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "api_key": TAVILY_API_KEY,
+                "query": query,
+                "search_depth": "basic",
+                "max_results": 6,
+                "include_answer": True,
+            }
+            async with session.post("https://api.tavily.com/search", json=payload, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    search_data = await resp.json()
+                    raw_results = search_data.get("results", [])
+    except Exception as e:
+        pass
+
+    if not raw_results:
+        return {"results": [], "query": query}
+
+    # AI форматирует каждый результат
+    items_text = "\n".join([f"{i+1}. Заголовок: {r.get('title','')}\nURL: {r.get('url','')}\nОписание: {r.get('content','')[:200]}" for i, r in enumerate(raw_results)])
+    format_prompt = (
+        f"Пользователь искал: '{query}'\n\n"
+        f"Найдено {len(raw_results)} результатов:\n{items_text}\n\n"
+        "Для каждого результата создай карточку. Ответь ТОЛЬКО валидным JSON массивом:\n"
+        '[{"title":"название","description":"краткое описание простым языком 1-2 предложения","price":"цена или null","old_price":"старая цена или null","source":"название сайта","url":"url","cat":"' + cat + '"}]'
+        "\nЕсли цена не указана — null. Название сайта — домен без www. Описание — простым языком."
+    )
+
+    try:
+        loop = __import__('asyncio').get_event_loop()
+        ai_result = await loop.run_in_executor(None, lambda: call_ai([{"role": "user", "content": format_prompt}]))
+        m = __import__('re').search(r'\[.*\]', ai_result or "", __import__('re').DOTALL)
+        if m:
+            results = _json.loads(m.group(0))
+            # Гарантируем поле cat
+            for r in results:
+                r["cat"] = r.get("cat", cat)
+            return {"results": results[:6], "query": query}
+    except Exception as e:
+        pass
+
+    # Fallback — возвращаем сырые результаты
+    fallback = []
+    for r in raw_results[:6]:
+        domain = r.get("url", "").split("/")[2].replace("www.", "") if r.get("url") else "Источник"
+        fallback.append({
+            "title": r.get("title", "")[:100],
+            "description": r.get("content", "")[:200],
+            "price": None, "old_price": None,
+            "source": domain, "url": r.get("url", ""), "cat": cat
+        })
+    return {"results": fallback, "query": query}
+
+
     """Новости через Tavily API с AI-упрощением, кеш 1 час"""
     return await fetch_tavily_news()
 
