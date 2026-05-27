@@ -295,23 +295,60 @@ SYSTEM_PROMPTS = {
 }
 
 def call_ai(messages, model="deepseek-chat"):
-    # Пробуем AItunnel (основной), при ошибке — DeepSeek напрямую
-    try:
-        if AITUNNEL_API_KEY:
+    # Основной: DeepSeek напрямую (дешевле в разы)
+    if DEEPSEEK_API_KEY:
+        try:
+            headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+            data = {"model": "deepseek-chat", "messages": messages, "max_tokens": 800, "temperature": 0.7}
+            response = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=data, timeout=30)
+            if response.status_code == 200:
+                return response.json()["choices"][0]["message"]["content"]
+        except Exception:
+            pass
+    # Fallback: AItunnel
+    if AITUNNEL_API_KEY:
+        try:
             headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
             data = {"model": "deepseek-v4-flash", "messages": messages, "max_tokens": 800, "temperature": 0.7}
             response = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
             if response.status_code == 200:
                 return response.json()["choices"][0]["message"]["content"]
-    except Exception:
-        pass
-    # Fallback — DeepSeek напрямую
-    if DEEPSEEK_API_KEY:
-        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-        data = {"model": "deepseek-chat", "messages": messages, "max_tokens": 800}
-        response = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=data, timeout=30)
-        return response.json()["choices"][0]["message"]["content"]
+        except Exception:
+            pass
     raise Exception("AI недоступен: нет рабочих API ключей")
+
+def _ds_headers():
+    return {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+
+def _ds_post(messages, system=None, max_tokens=800):
+    """Прямой вызов DeepSeek API с fallback на AItunnel"""
+    msgs = []
+    if system:
+        msgs.append({"role": "system", "content": system})
+    msgs.extend(messages)
+    # DeepSeek прямой
+    if DEEPSEEK_API_KEY:
+        try:
+            r = requests.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers=_ds_headers(),
+                json={"model": "deepseek-chat", "messages": msgs, "max_tokens": max_tokens, "temperature": 0.7},
+                timeout=30
+            )
+            if r.status_code == 200:
+                return r.json()["choices"][0]["message"]["content"].strip()
+        except Exception:
+            pass
+    # Fallback AItunnel
+    if AITUNNEL_API_KEY:
+        r = requests.post(
+            f"{AITUNNEL_BASE_URL}chat/completions",
+            headers={"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"},
+            json={"model": "deepseek-v4-flash", "messages": msgs, "max_tokens": max_tokens, "temperature": 0.7},
+            timeout=30
+        )
+        return r.json()["choices"][0]["message"]["content"].strip()
+    raise Exception("AI недоступен")
 
 # ── API v1 ───────────────────────────────────────────────────────
 
@@ -1047,99 +1084,138 @@ async def get_news():
 
 @app.post("/api/v1/search")
 async def search_agent(request: Request):
-    """Агент-поисковик: Tavily Search + AI форматирование результатов"""
-    import time, aiohttp, json as _json, re as _re
+    """Агент-поисковик: Wildberries + Tavily + Gemini Vision + AI форматирование"""
+    import aiohttp, json as _json, re as _re, asyncio as _asyncio
     data = await request.json()
     query = data.get("query", "").strip()
     image_base64 = data.get("image_base64")
     mime_type = data.get("mime_type", "image/jpeg")
 
-    # Если фото — сначала распознаём через AI
+    # ── 1. ФОТО → QUERY через Gemini Vision ──────────────────────
     if image_base64 and not query:
         try:
-            messages = [{"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_base64}"}},
-                {"type": "text", "text": "Определи что изображено на фото. Дай короткий поисковый запрос (3-5 слов) для поиска этого товара в интернете. Ответь только запросом, без пояснений."}
-            ]}]
-            query = call_ai(messages) or "товар с фото"
+            import httpx
+            r = httpx.post(
+                f"{os.getenv('AITUNNEL_BASE_URL','https://api.aitunnel.ru/v1/')}chat/completions",
+                headers={"Authorization": f"Bearer {os.getenv('AITUNNEL_API_KEY','')}", "Content-Type": "application/json"},
+                json={"model": "gemini-2.5-flash-lite", "max_tokens": 100, "messages": [{"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_base64}"}},
+                    {"type": "text", "text": "Что на фото? Дай поисковый запрос 3-5 слов для поиска этого товара на маркетплейсе. Только запрос, без пояснений."}
+                ]}]}, timeout=10
+            )
+            query = r.json()["choices"][0]["message"]["content"].strip() or "товар с фото"
         except:
             query = "товар с фото"
 
     if not query:
         return {"results": [], "query": ""}
 
-    # Определяем категорию запроса
-    cat_prompt = f"Запрос: '{query}'. Определи категорию: goods (товары, покупки), services (услуги, мастера), leisure (досуг, мероприятия, музеи, кино, рестораны), gov (госуслуги, банки, МФЦ). Ответь одним словом."
+    # ── 2. КЛАССИФИКАЦИЯ ЗАПРОСА ──────────────────────────────────
+    loop = _asyncio.get_event_loop()
+    cat_prompt = (
+        f"Запрос: '{query}'\n"
+        "Категория: goods (товары, купить, маркетплейс), leisure (кино, театр, музей, ресторан, концерт, экскурсия), services (мастер, услуга, ремонт, доставка). "
+        "Ответь одним словом из: goods, leisure, services"
+    )
     try:
-        loop = __import__('asyncio').get_event_loop()
-        cat_result = await loop.run_in_executor(None, lambda: call_ai([{"role": "user", "content": cat_prompt}]))
-        cat = "goods"
-        for c in ["goods", "services", "leisure", "gov"]:
-            if c in (cat_result or "").lower():
-                cat = c
-                break
+        cat_raw = await loop.run_in_executor(None, lambda: call_ai([{"role": "user", "content": cat_prompt}]))
+        cat = next((c for c in ["goods", "leisure", "services"] if c in (cat_raw or "").lower()), "goods")
     except:
         cat = "goods"
 
-    # Поиск через Tavily
     raw_results = []
-    try:
-        async with aiohttp.ClientSession() as session:
-            payload = {
-                "api_key": TAVILY_API_KEY,
-                "query": query,
-                "search_depth": "basic",
-                "max_results": 6,
-                "include_answer": True,
+
+    # ── 3. ПОИСК ПО ИСТОЧНИКАМ ───────────────────────────────────
+    async with aiohttp.ClientSession() as session:
+
+        # ── Товары: Wildberries API (бесплатно, лучший для РФ) ──
+        if cat == "goods":
+            try:
+                async with session.get(
+                    "https://search.wb.ru/exactmatch/ru/common/v4/search",
+                    params={"query": query, "resultset": "catalog", "limit": 6, "sort": "popular", "lang": "ru", "curr": "rub"},
+                    headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"},
+                    timeout=aiohttp.ClientTimeout(total=8)
+                ) as resp:
+                    if resp.status == 200:
+                        wb_data = await resp.json()
+                        products = wb_data.get("data", {}).get("products", [])
+                        for p in products[:6]:
+                            pid = p.get("id", "")
+                            brand = p.get("brand", "")
+                            name = p.get("name", "")
+                            price = p.get("salePriceU", p.get("priceU", 0))
+                            price_old = p.get("priceU", 0)
+                            rating = p.get("rating", 0)
+                            reviews = p.get("feedbacks", 0)
+                            raw_results.append({
+                                "title": f"{brand} {name}".strip(),
+                                "description": f"Рейтинг {rating}/5, {reviews} отзывов" if reviews else "",
+                                "price": f"{int(price/100):,} ₽".replace(",", " ") if price else None,
+                                "old_price": f"{int(price_old/100):,} ₽".replace(",", " ") if price_old and price_old > price else None,
+                                "source": "Wildberries",
+                                "url": f"https://www.wildberries.ru/catalog/{pid}/detail.aspx",
+                                "cat": "goods"
+                            })
+            except Exception as e:
+                pass
+
+        # ── Досуг и услуги: Tavily с таргетингом по сайтам ──────
+        if not raw_results or cat in ["leisure", "services"]:
+            site_hints = {
+                "leisure": "site:afisha.ru OR site:kinopoisk.ru OR site:kassir.ru OR site:mos.ru OR site:kudago.com",
+                "services": "site:profi.ru OR site:youdo.ru OR site:remontnik.ru",
+                "goods": ""
             }
-            async with session.post("https://api.tavily.com/search", json=payload, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-                if resp.status == 200:
-                    search_data = await resp.json()
-                    raw_results = search_data.get("results", [])
-    except Exception as e:
-        pass
+            tavily_query = f"{query} {site_hints.get(cat, '')}".strip()
+            try:
+                async with session.post(
+                    "https://api.tavily.com/search",
+                    json={"api_key": TAVILY_API_KEY, "query": tavily_query, "search_depth": "basic", "max_results": 6, "include_answer": False},
+                    timeout=aiohttp.ClientTimeout(total=12)
+                ) as resp:
+                    if resp.status == 200:
+                        tavily_data = await resp.json()
+                        for r in tavily_data.get("results", []):
+                            url = r.get("url", "")
+                            domain = url.split("/")[2].replace("www.", "") if url and url.startswith("http") else "Источник"
+                            raw_results.append({
+                                "title": r.get("title", "")[:120],
+                                "description": r.get("content", "")[:250],
+                                "price": None, "old_price": None,
+                                "source": domain, "url": url, "cat": cat
+                            })
+            except:
+                pass
 
     if not raw_results:
         return {"results": [], "query": query}
 
-    # AI форматирует каждый результат
-    items_text = "\n".join([f"{i+1}. Заголовок: {r.get('title','')}\nURL: {r.get('url','')}\nОписание: {r.get('content','')[:200]}" for i, r in enumerate(raw_results)])
-    format_prompt = (
-        f"Пользователь искал: '{query}'\n\n"
-        f"Найдено {len(raw_results)} результатов:\n{items_text}\n\n"
-        "Для каждого результата создай карточку. Ответь ТОЛЬКО валидным JSON массивом:\n"
-        '[{"title":"название","description":"краткое описание простым языком 1-2 предложения","price":"цена или null","old_price":"старая цена или null","source":"название сайта","url":"url","cat":"' + cat + '"}]'
-        "\nЕсли цена не указана — null. Название сайта — домен без www. Описание — простым языком."
-    )
+    # ── 4. AI ФОРМАТИРУЕТ КАРТОЧКИ ──────────────────────────────
+    # Для Wildberries карточки уже готовы — только досуг/услуги обрабатываем
+    if cat in ["leisure", "services"]:
+        items_text = "\n".join([
+            f"{i+1}. Заголовок: {r['title']}\nURL: {r['url']}\nОписание: {r['description'][:200]}"
+            for i, r in enumerate(raw_results[:6])
+        ])
+        fmt_prompt = (
+            f"Пользователь искал: '{query}'\n\nРезультаты поиска:\n{items_text}\n\n"
+            "Для каждого пункта сделай карточку. Ответь ТОЛЬКО JSON массивом, без markdown:\n"
+            f'[{{"title":"название","description":"что это, 1-2 простых предложения","price":"цена или null","old_price":null,"source":"сайт (домен)","url":"url","cat":"{cat}"}}]\n'
+            "Описание — простым языком. Если цена не указана явно — null. Не придумывай цену."
+        )
+        try:
+            ai_raw = await loop.run_in_executor(None, lambda: call_ai([{"role": "user", "content": fmt_prompt}]))
+            m = _re.search(r'\[.*\]', ai_raw or "", _re.DOTALL)
+            if m:
+                formatted = _json.loads(m.group(0))
+                for item in formatted:
+                    item["cat"] = cat
+                return {"results": formatted[:6], "query": query}
+        except:
+            pass
 
-    try:
-        loop = __import__('asyncio').get_event_loop()
-        ai_result = await loop.run_in_executor(None, lambda: call_ai([{"role": "user", "content": format_prompt}]))
-        m = __import__('re').search(r'\[.*\]', ai_result or "", __import__('re').DOTALL)
-        if m:
-            results = _json.loads(m.group(0))
-            # Гарантируем поле cat
-            for r in results:
-                r["cat"] = r.get("cat", cat)
-            return {"results": results[:6], "query": query}
-    except Exception as e:
-        pass
-
-    # Fallback — возвращаем сырые результаты
-    fallback = []
-    for r in raw_results[:6]:
-        domain = r.get("url", "").split("/")[2].replace("www.", "") if r.get("url") else "Источник"
-        fallback.append({
-            "title": r.get("title", "")[:100],
-            "description": r.get("content", "")[:200],
-            "price": None, "old_price": None,
-            "source": domain, "url": r.get("url", ""), "cat": cat
-        })
-    return {"results": fallback, "query": query}
-
-
-    """Новости через Tavily API с AI-упрощением, кеш 1 час"""
-    return await fetch_tavily_news()
+    return {"results": raw_results[:6], "query": query}
 
 @app.get("/sites")
 async def get_sites():
@@ -1485,9 +1561,7 @@ class AntiscamChatRequest(BaseModel):
 
 @app.post("/api/v1/antiscam/chat")
 async def antiscam_chat(req: AntiscamChatRequest):
-    """Диалог в контексте антискам анализа"""
-    if not AITUNNEL_API_KEY:
-        raise HTTPException(status_code=503, detail="AI недоступен")
+    """Диалог в контексте антискам анализа — DeepSeek прямой"""
     try:
         system = """Ты консультант по защите от мошенников OkTolk.
 Ты уже проанализировал материалы пользователя и знаешь контекст ситуации.
@@ -1511,21 +1585,12 @@ async def antiscam_chat(req: AntiscamChatRequest):
         messages = [{"role": "system", "content": system}]
         messages.append({"role": "user", "content": f"Контекст проверки:\n{req.facts}"})
         messages.append({"role": "assistant", "content": "Понял, я изучил материалы. Задавайте вопросы."})
-        
         for h in (req.history or [])[-6:]:
             if h.get("role") and h.get("content"):
                 messages.append({"role": h["role"], "content": h["content"]})
-        
         messages.append({"role": "user", "content": req.question})
 
-        headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
-        data = {
-            "model": "gemini-2.5-flash-lite",
-            "messages": messages,
-            "max_tokens": 400
-        }
-        response = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
-        reply = response.json()["choices"][0]["message"]["content"].strip()
+        reply = _ds_post(messages[1:], system=system, max_tokens=400)
         return {"reply": reply}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
@@ -1560,16 +1625,21 @@ merchant — название места если есть, иначе null.
 Сумма не найдена — верни [{"error":"no_amount"}]."""
 
         if req.image_base64:
+            # Фото чека — Gemini Vision через AItunnel (мультимодальный)
+            headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
             messages = [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": f"data:{req.mime_type};base64,{req.image_base64}"}},
                 {"type": "text", "text": FINANCE_PROMPT}
             ]}]
+            data = {"model": "gemini-2.5-flash-lite", "messages": messages, "max_tokens": 600}
+            response = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
+            result_text = response.json()["choices"][0]["message"]["content"].strip()
         else:
-            messages = [{"role": "user", "content": f"{FINANCE_PROMPT}\n\nТекст: {req.text}"}]
-
-        data = {"model": "gemini-2.5-flash-lite", "messages": messages, "max_tokens": 600}
-        response = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
-        result_text = response.json()["choices"][0]["message"]["content"].strip()
+            # Текст — DeepSeek прямой (дешевле)
+            result_text = _ds_post(
+                [{"role": "user", "content": f"{FINANCE_PROMPT}\n\nТекст: {req.text}"}],
+                max_tokens=600
+            )
 
         import re as re_mod
         json_match = re_mod.search(r"(\[.*?\]|\{.*?\})", result_text, re_mod.DOTALL)
