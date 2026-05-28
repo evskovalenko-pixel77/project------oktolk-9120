@@ -1082,6 +1082,11 @@ async def fetch_tavily_news() -> list:
 async def get_news():
     return await fetch_tavily_news()
 
+@app.get("/api/v1/news")
+async def get_news_v1():
+    """Новости через Tavily API с AI-упрощением, кеш 1 час"""
+    return await fetch_tavily_news()
+
 @app.post("/api/v1/search")
 async def search_agent(request: Request):
     """Агент-поисковик: Wildberries + Tavily + AI (синхронный, надёжный)"""
