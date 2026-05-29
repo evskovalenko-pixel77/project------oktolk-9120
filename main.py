@@ -1240,10 +1240,32 @@ async def search_agent(request: Request):
                 for it in items:
                     url = it.get("url", "")
                     domain = url.split("/")[2].replace("www.", "") if url.startswith("http") else "источник"
+                    description = (it.get("content") or "")[:250]
+                    # Извлекаем цены из описания
+                    price = None
+                    old_price = None
+                    # Ищем все цены в формате "1 234 ₽" или "1234₽" или "1234 руб"
+                    prices = _re.findall(r'(\d[\d\s]{2,}\s*[₽рРP])', description)
+                    if prices:
+                        # Чистим: убираем не-цифры кроме разделителей
+                        clean = [_re.sub(r'\s+', ' ', p).strip() for p in prices[:2]]
+                        price = clean[0]
+                        if len(clean) > 1:
+                            # Меньшая - текущая, бОльшая - старая
+                            n0 = int(_re.sub(r'\D', '', clean[0]) or 0)
+                            n1 = int(_re.sub(r'\D', '', clean[1]) or 0)
+                            if n0 < n1:
+                                price, old_price = clean[0], clean[1]
+                            elif n1 < n0:
+                                price, old_price = clean[1], clean[0]
+                    # Чистим title от хвостов типа " - Wildberries", " - Купить в интернет ..."
+                    title = (it.get("title") or "").strip()
+                    title = _re.sub(r'\s*[-–—|]\s*(Купить|Wildberries|Ozon|Купить в.*)$', '', title, flags=_re.IGNORECASE)
+                    title = _re.sub(r'\s*\.\.\.\s*-?\s*\w+$', '', title)
                     raw_results.append({
-                        "title": (it.get("title") or "")[:120],
-                        "description": (it.get("content") or "")[:250],
-                        "price": None, "old_price": None,
+                        "title": title[:120],
+                        "description": description,
+                        "price": price, "old_price": old_price,
                         "source": domain, "url": url, "cat": cat
                     })
             else:
