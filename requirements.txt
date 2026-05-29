@@ -10,3 +10,4 @@ requests
 aiofiles
 asyncpg
 aiohttp
+pywebpush

@@ -1,4 +1,4 @@
-import sys, os, requests, json, re, hashlib, secrets
+import sys, os, requests, json, re, hashlib, secrets, asyncio
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +22,174 @@ DEEPSEEK_API_KEY  = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1/"
 SECRET_KEY        = os.getenv("SECRET_KEY", "oktolk-super-secret-key-2026-production")
 
+# VAPID ключи для Web Push (хранить в env Amvera!)
+VAPID_PUBLIC_KEY  = os.getenv("VAPID_PUBLIC_KEY",  "BKkeZ1rrVz29eRFV9oG0Wd3JVoncDcNspP4AJRv-6mdTeHg1oQCCUbLBNVpfaU8Ew8nkPwT4Q-l44lzciK_n2-k")
+VAPID_PRIVATE_PEM = os.getenv("VAPID_PRIVATE_PEM", "")  # полный PEM в env переменной
+VAPID_CLAIMS      = {"sub": "mailto:info@oktolk.ru"}
+
+# ── Web Push functions ────────────────────────────────────────────
+
+def send_web_push(subscription_info: dict, title: str, body: str, icon: str = "/icon-192.png"):
+    """Отправить Web Push уведомление через pywebpush"""
+    if not VAPID_PRIVATE_PEM:
+        print("[push] VAPID_PRIVATE_PEM не задан — пропуск")
+        return False
+    try:
+        from pywebpush import webpush, WebPushException
+        webpush(
+            subscription_info=subscription_info,
+            data=json.dumps({"title": title, "body": body, "icon": icon}),
+            vapid_private_key=VAPID_PRIVATE_PEM,
+            vapid_claims=VAPID_CLAIMS
+        )
+        return True
+    except Exception as e:
+        print(f"[push] Ошибка отправки: {e}")
+        return False
+
+async def push_scheduler():
+    """Фоновой планировщик — проверяет расписание лекарств каждую минуту"""
+    import json as _json
+    from datetime import date, time as dtime
+    print("[push_scheduler] Запущен")
+    while True:
+        try:
+            await asyncio.sleep(60)
+            if not db_pool or not VAPID_PRIVATE_PEM:
+                continue
+            now = datetime.now()
+            # Окно: уведомляем за 10 минут (±30 сек)
+            target_time = (now + timedelta(minutes=10)).strftime("%H:%M")
+            async with db_pool.acquire() as conn:
+                # Берём все активные лекарства с уведомлениями
+                meds = await conn.fetch(
+                    "SELECT m.*, u.id as uid FROM medications m JOIN users u ON m.user_id=u.id "
+                    "WHERE m.is_active=TRUE AND m.notify=TRUE"
+                )
+                for med in meds:
+                    times = _json.loads(med.get("times_json") or "[]")
+                    if target_time not in times:
+                        continue
+                    # Проверяем что не принято сегодня
+                    taken = _json.loads(med.get("taken_today") or "[]")
+                    if target_time in taken:
+                        continue
+                    # Отправляем push всем подпискам пользователя
+                    subs = await conn.fetch(
+                        "SELECT * FROM push_subscriptions WHERE user_id=$1", med["user_id"]
+                    )
+                    for sub in subs:
+                        subscription_info = {
+                            "endpoint": sub["endpoint"],
+                            "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}
+                        }
+                        send_web_push(
+                            subscription_info,
+                            title=f"Пора принять {med['name']}",
+                            body=f"Приём в {target_time}{' · ' + med['dose'] if med.get('dose') else ''}"
+                        )
+                        print(f"[push] Отправлено: {med['name']} → user {med['user_id']}")
+        except Exception as e:
+            print(f"[push_scheduler] Ошибка: {e}")
+
+# ── SW.js с push-обработчиком ─────────────────────────────────────
+
+SW_CONTENT = """
+const CACHE = 'oktolk-v4';
+const PRECACHE = ['/', '/manifest.json'];
+
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+  ).then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+});
+
+/* ── Web Push ── */
+self.addEventListener('push', e => {
+  let data = { title: 'OkTolk', body: 'Напоминание о приёме лекарств' };
+  try { data = e.data ? e.data.json() : data; } catch(err) {}
+  e.waitUntil(self.registration.showNotification(data.title || 'OkTolk', {
+    body: data.body || '',
+    icon: data.icon || '/icon-192.png',
+    badge: '/icon-192.png',
+    vibrate: [200, 100, 200],
+    tag: 'meds-reminder',
+    requireInteraction: true,
+    actions: [{ action: 'open', title: 'Открыть' }]
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    const c = cs.find(x => x.url.includes('oktolk.ru'));
+    return c ? c.focus() : clients.openWindow('/');
+  }));
+});
+"""
+
+@app.get("/sw.js")
+async def service_worker():
+    from fastapi.responses import Response
+    return Response(content=SW_CONTENT, media_type="application/javascript",
+                   headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
+
+# ── Push API endpoints ────────────────────────────────────────────
+
+@app.get("/api/v1/push/vapid-key")
+async def get_vapid_key():
+    """Возвращает VAPID public key для подписки на push"""
+    return {"public_key": VAPID_PUBLIC_KEY}
+
+class PushSubscriptionRequest(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str
+
+@app.post("/api/v1/push/subscribe")
+async def subscribe_push(req: PushSubscriptionRequest, user=Depends(get_current_user)):
+    """Сохранить push-подписку пользователя"""
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh=$3, auth=$4
+        """, user["id"], req.endpoint, req.p256dh, req.auth)
+    return {"status": "subscribed"}
+
+@app.delete("/api/v1/push/subscribe")
+async def unsubscribe_push(request: Request, user=Depends(get_current_user)):
+    """Удалить push-подписку"""
+    data = await request.json()
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM push_subscriptions WHERE user_id=$1 AND endpoint=$2",
+            user["id"], data.get("endpoint", "")
+        )
+    return {"status": "unsubscribed"}
+
+@app.post("/api/v1/push/test")
+async def test_push(user=Depends(get_current_user)):
+    """Тестовый push для проверки"""
+    async with db_pool.acquire() as conn:
+        subs = await conn.fetch("SELECT * FROM push_subscriptions WHERE user_id=$1", user["id"])
+    if not subs:
+        return {"status": "no_subscriptions"}
+    for sub in subs:
+        send_web_push(
+            {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
+            "OkTolk — тест уведомлений",
+            "Push-уведомления работают! Лекарства будут напоминать вовремя."
+        )
+    return {"status": "sent", "count": len(subs)}
+
 DB_HOST = os.getenv("DB_HOST", "amvera-kes-cnpg-oktolk-db-rw")
 DB_PORT = int(os.getenv("DB_PORT", "5432"))
 DB_NAME = os.getenv("DB_NAME", "oktolk")
@@ -43,6 +211,9 @@ async def startup():
         db_pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=10)
         await init_db()
         print("✅ PostgreSQL connected")
+        # Запускаем планировщик push-уведомлений
+        asyncio.create_task(push_scheduler())
+        print("✅ Push scheduler started")
     except Exception as e:
         print(f"⚠️ PostgreSQL not available: {e}")
 
@@ -92,6 +263,16 @@ async def init_db():
                 start_date  DATE,
                 end_date    DATE,
                 is_active   BOOLEAN DEFAULT TRUE
+            );
+
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                endpoint    TEXT NOT NULL,
+                p256dh      TEXT NOT NULL,
+                auth        TEXT NOT NULL,
+                created_at  TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, endpoint)
             );
 
             CREATE TABLE IF NOT EXISTS finance_records (
