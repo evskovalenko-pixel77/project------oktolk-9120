@@ -1284,7 +1284,49 @@ async def search_agent(request: Request):
     print(f"[search] returning {len(raw_results)} valid results")
     return {"results": raw_results[:6], "query": query, "cat": cat}
 
-@app.get("/sites")
+@app.get("/manifest.json")
+async def manifest():
+    """PWA Manifest — fullscreen скрывает браузер и системную навигацию Android"""
+    from fastapi.responses import JSONResponse
+    return JSONResponse({
+        "name": "OkTolk — AI Помощник",
+        "short_name": "OkTolk",
+        "description": "Простой AI-помощник: защита от мошенников, здоровье, финансы, поиск",
+        "start_url": "/",
+        "scope": "/",
+        "display": "fullscreen",
+        "display_override": ["fullscreen", "standalone", "minimal-ui"],
+        "orientation": "portrait",
+        "background_color": "#FAFAF7",
+        "theme_color": "#3B4FE0",
+        "lang": "ru",
+        "icons": [
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+        ],
+        "screenshots": [],
+        "categories": ["utilities", "productivity"],
+        "prefer_related_applications": False
+    }, headers={"Content-Type": "application/manifest+json", "Cache-Control": "no-cache"})
+
+@app.get("/icon-192.png")
+@app.get("/icon-512.png")
+async def icon(request: Request):
+    """Временная SVG иконка как PNG — замените на реальные PNG файлы"""
+    import base64
+    # Простая SVG иконка OkTolk в виде PNG (base64 1x1 transparent)
+    # Для продакшна — положить реальные PNG файлы в папку проекта
+    path = request.url.path
+    size = 192 if "192" in path else 512
+    svg = f'''<svg width="{size}" height="{size}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="{size}" height="{size}" rx="{size//5}" fill="#3B4FE0"/>
+      <text x="50%" y="56%" font-family="Arial" font-size="{size//3}" font-weight="bold"
+        fill="white" text-anchor="middle" dominant-baseline="middle">Ok</text>
+    </svg>'''
+    from fastapi.responses import Response
+    return Response(content=svg.encode(), media_type="image/svg+xml",
+                   headers={"Cache-Control": "public, max-age=86400"})
+
 async def get_sites():
     return [
         {"name": "Госуслуги", "url": "https://gosuslugi.ru", "description": "Государственные услуги онлайн"},
