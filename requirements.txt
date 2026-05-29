@@ -11,3 +11,4 @@ aiofiles
 asyncpg
 aiohttp
 pywebpush
+pywebpush

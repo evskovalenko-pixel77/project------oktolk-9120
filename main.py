@@ -92,6 +92,29 @@ async def push_scheduler():
         except Exception as e:
             print(f"[push_scheduler] Ошибка: {e}")
 
+# ── Auth helpers ─────────────────────────────────────────────────
+def hash_password(password: str) -> str:
+    return hashlib.sha256((password + SECRET_KEY).encode()).hexdigest()
+
+def generate_token() -> str:
+    return secrets.token_urlsafe(32)
+
+async def get_current_user(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Не авторизован")
+    token = authorization.split(" ")[1]
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        session = await conn.fetchrow(
+            "SELECT user_id FROM sessions WHERE token=$1 AND expires_at > NOW()", token
+        )
+        if not session:
+            raise HTTPException(status_code=401, detail="Токен истёк или неверный")
+        user = await conn.fetchrow("SELECT * FROM users WHERE id=$1", session["user_id"])
+        return dict(user)
+
+
 # ── SW.js с push-обработчиком ─────────────────────────────────────
 
 SW_CONTENT = """
@@ -369,28 +392,6 @@ async def init_db():
                 ('new_nav',        FALSE, 'Новая навигация v2')
             ON CONFLICT (name) DO NOTHING;
         """)
-
-# ── Auth helpers ─────────────────────────────────────────────────
-def hash_password(password: str) -> str:
-    return hashlib.sha256((password + SECRET_KEY).encode()).hexdigest()
-
-def generate_token() -> str:
-    return secrets.token_urlsafe(32)
-
-async def get_current_user(authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Не авторизован")
-    token = authorization.split(" ")[1]
-    if not db_pool:
-        raise HTTPException(status_code=503, detail="БД недоступна")
-    async with db_pool.acquire() as conn:
-        session = await conn.fetchrow(
-            "SELECT user_id FROM sessions WHERE token=$1 AND expires_at > NOW()", token
-        )
-        if not session:
-            raise HTTPException(status_code=401, detail="Токен истёк или неверный")
-        user = await conn.fetchrow("SELECT * FROM users WHERE id=$1", session["user_id"])
-        return dict(user)
 
 # ── Models ───────────────────────────────────────────────────────
 class RegisterRequest(BaseModel):
