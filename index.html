@@ -4266,62 +4266,65 @@ function SitesScreen({ onAsk }) {
 }
 
 function SearchResultCard({ item, isSaved, onSave, onRemove }) {
-  const catColors = { goods:'var(--primary)', services:'var(--success)', leisure:'#8B5CF6', gov:'var(--warn)' };
-  const catLabels = { goods:'Товары', services:'Услуги', leisure:'Досуг', gov:'Госорганы' };
+  const catColors = { goods:'var(--primary)', services:'var(--success)', leisure:'#8B5CF6' };
   const clr = catColors[item.cat] || 'var(--primary)';
-  const safeUrl = item.url || '#';
-  const safeTitle = item.title && item.title.trim() ? item.title : 'Без названия';
-  const safeSource = item.source || (item.url ? item.url.split('/')[2] : 'источник');
   const hasUrl = item.url && item.url.startsWith('http');
+  const safeUrl = hasUrl ? item.url : '#';
+  const safeTitle = (item.title || '').trim() || 'Без названия';
+  const safeSource = item.source || '';
+
+  // Извлекаем первую цену из description если не распознана
+  let price = item.price;
+  if (!price && item.description) {
+    const m = item.description.match(/(\d[\d\s]{1,6}\s*[₽Р])/);
+    if (m) price = m[1].trim();
+  }
 
   return (
-    <div style={{ background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:14, overflow:'hidden', minHeight: 120 }}>
-      <div style={{ padding:'14px 14px 12px' }}>
-        {/* Категория-бейдж */}
-        <div style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:6, fontSize:11, fontWeight:600, background:clr+'18', color:clr, marginBottom:8 }}>
-          {catLabels[item.cat] || 'Результат'}
+    <div style={{ background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:14, overflow:'hidden' }}>
+      <div style={{ padding:'12px 14px' }}>
+
+        {/* 1. Магазин — источник */}
+        {safeSource && (
+          <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:6 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <span style={{ fontSize:12, fontWeight:600, color:clr }}>{safeSource}</span>
+          </div>
+        )}
+
+        {/* 2. Название = активная ссылка */}
+        <a href={safeUrl} target="_blank" rel="noopener noreferrer"
+          style={{ display:'block', fontSize:15, fontWeight:700, lineHeight:1.4, color:'var(--text)', textDecoration:'none', marginBottom:12 }}>
+          {safeTitle}
+          {hasUrl && (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-subtle)" strokeWidth="2" style={{ marginLeft:6, display:'inline', verticalAlign:'middle' }}>
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          )}
+        </a>
+
+        {/* 3. Нижняя строка: Сохранить слева, цена справа */}
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          {isSaved
+            ? <button onClick={onRemove} style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 14px', borderRadius:10, border:'0.5px solid var(--danger)', background:'var(--danger-tint)', color:'var(--danger)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                Удалить
+              </button>
+            : <button onClick={onSave} style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 14px', borderRadius:10, border:'0.5px solid var(--border)', background:'var(--surface-2)', color:'var(--text-muted)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                Сохранить
+              </button>
+          }
+          {/* Цена — справа */}
+          {price
+            ? <div style={{ marginLeft:'auto', textAlign:'right' }}>
+                <div style={{ fontSize:18, fontWeight:800, color:'var(--text)', lineHeight:1 }}>{price}</div>
+                {item.old_price && <div style={{ fontSize:12, color:'var(--text-subtle)', textDecoration:'line-through', marginTop:2 }}>{item.old_price}</div>}
+              </div>
+            : <div style={{ marginLeft:'auto', fontSize:13, color:'var(--text-subtle)' }}>цена на сайте</div>
+          }
         </div>
-        {/* Заголовок */}
-        <div style={{ fontSize:15, fontWeight:700, lineHeight:1.35, marginBottom:6 }}>{safeTitle}</div>
-        {/* Описание */}
-        {item.description && <div style={{ fontSize:13, color:'var(--text-muted)', lineHeight:1.55, marginBottom:10 }}>{item.description}</div>}
-        {/* Блок с ценой — отдельно, заметно */}
-        {item.price && (
-          <div style={{ display:'flex', alignItems:'baseline', gap:8, padding:'10px 12px', background:clr+'10', borderRadius:10, marginBottom:10 }}>
-            <div style={{ fontSize:22, fontWeight:800, color:clr }}>{item.price}</div>
-            {item.old_price && <div style={{ fontSize:14, color:'var(--text-subtle)', textDecoration:'line-through', fontWeight:500 }}>{item.old_price}</div>}
-          </div>
-        )}
-        {/* Источник — кликабельная ссылка */}
-        {hasUrl && (
-          <a href={safeUrl} target="_blank" rel="noopener noreferrer" style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 10px', background:'var(--surface-2)', borderRadius:8, border:'0.5px solid var(--border)', textDecoration:'none', color:'var(--text-muted)', fontSize:12, fontWeight:500 }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            <span style={{ flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{safeSource}</span>
-          </a>
-        )}
-      </div>
-      {/* Кнопки действий */}
-      <div style={{ display:'flex', borderTop:'0.5px solid var(--border)' }}>
-        {hasUrl ? (
-          <a href={safeUrl} target="_blank" rel="noopener noreferrer" style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'13px', fontSize:14, fontWeight:700, color:clr, background:'none', textDecoration:'none', borderRight:'0.5px solid var(--border)' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            Перейти к товару
-          </a>
-        ) : (
-          <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'13px', fontSize:13, color:'var(--text-subtle)', borderRight:'0.5px solid var(--border)' }}>
-            Нет ссылки
-          </div>
-        )}
-        {isSaved
-          ? <button onClick={onRemove} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'13px', fontSize:13, fontWeight:600, color:'var(--danger)', background:'none', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-              Удалить
-            </button>
-          : <button onClick={onSave} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'13px', fontSize:13, fontWeight:600, color:'var(--success)', background:'none', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-              Сохранить
-            </button>
-        }
       </div>
     </div>
   );
