@@ -1145,7 +1145,7 @@ async def search_agent(request: Request):
                     params={
                         "query": query, "resultset": "catalog", "limit": 6,
                         "sort": "popular", "lang": "ru", "curr": "rub",
-                        "dest": "-1257786",  # Москва
+                        "dest": "-1257786",
                         "spp": "30",
                         "appType": "1",
                     },
@@ -1158,48 +1158,67 @@ async def search_agent(request: Request):
                     },
                     timeout=10
                 )
-                print(f"[search] WB {wb_url.split('/')[-2]} status={r.status_code}")
+                print(f"[search] WB status={r.status_code}")
                 if r.status_code == 200:
                     wb_data = r.json()
+                    # Диагностика — ключи ответа
+                    print(f"[search] WB top keys: {list(wb_data.keys())[:5]}")
                     products = (wb_data.get("data") or {}).get("products", []) or wb_data.get("products", [])
+                    if products:
+                        # Логируем ключи первого товара
+                        print(f"[search] WB product[0] keys: {list(products[0].keys())[:10]}")
                     print(f"[search] WB products: {len(products)}")
                     for p in products[:6]:
                         pid = p.get("id")
                         name = p.get("name", "")
                         brand = p.get("brand", "")
-                        if not pid or not name:
+                        title = f"{brand} {name}".strip()
+                        if not pid or not title:
+                            print(f"[search] WB skip: pid={pid} title='{title}'")
                             continue
-                        # Цены: проверяем разные форматы
-                        price = p.get("salePriceU") or p.get("priceU") or 0
+                        # Цены: проверяем все возможные форматы
+                        price = p.get("salePriceU") or p.get("priceU") or p.get("sale") or 0
                         price_old = p.get("priceU") or 0
-                        # В новом v5 цены могут быть в sizes[0].price
+                        # v5: цены в sizes[0].price
                         if not price and p.get("sizes"):
-                            sz = p["sizes"][0]
-                            price = (sz.get("price") or {}).get("product", 0)
-                            price_old = (sz.get("price") or {}).get("basic", 0)
+                            try:
+                                sz = p["sizes"][0]
+                                pp = sz.get("price") or {}
+                                price = pp.get("product") or pp.get("total") or 0
+                                price_old = pp.get("basic") or 0
+                            except: pass
                         rating = p.get("rating") or p.get("reviewRating") or 0
-                        reviews = p.get("feedbacks", 0)
+                        reviews = p.get("feedbacks") or p.get("nmReviewRating") or 0
                         raw_results.append({
-                            "title": f"{brand} {name}".strip()[:120],
-                            "description": f"Рейтинг {rating:.1f}/5 · {reviews} отзывов" if reviews else "Wildberries",
-                            "price": f"{int(price/100):,} ₽".replace(",", " ") if price > 0 else None,
+                            "title": title[:120],
+                            "description": f"Рейтинг {rating}/5 · {reviews} отзывов" if reviews else "",
+                            "price": f"{int(price/100):,} ₽".replace(",", " ") if price > 100 else None,
                             "old_price": f"{int(price_old/100):,} ₽".replace(",", " ") if price_old > price else None,
                             "source": "wildberries.ru",
                             "url": f"https://www.wildberries.ru/catalog/{pid}/detail.aspx",
                             "cat": "goods"
                         })
+                        print(f"[search] WB added: {title[:50]} price={price}")
             except Exception as e:
                 print(f"[search] WB error: {e}")
                 continue
 
-    # ── 4. TAVILY (всегда как fallback или для досуга/услуг) ─────
-    if not raw_results or cat in ["leisure", "services"]:
-        site_map = {
-            "leisure": "site:afisha.ru OR site:kinopoisk.ru OR site:kassir.ru OR site:kudago.com",
-            "services": "site:profi.ru OR site:youdo.ru",
-            "goods":    "site:ozon.ru OR site:wildberries.ru OR site:market.yandex.ru",
-        }
-        tq = f"{query} {site_map.get(cat, '')}".strip()
+        # Проверяем качество WB результатов — если все без title, сбрасываем
+        if raw_results and all(not r.get("title") for r in raw_results):
+            print("[search] WB results have empty titles, discarding")
+            raw_results = []
+
+    # ── 4. TAVILY — для досуга/услуг всегда, для товаров если WB пустой ──
+    if len(raw_results) < 3 or cat in ["leisure", "services"]:
+        # Для товаров — естественный запрос с упоминанием маркетплейса
+        if cat == "goods":
+            tq = f"{query} купить цена ozon wildberries"
+        elif cat == "leisure":
+            tq = f"{query} site:afisha.ru OR site:kinopoisk.ru OR site:kassir.ru OR site:kudago.com"
+        else:  # services
+            tq = f"{query} site:profi.ru OR site:youdo.ru"
+
+        print(f"[search] Tavily query: {tq}")
         try:
             r = requests.post(
                 "https://api.tavily.com/search",
@@ -1235,7 +1254,12 @@ async def search_agent(request: Request):
     if not raw_results:
         return {"results": [], "query": query, "error": "Ничего не нашлось"}
 
-    print(f"[search] returning {len(raw_results)} results")
+    # Фильтруем пустые результаты
+    raw_results = [r for r in raw_results if r.get("title") and len(r["title"].strip()) > 2]
+    if not raw_results:
+        return {"results": [], "query": query, "error": "Результаты некачественные"}
+
+    print(f"[search] returning {len(raw_results)} valid results")
     return {"results": raw_results[:6], "query": query, "cat": cat}
 
 @app.get("/sites")
