@@ -4106,7 +4106,7 @@ function SitesScreen({ onAsk }) {
   const accentColor = '#8B5CF6';
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, overflow:'hidden' }}>
+    <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0 }}>
 
       {/* Hero — компактный когда есть запрос */}
       <div style={{ padding:'4px 14px 0', flexShrink:0 }}>
@@ -4151,7 +4151,7 @@ function SitesScreen({ onAsk }) {
       </div>
 
       {/* Контент — скроллится */}
-      <div style={{ flex:1, minHeight:0, overflowY:'auto', overflowX:'hidden', padding:'10px 14px 16px', display:'flex', flexDirection:'column', gap:10, scrollbarWidth:'none', WebkitOverflowScrolling:'touch' }}>
+      <div style={{ flex:'1 1 0', minHeight:0, overflowY:'auto', overflowX:'hidden', padding:'10px 14px 16px', display:'flex', flexDirection:'column', gap:10, WebkitOverflowScrolling:'touch' }}>
 
         {/* Пустой экран */}
         {(state === 'empty' && curTab !== 'saved') && (
@@ -4281,49 +4281,59 @@ function SearchResultCard({ item, isSaved, onSave, onRemove }) {
   }
 
   return (
-    <div style={{ background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:14, overflow:'hidden' }}>
-      <div style={{ padding:'12px 14px' }}>
+    <div style={{ background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:14, overflow:'visible', flexShrink:0 }}>
+      <div style={{ padding:'12px 14px 10px' }}>
 
-        {/* 1. Магазин — источник */}
+        {/* 1. Источник */}
         {safeSource && (
           <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:6 }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={clr} strokeWidth="2" style={{ flexShrink:0 }}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             <span style={{ fontSize:12, fontWeight:600, color:clr }}>{safeSource}</span>
           </div>
         )}
 
-        {/* 2. Название = активная ссылка */}
+        {/* 2. Название — активная ссылка, всегда видна */}
         <a href={safeUrl} target="_blank" rel="noopener noreferrer"
-          style={{ display:'block', fontSize:15, fontWeight:700, lineHeight:1.4, color:'var(--text)', textDecoration:'none', marginBottom:12 }}>
+          style={{ display:'block', fontSize:15, fontWeight:700, lineHeight:1.45,
+                   color:'var(--text)', textDecoration:'none', marginBottom:10,
+                   wordBreak:'break-word', whiteSpace:'normal' }}>
           {safeTitle}
           {hasUrl && (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-subtle)" strokeWidth="2" style={{ marginLeft:6, display:'inline', verticalAlign:'middle' }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-subtle)" strokeWidth="2"
+              style={{ marginLeft:5, display:'inline-block', verticalAlign:'middle', flexShrink:0 }}>
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
               <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
             </svg>
           )}
         </a>
 
-        {/* 3. Нижняя строка: Сохранить слева, цена справа */}
+        {/* 3. Кнопка Сохранить (слева) + Цена (справа) */}
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           {isSaved
-            ? <button onClick={onRemove} style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 14px', borderRadius:10, border:'0.5px solid var(--danger)', background:'var(--danger-tint)', color:'var(--danger)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+            ? <button onClick={onRemove}
+                style={{ flexShrink:0, display:'flex', alignItems:'center', gap:5, padding:'7px 12px',
+                         borderRadius:10, border:'0.5px solid var(--danger)', background:'var(--danger-tint)',
+                         color:'var(--danger)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
                 Удалить
               </button>
-            : <button onClick={onSave} style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 14px', borderRadius:10, border:'0.5px solid var(--border)', background:'var(--surface-2)', color:'var(--text-muted)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+            : <button onClick={onSave}
+                style={{ flexShrink:0, display:'flex', alignItems:'center', gap:5, padding:'7px 12px',
+                         borderRadius:10, border:'0.5px solid var(--border)', background:'var(--surface-2)',
+                         color:'var(--text-muted)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
                 Сохранить
               </button>
           }
-          {/* Цена — справа */}
-          {price
-            ? <div style={{ marginLeft:'auto', textAlign:'right' }}>
-                <div style={{ fontSize:18, fontWeight:800, color:'var(--text)', lineHeight:1 }}>{price}</div>
-                {item.old_price && <div style={{ fontSize:12, color:'var(--text-subtle)', textDecoration:'line-through', marginTop:2 }}>{item.old_price}</div>}
-              </div>
-            : <div style={{ marginLeft:'auto', fontSize:13, color:'var(--text-subtle)' }}>цена на сайте</div>
-          }
+          <div style={{ marginLeft:'auto', textAlign:'right', flexShrink:0 }}>
+            {price
+              ? <>
+                  <div style={{ fontSize:17, fontWeight:800, color:'var(--text)', lineHeight:1 }}>{price}</div>
+                  {item.old_price && <div style={{ fontSize:11, color:'var(--text-subtle)', textDecoration:'line-through', marginTop:2 }}>{item.old_price}</div>}
+                </>
+              : <span style={{ fontSize:12, color:'var(--text-subtle)' }}>цена на сайте</span>
+            }
+          </div>
         </div>
       </div>
     </div>
