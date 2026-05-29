@@ -903,22 +903,113 @@ async def parse_health_photo(req: HealthParseRequest, user=Depends(get_current_u
 
 @app.get("/api/v1/health/meds")
 async def get_medications(user=Depends(get_current_user)):
+    """Список активных лекарств пользователя"""
     async with db_pool.acquire() as conn:
+        # Миграция: добавляем колонки если их нет
+        for col, definition in [
+            ("times_per_day", "INTEGER DEFAULT 1"),
+            ("times_json",    "TEXT DEFAULT '[]'"),
+            ("food_rule",     "VARCHAR(50) DEFAULT 'any'"),
+            ("notify",        "BOOLEAN DEFAULT FALSE"),
+            ("taken_today",   "TEXT DEFAULT '[]'"),
+            ("taken_date",    "DATE"),
+        ]:
+            try:
+                await conn.execute(f"ALTER TABLE medications ADD COLUMN IF NOT EXISTS {col} {definition}")
+            except Exception:
+                pass
         rows = await conn.fetch(
             "SELECT * FROM medications WHERE user_id=$1 AND is_active=TRUE ORDER BY id",
             user["id"]
         )
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            import json as _json
+            d = dict(r)
+            # Парсим JSON поля
+            try: d["times"] = _json.loads(d.get("times_json") or "[]")
+            except: d["times"] = []
+            # Проверяем taken_today — сбрасываем если дата изменилась
+            from datetime import date
+            today = date.today()
+            if d.get("taken_date") != today:
+                d["taken_today_list"] = []
+            else:
+                try: d["taken_today_list"] = _json.loads(d.get("taken_today") or "[]")
+                except: d["taken_today_list"] = []
+            result.append(d)
+        return result
+
+class MedRequest(BaseModel):
+    name: str
+    dose: Optional[str] = None
+    dose_unit: Optional[str] = "мг"
+    times_per_day: Optional[int] = 1
+    times: Optional[list] = []       # ["09:00", "21:00"]
+    food_rule: Optional[str] = "any" # before/after/during/any
+    food_minutes: Optional[int] = None
+    notify: Optional[bool] = False
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 @app.post("/api/v1/health/meds")
-async def add_medication(req: MedicationRequest, user=Depends(get_current_user)):
+async def add_medication(req: MedRequest, user=Depends(get_current_user)):
+    """Добавить лекарство"""
+    import json as _json
+    from datetime import date
     async with db_pool.acquire() as conn:
+        dose_str = f"{req.dose} {req.dose_unit}".strip() if req.dose else req.dose_unit or ""
         row_id = await conn.fetchval(
-            "INSERT INTO medications (user_id, name, dose, schedule, start_date, end_date) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id",
-            user["id"], req.name, req.dose, req.schedule,
-            req.start_date, req.end_date
+            """INSERT INTO medications
+               (user_id, name, dose, schedule, times_per_day, times_json, food_rule, notify, start_date, is_active)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE) RETURNING id""",
+            user["id"], req.name, dose_str,
+            req.food_rule,
+            req.times_per_day,
+            _json.dumps(req.times or []),
+            req.food_rule,
+            req.notify,
+            date.today()
         )
         return {"id": row_id, "status": "ok"}
+
+@app.delete("/api/v1/health/meds/{med_id}")
+async def delete_medication(med_id: int, user=Depends(get_current_user)):
+    """Удалить лекарство (soft delete)"""
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE medications SET is_active=FALSE WHERE id=$1 AND user_id=$2",
+            med_id, user["id"]
+        )
+        return {"status": "ok"}
+
+@app.post("/api/v1/health/meds/{med_id}/taken")
+async def mark_taken(med_id: int, request: Request, user=Depends(get_current_user)):
+    """Отметить приём лекарства"""
+    import json as _json
+    from datetime import date
+    data = await request.json()
+    time_slot = data.get("time", "")
+    today = date.today()
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT taken_today, taken_date FROM medications WHERE id=$1 AND user_id=$2",
+            med_id, user["id"]
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Не найдено")
+        if row["taken_date"] == today:
+            try: taken = _json.loads(row["taken_today"] or "[]")
+            except: taken = []
+        else:
+            taken = []
+        if time_slot and time_slot not in taken:
+            taken.append(time_slot)
+        await conn.execute(
+            "UPDATE medications SET taken_today=$1, taken_date=$2 WHERE id=$3",
+            _json.dumps(taken), today, med_id
+        )
+        return {"status": "ok", "taken": taken}
 
 # Finance
 @app.get("/api/v1/finance/records")
