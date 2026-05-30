@@ -27,192 +27,6 @@ VAPID_PUBLIC_KEY  = os.getenv("VAPID_PUBLIC_KEY",  "BKkeZ1rrVz29eRFV9oG0Wd3JVonc
 VAPID_PRIVATE_PEM = os.getenv("VAPID_PRIVATE_PEM", "")  # полный PEM в env переменной
 VAPID_CLAIMS      = {"sub": "mailto:info@oktolk.ru"}
 
-# ── Web Push functions ────────────────────────────────────────────
-
-def send_web_push(subscription_info: dict, title: str, body: str, icon: str = "/icon-192.png"):
-    """Отправить Web Push уведомление через pywebpush"""
-    if not VAPID_PRIVATE_PEM:
-        print("[push] VAPID_PRIVATE_PEM не задан — пропуск")
-        return False
-    try:
-        from pywebpush import webpush, WebPushException
-        webpush(
-            subscription_info=subscription_info,
-            data=json.dumps({"title": title, "body": body, "icon": icon}),
-            vapid_private_key=VAPID_PRIVATE_PEM,
-            vapid_claims=VAPID_CLAIMS
-        )
-        return True
-    except Exception as e:
-        print(f"[push] Ошибка отправки: {e}")
-        return False
-
-async def push_scheduler():
-    """Фоновой планировщик — проверяет расписание лекарств каждую минуту"""
-    import json as _json
-    from datetime import date, time as dtime
-    print("[push_scheduler] Запущен")
-    while True:
-        try:
-            await asyncio.sleep(60)
-            if not db_pool or not VAPID_PRIVATE_PEM:
-                continue
-            now = datetime.now()
-            # Окно: уведомляем за 10 минут (±30 сек)
-            target_time = (now + timedelta(minutes=10)).strftime("%H:%M")
-            async with db_pool.acquire() as conn:
-                # Берём все активные лекарства с уведомлениями
-                meds = await conn.fetch(
-                    "SELECT m.*, u.id as uid FROM medications m JOIN users u ON m.user_id=u.id "
-                    "WHERE m.is_active=TRUE AND m.notify=TRUE"
-                )
-                for med in meds:
-                    times = _json.loads(med.get("times_json") or "[]")
-                    if target_time not in times:
-                        continue
-                    # Проверяем что не принято сегодня
-                    taken = _json.loads(med.get("taken_today") or "[]")
-                    if target_time in taken:
-                        continue
-                    # Отправляем push всем подпискам пользователя
-                    subs = await conn.fetch(
-                        "SELECT * FROM push_subscriptions WHERE user_id=$1", med["user_id"]
-                    )
-                    for sub in subs:
-                        subscription_info = {
-                            "endpoint": sub["endpoint"],
-                            "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}
-                        }
-                        send_web_push(
-                            subscription_info,
-                            title=f"Пора принять {med['name']}",
-                            body=f"Приём в {target_time}{' · ' + med['dose'] if med.get('dose') else ''}"
-                        )
-                        print(f"[push] Отправлено: {med['name']} → user {med['user_id']}")
-        except Exception as e:
-            print(f"[push_scheduler] Ошибка: {e}")
-
-# ── Auth helpers ─────────────────────────────────────────────────
-def hash_password(password: str) -> str:
-    return hashlib.sha256((password + SECRET_KEY).encode()).hexdigest()
-
-def generate_token() -> str:
-    return secrets.token_urlsafe(32)
-
-async def get_current_user(authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Не авторизован")
-    token = authorization.split(" ")[1]
-    if not db_pool:
-        raise HTTPException(status_code=503, detail="БД недоступна")
-    async with db_pool.acquire() as conn:
-        session = await conn.fetchrow(
-            "SELECT user_id FROM sessions WHERE token=$1 AND expires_at > NOW()", token
-        )
-        if not session:
-            raise HTTPException(status_code=401, detail="Токен истёк или неверный")
-        user = await conn.fetchrow("SELECT * FROM users WHERE id=$1", session["user_id"])
-        return dict(user)
-
-
-# ── SW.js с push-обработчиком ─────────────────────────────────────
-
-SW_CONTENT = """
-const CACHE = 'oktolk-v4';
-const PRECACHE = ['/', '/manifest.json'];
-
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
-});
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-  ).then(() => self.clients.claim()));
-});
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
-});
-
-/* ── Web Push ── */
-self.addEventListener('push', e => {
-  let data = { title: 'OkTolk', body: 'Напоминание о приёме лекарств' };
-  try { data = e.data ? e.data.json() : data; } catch(err) {}
-  e.waitUntil(self.registration.showNotification(data.title || 'OkTolk', {
-    body: data.body || '',
-    icon: data.icon || '/icon-192.png',
-    badge: '/icon-192.png',
-    vibrate: [200, 100, 200],
-    tag: 'meds-reminder',
-    requireInteraction: true,
-    actions: [{ action: 'open', title: 'Открыть' }]
-  }));
-});
-
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-    const c = cs.find(x => x.url.includes('oktolk.ru'));
-    return c ? c.focus() : clients.openWindow('/');
-  }));
-});
-"""
-
-@app.get("/sw.js")
-async def service_worker():
-    from fastapi.responses import Response
-    return Response(content=SW_CONTENT, media_type="application/javascript",
-                   headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
-
-# ── Push API endpoints ────────────────────────────────────────────
-
-@app.get("/api/v1/push/vapid-key")
-async def get_vapid_key():
-    """Возвращает VAPID public key для подписки на push"""
-    return {"public_key": VAPID_PUBLIC_KEY}
-
-class PushSubscriptionRequest(BaseModel):
-    endpoint: str
-    p256dh: str
-    auth: str
-
-@app.post("/api/v1/push/subscribe")
-async def subscribe_push(req: PushSubscriptionRequest, user=Depends(get_current_user)):
-    """Сохранить push-подписку пользователя"""
-    async with db_pool.acquire() as conn:
-        await conn.execute("""
-            INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh=$3, auth=$4
-        """, user["id"], req.endpoint, req.p256dh, req.auth)
-    return {"status": "subscribed"}
-
-@app.delete("/api/v1/push/subscribe")
-async def unsubscribe_push(request: Request, user=Depends(get_current_user)):
-    """Удалить push-подписку"""
-    data = await request.json()
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            "DELETE FROM push_subscriptions WHERE user_id=$1 AND endpoint=$2",
-            user["id"], data.get("endpoint", "")
-        )
-    return {"status": "unsubscribed"}
-
-@app.post("/api/v1/push/test")
-async def test_push(user=Depends(get_current_user)):
-    """Тестовый push для проверки"""
-    async with db_pool.acquire() as conn:
-        subs = await conn.fetch("SELECT * FROM push_subscriptions WHERE user_id=$1", user["id"])
-    if not subs:
-        return {"status": "no_subscriptions"}
-    for sub in subs:
-        send_web_push(
-            {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
-            "OkTolk — тест уведомлений",
-            "Push-уведомления работают! Лекарства будут напоминать вовремя."
-        )
-    return {"status": "sent", "count": len(subs)}
-
 DB_HOST = os.getenv("DB_HOST", "amvera-kes-cnpg-oktolk-db-rw")
 DB_PORT = int(os.getenv("DB_PORT", "5432"))
 DB_NAME = os.getenv("DB_NAME", "oktolk")
@@ -379,6 +193,15 @@ async def init_db():
             ALTER TABLE loans ADD COLUMN IF NOT EXISTS monthly_payment REAL;
             ALTER TABLE finance_records ADD COLUMN IF NOT EXISTS subcategory VARCHAR(50);
             ALTER TABLE finance_records ADD COLUMN IF NOT EXISTS item_name TEXT;
+
+            -- Колонки для лекарств с уведомлениями
+            ALTER TABLE medications ADD COLUMN IF NOT EXISTS times_per_day INTEGER DEFAULT 1;
+            ALTER TABLE medications ADD COLUMN IF NOT EXISTS times_json TEXT DEFAULT '[]';
+            ALTER TABLE medications ADD COLUMN IF NOT EXISTS food_rule VARCHAR(50) DEFAULT 'any';
+            ALTER TABLE medications ADD COLUMN IF NOT EXISTS food_minutes INTEGER;
+            ALTER TABLE medications ADD COLUMN IF NOT EXISTS notify BOOLEAN DEFAULT FALSE;
+            ALTER TABLE medications ADD COLUMN IF NOT EXISTS taken_today TEXT DEFAULT '[]';
+            ALTER TABLE medications ADD COLUMN IF NOT EXISTS taken_date DATE;
         """)
 
         # Insert default feature flags
@@ -392,6 +215,28 @@ async def init_db():
                 ('new_nav',        FALSE, 'Новая навигация v2')
             ON CONFLICT (name) DO NOTHING;
         """)
+
+# ── Auth helpers ─────────────────────────────────────────────────
+def hash_password(password: str) -> str:
+    return hashlib.sha256((password + SECRET_KEY).encode()).hexdigest()
+
+def generate_token() -> str:
+    return secrets.token_urlsafe(32)
+
+async def get_current_user(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Не авторизован")
+    token = authorization.split(" ")[1]
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        session = await conn.fetchrow(
+            "SELECT user_id FROM sessions WHERE token=$1 AND expires_at > NOW()", token
+        )
+        if not session:
+            raise HTTPException(status_code=401, detail="Токен истёк или неверный")
+        user = await conn.fetchrow("SELECT * FROM users WHERE id=$1", session["user_id"])
+        return dict(user)
 
 # ── Models ───────────────────────────────────────────────────────
 class RegisterRequest(BaseModel):
@@ -2180,5 +2025,219 @@ async def get_credits_overview(user=Depends(get_current_user)):
             "credits": [{"name": c["name"], "amount": float(c["amount"] or 0), "payment": float(c["monthly_payment"] or 0), "rate": c["rate"], "term": c["term_months"]} for c in credits],
             "loans": [{"name": l["name"], "amount": float(l["amount"] or 0), "payment": float(l["monthly_payment"] or 0), "due": l["due_date"]} for l in loans],
         }
+
+# ═════════════════════════════════════════════════════════════════
+# Web Push — уведомления о приёме лекарств
+# Размещено в конце файла, после get_current_user, db_pool и всех зависимостей
+# ═════════════════════════════════════════════════════════════════
+
+def _normalize_time(t: str) -> str:
+    """Нормализует строку времени: '9:00' → '09:00'"""
+    if not t or ':' not in t:
+        return t
+    parts = t.split(':')
+    return f"{int(parts[0]):02d}:{int(parts[1]):02d}"
+
+def send_web_push(subscription_info: dict, title: str, body: str, icon: str = "/icon-192.png") -> bool:
+    """Отправить Web Push уведомление через pywebpush"""
+    if not VAPID_PRIVATE_PEM:
+        print("[push] VAPID_PRIVATE_PEM не задан — пропуск")
+        return False
+    try:
+        from pywebpush import webpush
+        webpush(
+            subscription_info=subscription_info,
+            data=json.dumps({"title": title, "body": body, "icon": icon}),
+            vapid_private_key=VAPID_PRIVATE_PEM,
+            vapid_claims=dict(VAPID_CLAIMS)  # копируем, pywebpush мутирует
+        )
+        return True
+    except Exception as e:
+        print(f"[push] Ошибка отправки: {e}")
+        return False
+
+async def push_scheduler():
+    """Фоновой планировщик — каждую минуту проверяет расписание лекарств"""
+    from datetime import date
+    print("[push_scheduler] Запущен — проверка каждую минуту")
+    # Защита от запуска до полной готовности БД
+    await asyncio.sleep(5)
+    while True:
+        try:
+            await asyncio.sleep(60)
+            if not db_pool:
+                continue
+            if not VAPID_PRIVATE_PEM:
+                continue
+            now = datetime.now()
+            # Окно: уведомляем за 10 минут до приёма
+            target = now + timedelta(minutes=10)
+            target_time = f"{target.hour:02d}:{target.minute:02d}"
+
+            async with db_pool.acquire() as conn:
+                meds = await conn.fetch(
+                    "SELECT id, user_id, name, dose, times_json, taken_today, taken_date, notify "
+                    "FROM medications WHERE is_active=TRUE AND notify=TRUE"
+                )
+                for med in meds:
+                    try:
+                        times = json.loads(med["times_json"] or "[]")
+                        times = [_normalize_time(t) for t in times]
+                    except:
+                        times = []
+                    if target_time not in times:
+                        continue
+                    # Проверяем что не принято сегодня
+                    today = date.today()
+                    if med["taken_date"] == today:
+                        try: taken = json.loads(med["taken_today"] or "[]")
+                        except: taken = []
+                        if target_time in taken:
+                            continue
+                    # Отправляем push всем подпискам пользователя
+                    subs = await conn.fetch(
+                        "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=$1",
+                        med["user_id"]
+                    )
+                    if not subs:
+                        continue
+                    body = f"Приём в {target_time}"
+                    if med.get("dose"):
+                        body += f" · {med['dose']}"
+                    for sub in subs:
+                        sent = send_web_push(
+                            {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
+                            title=f"Пора принять {med['name']}",
+                            body=body
+                        )
+                        if sent:
+                            print(f"[push] ✅ {med['name']} → user {med['user_id']} @ {target_time}")
+        except Exception as e:
+            print(f"[push_scheduler] Ошибка цикла: {e}")
+
+# ── Service Worker (с push-обработчиком и pushsubscriptionchange) ──
+SW_CONTENT = """
+const CACHE = 'oktolk-v5';
+const PRECACHE = ['/', '/manifest.json'];
+
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+  ).then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+});
+
+/* ── Web Push: получение и показ уведомления ── */
+self.addEventListener('push', e => {
+  let data = { title: 'OkTolk', body: 'Напоминание' };
+  try { data = e.data ? e.data.json() : data; } catch(err) {}
+  e.waitUntil(self.registration.showNotification(data.title || 'OkTolk', {
+    body: data.body || '',
+    icon: data.icon || '/icon-192.png',
+    badge: '/icon-192.png',
+    vibrate: [200, 100, 200],
+    tag: 'meds-reminder',
+    requireInteraction: true,
+    data: { url: '/' }
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    const c = cs.find(x => x.url.includes(self.location.host));
+    return c ? c.focus() : clients.openWindow('/');
+  }));
+});
+
+/* ── Ротация подписки — пересохраняем на сервере ── */
+self.addEventListener('pushsubscriptionchange', e => {
+  e.waitUntil(
+    self.registration.pushManager.subscribe({ userVisibleOnly: true })
+      .then(sub => {
+        const json = sub.toJSON();
+        return fetch('/api/v1/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth })
+        });
+      })
+  );
+});
+"""
+
+@app.get("/sw.js")
+async def service_worker():
+    from fastapi.responses import Response
+    return Response(content=SW_CONTENT, media_type="application/javascript",
+                   headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
+
+# ── Push API endpoints ────────────────────────────────────────────
+
+@app.get("/api/v1/push/vapid-key")
+async def get_vapid_key():
+    """Возвращает VAPID public key для подписки на push"""
+    return {"public_key": VAPID_PUBLIC_KEY}
+
+class PushSubscriptionRequest(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str
+
+@app.post("/api/v1/push/subscribe")
+async def subscribe_push(req: PushSubscriptionRequest, user=Depends(get_current_user)):
+    """Сохранить push-подписку пользователя"""
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh=EXCLUDED.p256dh, auth=EXCLUDED.auth
+        """, user["id"], req.endpoint, req.p256dh, req.auth)
+    return {"status": "subscribed"}
+
+class PushUnsubRequest(BaseModel):
+    endpoint: str
+
+@app.delete("/api/v1/push/subscribe")
+async def unsubscribe_push(req: PushUnsubRequest, user=Depends(get_current_user)):
+    """Удалить push-подписку"""
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM push_subscriptions WHERE user_id=$1 AND endpoint=$2",
+            user["id"], req.endpoint
+        )
+    return {"status": "unsubscribed"}
+
+@app.post("/api/v1/push/test")
+async def test_push(user=Depends(get_current_user)):
+    """Тестовый push — для проверки что подписка работает"""
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        subs = await conn.fetch("SELECT * FROM push_subscriptions WHERE user_id=$1", user["id"])
+    if not subs:
+        return {"status": "no_subscriptions", "message": "Нет активных подписок"}
+    sent = 0
+    for sub in subs:
+        ok = send_web_push(
+            {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
+            "OkTolk — тест уведомлений",
+            "Push работает! Лекарства будут напоминать вовремя."
+        )
+        if ok:
+            sent += 1
+    return {"status": "ok", "sent": sent, "total": len(subs)}
+
+# ═════════════════════════════════════════════════════════════════
 
 app.mount("/", StaticFiles(directory=".", html=True), name="static")

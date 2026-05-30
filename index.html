@@ -2114,6 +2114,8 @@ async function subscribeToPush() {
     auth: subJson.keys.auth
   });
   console.log('[push] Подписка сохранена');
+  // Отправляем тестовый push чтобы пользователь увидел что работает
+  try { await authSend('/api/v1/push/test', 'POST', {}); } catch(e) {}
   return true;
 }
 
