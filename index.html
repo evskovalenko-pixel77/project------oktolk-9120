@@ -2358,7 +2358,7 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
   const getVerdictTitle = (data) => data?.title || (data?.risk_level === 0 ? 'Угрозы не обнаружены' : data?.risk_level >= 3 ? 'Это мошенничество' : 'Будьте осторожны');
 
   return (
-    <div style={{ position:'absolute', inset:0, background:'var(--bg)', display:'flex', flexDirection:'column', zIndex:8 }}>
+    <div style={{ position:'fixed', inset:0, background:'var(--bg)', display:'flex', flexDirection:'column', zIndex:50 }}>
       {/* TopBar */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'calc(18px + env(safe-area-inset-top)) 18px 10px', flexShrink:0 }}>
         <button onClick={onClose} style={{ width:44, height:44, borderRadius:'var(--r-md)', background:'var(--surface)', border:'0.5px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
@@ -3875,7 +3875,7 @@ function MedsScreen({ onBack, onMedsChange }) {
   const nextMed = meds.find(m => (m.taken_today_list || []).length < (m.times_per_day || 1));
 
   return (
-    <div style={{ position:'absolute', inset:0, background:'var(--bg)', display:'flex', flexDirection:'column', zIndex:8 }}>
+    <div style={{ position:'fixed', inset:0, background:'var(--bg)', display:'flex', flexDirection:'column', zIndex:50 }}>
       {/* TopBar */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'calc(18px + env(safe-area-inset-top)) 18px 10px', flexShrink:0 }}>
         <button onClick={onBack} style={{ width:44, height:44, borderRadius:'var(--r-md)', background:'var(--surface)', border:'0.5px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
