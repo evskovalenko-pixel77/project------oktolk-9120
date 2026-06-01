@@ -2056,81 +2056,154 @@ def send_web_push(subscription_info: dict, title: str, body: str, icon: str = "/
         print(f"[push] Ошибка отправки: {e}")
         return False
 
-# Состояние scheduler для диагностики
+# Состояние scheduler для диагностики (in-memory, перезаписывается из БД)
 _push_scheduler_state = {
     "started_at": None,
     "last_check": None,
     "checks_count": 0,
     "last_error": None,
     "pushes_sent": 0,
+    "is_leader": False,  # этот воркер захватил advisory lock
 }
 
+# Уникальный ID для advisory lock (любое 64-битное число)
+PUSH_SCHEDULER_LOCK_ID = 8675309
+
 async def push_scheduler():
-    """Фоновой планировщик — каждую минуту проверяет расписание лекарств"""
+    """Фоновой планировщик — каждую минуту проверяет расписание лекарств.
+    Использует PostgreSQL advisory lock — только ОДИН воркер становится лидером.
+    Состояние heartbeat пишется в БД, чтобы любой воркер видел реальную картину.
+    """
     from datetime import date
     global _push_scheduler_state
-    print("[push_scheduler] Запущен — проверка каждую минуту")
+    print("[push_scheduler] Поток запущен")
     _push_scheduler_state["started_at"] = datetime.now().isoformat()
-    # Защита от запуска до полной готовности БД
     await asyncio.sleep(5)
-    while True:
-        try:
-            await asyncio.sleep(60)
-            _push_scheduler_state["last_check"] = datetime.now().isoformat()
-            _push_scheduler_state["checks_count"] = _push_scheduler_state.get("checks_count", 0) + 1
-            if not db_pool:
-                _push_scheduler_state["last_error"] = "db_pool is None"
-                continue
-            if not VAPID_PRIVATE_PEM:
-                _push_scheduler_state["last_error"] = "VAPID_PRIVATE_PEM не задан"
-                continue
-            _push_scheduler_state["last_error"] = None
-            now = datetime.now()
-            # Окно: уведомляем за 10 минут до приёма
-            target = now + timedelta(minutes=10)
-            target_time = f"{target.hour:02d}:{target.minute:02d}"
 
-            async with db_pool.acquire() as conn:
-                meds = await conn.fetch(
-                    "SELECT id, user_id, name, dose, times_json, taken_today, taken_date, notify "
-                    "FROM medications WHERE is_active=TRUE AND notify=TRUE"
-                )
-                for med in meds:
-                    try:
-                        times = json.loads(med["times_json"] or "[]")
-                        times = [_normalize_time(t) for t in times]
-                    except:
-                        times = []
-                    if target_time not in times:
-                        continue
-                    # Проверяем что не принято сегодня
-                    today = date.today()
-                    if med["taken_date"] == today:
-                        try: taken = json.loads(med["taken_today"] or "[]")
-                        except: taken = []
-                        if target_time in taken:
-                            continue
-                    # Отправляем push всем подпискам пользователя
-                    subs = await conn.fetch(
-                        "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=$1",
-                        med["user_id"]
+    # Ждём готовность БД
+    while not db_pool:
+        await asyncio.sleep(2)
+
+    # Создаём таблицу для heartbeat если её нет
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS scheduler_state (
+                    name VARCHAR(50) PRIMARY KEY,
+                    started_at TIMESTAMP,
+                    last_check TIMESTAMP,
+                    checks_count INTEGER DEFAULT 0,
+                    pushes_sent INTEGER DEFAULT 0,
+                    last_error TEXT,
+                    leader_pid INTEGER
+                );
+            """)
+    except Exception as e:
+        print(f"[push_scheduler] Ошибка создания таблицы heartbeat: {e}")
+
+    # Попытка захватить advisory lock — только ОДИН воркер станет лидером
+    leader_conn = None
+    try:
+        leader_conn = await db_pool.acquire()
+        got_lock = await leader_conn.fetchval(
+            "SELECT pg_try_advisory_lock($1)", PUSH_SCHEDULER_LOCK_ID
+        )
+        if not got_lock:
+            print("[push_scheduler] Этот воркер НЕ лидер — другой уже работает. Выхожу.")
+            await db_pool.release(leader_conn)
+            return
+        print(f"[push_scheduler] ✅ Стал лидером (PID {os.getpid()})")
+        _push_scheduler_state["is_leader"] = True
+
+        # Записать в БД что мы стали лидером
+        async with db_pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO scheduler_state (name, started_at, last_check, checks_count, pushes_sent, last_error, leader_pid)
+                VALUES ('push', $1, NULL, 0, 0, NULL, $2)
+                ON CONFLICT (name) DO UPDATE SET started_at=$1, leader_pid=$2, last_error=NULL, checks_count=0, pushes_sent=0
+            """, datetime.now(), os.getpid())
+
+        # Основной цикл
+        while True:
+            try:
+                await asyncio.sleep(60)
+                now = datetime.now()
+                _push_scheduler_state["last_check"] = now.isoformat()
+                _push_scheduler_state["checks_count"] += 1
+
+                last_err = None
+                if not VAPID_PRIVATE_PEM:
+                    last_err = "VAPID_PRIVATE_PEM не задан"
+                    _push_scheduler_state["last_error"] = last_err
+                else:
+                    _push_scheduler_state["last_error"] = None
+
+                # Heartbeat в БД
+                async with db_pool.acquire() as conn:
+                    await conn.execute("""
+                        UPDATE scheduler_state SET last_check=$1, checks_count=$2, pushes_sent=$3, last_error=$4
+                        WHERE name='push'
+                    """, now, _push_scheduler_state["checks_count"],
+                        _push_scheduler_state["pushes_sent"], last_err)
+
+                if not VAPID_PRIVATE_PEM:
+                    continue
+
+                # Окно: уведомляем за 10 минут до приёма
+                target = now + timedelta(minutes=10)
+                target_time = f"{target.hour:02d}:{target.minute:02d}"
+
+                async with db_pool.acquire() as conn:
+                    meds = await conn.fetch(
+                        "SELECT id, user_id, name, dose, times_json, taken_today, taken_date, notify "
+                        "FROM medications WHERE is_active=TRUE AND notify=TRUE"
                     )
-                    if not subs:
-                        continue
-                    body = f"Приём в {target_time}"
-                    if med.get("dose"):
-                        body += f" · {med['dose']}"
-                    for sub in subs:
-                        sent = send_web_push(
-                            {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
-                            title=f"Пора принять {med['name']}",
-                            body=body
+                    for med in meds:
+                        try:
+                            times = json.loads(med["times_json"] or "[]")
+                            times = [_normalize_time(t) for t in times]
+                        except:
+                            times = []
+                        if target_time not in times:
+                            continue
+                        # Проверяем что не принято сегодня
+                        today = date.today()
+                        if med["taken_date"] == today:
+                            try: taken = json.loads(med["taken_today"] or "[]")
+                            except: taken = []
+                            if target_time in taken:
+                                continue
+                        # Отправляем push всем подпискам пользователя
+                        subs = await conn.fetch(
+                            "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=$1",
+                            med["user_id"]
                         )
-                        if sent:
-                            _push_scheduler_state["pushes_sent"] = _push_scheduler_state.get("pushes_sent", 0) + 1
-                            print(f"[push] ✅ {med['name']} → user {med['user_id']} @ {target_time}")
-        except Exception as e:
-            print(f"[push_scheduler] Ошибка цикла: {e}")
+                        if not subs:
+                            continue
+                        body = f"Приём в {target_time}"
+                        if med.get("dose"):
+                            body += f" · {med['dose']}"
+                        for sub in subs:
+                            sent = send_web_push(
+                                {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
+                                title=f"Пора принять {med['name']}",
+                                body=body
+                            )
+                            if sent:
+                                _push_scheduler_state["pushes_sent"] = _push_scheduler_state.get("pushes_sent", 0) + 1
+                                print(f"[push] ✅ {med['name']} → user {med['user_id']} @ {target_time}")
+            except Exception as e:
+                print(f"[push_scheduler] Ошибка цикла: {e}")
+    except Exception as e:
+        print(f"[push_scheduler] Критическая ошибка лидера: {e}")
+    finally:
+        if leader_conn is not None:
+            try:
+                await leader_conn.execute("SELECT pg_advisory_unlock($1)", PUSH_SCHEDULER_LOCK_ID)
+                await db_pool.release(leader_conn)
+            except: pass
+        _push_scheduler_state["is_leader"] = False
+        print("[push_scheduler] Лидерство отпущено")
 
 # ── Service Worker (с push-обработчиком и pushsubscriptionchange) ──
 SW_CONTENT = """
@@ -2259,13 +2332,15 @@ async def test_push(user=Depends(get_current_user)):
 
 @app.get("/api/v1/push/diagnostic")
 async def push_diagnostic():
-    """Диагностика состояния push-уведомлений. Возвращает что работает, что нет"""
+    """Диагностика состояния push-уведомлений. Возвращает что работает, что нет.
+    Состояние scheduler читается из БД — чтобы любой воркер видел реальную картину."""
     diag = {
         "vapid_public_key_set": bool(VAPID_PUBLIC_KEY),
         "vapid_private_pem_set": bool(VAPID_PRIVATE_PEM),
         "vapid_private_length": len(VAPID_PRIVATE_PEM) if VAPID_PRIVATE_PEM else 0,
         "db_pool_ready": db_pool is not None,
-        "scheduler": _push_scheduler_state,
+        "scheduler": dict(_push_scheduler_state),  # копия
+        "worker_pid": os.getpid(),
         "pywebpush_available": False,
     }
     try:
@@ -2273,28 +2348,56 @@ async def push_diagnostic():
         diag["pywebpush_available"] = True
     except ImportError as e:
         diag["pywebpush_error"] = str(e)
-    # Общее количество подписок
+    # Общее количество подписок + СОСТОЯНИЕ SCHEDULER ИЗ БД
     if db_pool:
         try:
             async with db_pool.acquire() as conn:
                 diag["total_subscriptions"] = await conn.fetchval(
                     "SELECT COUNT(*) FROM push_subscriptions"
                 ) or 0
+                # Читаем реальное состояние scheduler из БД
+                row = await conn.fetchrow("SELECT * FROM scheduler_state WHERE name='push'")
+                if row:
+                    diag["scheduler_db"] = {
+                        "started_at":  row["started_at"].isoformat() if row["started_at"] else None,
+                        "last_check":  row["last_check"].isoformat() if row["last_check"] else None,
+                        "checks_count": row["checks_count"],
+                        "pushes_sent": row["pushes_sent"],
+                        "last_error":  row["last_error"],
+                        "leader_pid":  row["leader_pid"],
+                    }
+                    # Считаем секунды с последней проверки
+                    if row["last_check"]:
+                        diff = (datetime.now() - row["last_check"]).total_seconds()
+                        diag["scheduler_db"]["seconds_since_last_check"] = int(diff)
+                        diag["scheduler_db"]["alive"] = diff < 180  # жив если проверял <3 мин назад
+                else:
+                    diag["scheduler_db"] = None
+                    diag["scheduler_db_note"] = "Запись scheduler в БД ещё не создана. Подождите 1-2 минуты после деплоя."
         except Exception as e:
             diag["subscriptions_error"] = str(e)
     # Итоговый вердикт
+    scheduler_alive = diag.get("scheduler_db", {}) and diag["scheduler_db"].get("alive", False)
     diag["status"] = "ok" if (
         diag["vapid_public_key_set"] and
         diag["vapid_private_pem_set"] and
         diag["db_pool_ready"] and
-        diag["pywebpush_available"]
+        diag["pywebpush_available"] and
+        scheduler_alive
     ) else "broken"
     diag["issues"] = []
     if not diag["vapid_public_key_set"]: diag["issues"].append("VAPID_PUBLIC_KEY не задан")
     if not diag["vapid_private_pem_set"]: diag["issues"].append("VAPID_PRIVATE_PEM не задан в Amvera env")
     if not diag["db_pool_ready"]: diag["issues"].append("База данных недоступна")
     if not diag["pywebpush_available"]: diag["issues"].append("pywebpush не установлен")
-    if diag["scheduler"]["started_at"] is None: diag["issues"].append("Scheduler не запущен")
+    # Проверка scheduler по БД (реальное состояние)
+    sdb = diag.get("scheduler_db")
+    if not sdb:
+        diag["issues"].append("Scheduler ещё не запустился (подождите 1-2 минуты)")
+    elif sdb.get("last_check") is None:
+        diag["issues"].append("Scheduler запустился, но ни разу не проверил расписание")
+    elif not sdb.get("alive"):
+        diag["issues"].append(f"Scheduler не отвечает {sdb.get('seconds_since_last_check', 0)} сек")
     return diag
 
 @app.post("/api/v1/auth/logout-all")
