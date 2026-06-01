@@ -2360,7 +2360,7 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
   return (
     <div style={{ position:'absolute', inset:0, background:'var(--bg)', display:'flex', flexDirection:'column', zIndex:8 }}>
       {/* TopBar */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 18px 10px', flexShrink:0 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'calc(18px + env(safe-area-inset-top)) 18px 10px', flexShrink:0 }}>
         <button onClick={onClose} style={{ width:44, height:44, borderRadius:'var(--r-md)', background:'var(--surface)', border:'0.5px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
@@ -2494,7 +2494,7 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
       </div>
 
       {/* Bottom composer */}
-      <div style={{ padding:'10px 14px 14px', borderTop:'0.5px solid var(--border)', background:'var(--bg)', flexShrink:0, display:'flex', flexDirection:'column', gap:8, position:'relative' }}>
+      <div style={{ padding:'10px 14px calc(14px + env(safe-area-inset-bottom))', borderTop:'0.5px solid var(--border)', background:'var(--bg)', flexShrink:0, display:'flex', flexDirection:'column', gap:8, position:'relative' }}>
 
         {/* Clip menu */}
         {showClip && (
@@ -3877,7 +3877,7 @@ function MedsScreen({ onBack, onMedsChange }) {
   return (
     <div style={{ position:'absolute', inset:0, background:'var(--bg)', display:'flex', flexDirection:'column', zIndex:8 }}>
       {/* TopBar */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 18px 10px', flexShrink:0 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'calc(18px + env(safe-area-inset-top)) 18px 10px', flexShrink:0 }}>
         <button onClick={onBack} style={{ width:44, height:44, borderRadius:'var(--r-md)', background:'var(--surface)', border:'0.5px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
