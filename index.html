@@ -2534,17 +2534,17 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
         {/* Аудио / Фото / Голос */}
         <div style={{ display:'flex', gap:8 }}>
           <button onClick={() => pickFile('audio/*,video/mp4', 'Аудио', 'audio')} disabled={pending}
-            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:44, borderRadius:12, border:'0.5px solid var(--border)', background:'var(--surface)', color:'var(--text-muted)', fontFamily:'inherit', fontSize:13, fontWeight:600, cursor: pending ? 'default' : 'pointer' }}>
+            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:44, borderRadius:12, border:'0.5px solid var(--border)', background:'var(--surface-2)', color:'var(--text-muted)', fontFamily:'inherit', fontSize:13, fontWeight:600, cursor: pending ? 'default' : 'pointer' }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
             Аудио
           </button>
           <button onClick={() => pickFile('image/*', 'Фото', 'photo')} disabled={pending}
-            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:44, borderRadius:12, border:'0.5px solid var(--border)', background:'var(--surface)', color:'var(--text-muted)', fontFamily:'inherit', fontSize:13, fontWeight:600, cursor: pending ? 'default' : 'pointer' }}>
+            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:44, borderRadius:12, border:'0.5px solid var(--border)', background:'var(--surface-2)', color:'var(--text-muted)', fontFamily:'inherit', fontSize:13, fontWeight:600, cursor: pending ? 'default' : 'pointer' }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
             Фото
           </button>
           <button onClick={handleVoice} disabled={pending}
-            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:44, borderRadius:12, border:'0.5px solid var(--border)', background:'var(--surface)', color:'var(--text-muted)', fontFamily:'inherit', fontSize:13, fontWeight:600, cursor: pending ? 'default' : 'pointer' }}>
+            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:44, borderRadius:12, border:'0.5px solid var(--border)', background:'var(--surface-2)', color:'var(--text-muted)', fontFamily:'inherit', fontSize:13, fontWeight:600, cursor: pending ? 'default' : 'pointer' }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
             Голос
           </button>
@@ -3075,8 +3075,8 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
         </div>
         {chips.length > 0 && (<div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "8px 0 0", scrollbarWidth: "none" }}>{chips.map(([key, label]) => (<button key={key} onClick={() => setActiveChip(activeChip === key ? null : key)} style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 99, fontSize: 12, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", border: "0.5px solid " + (activeChip === key ? accent : "var(--border)"), background: activeChip === key ? accent + "22" : "var(--surface)", color: activeChip === key ? accent : "var(--text-muted)" }}>{label}</button>))}</div>)}
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button onClick={handleDoc} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 0", borderRadius: 12, border: "0.5px solid var(--border)", background: "var(--surface)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: "var(--text-muted)", cursor: "pointer" }}><IconDoc size={18}/>Документ</button>
-          <button onClick={handlePhoto} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 0", borderRadius: 12, border: "0.5px solid var(--border)", background: "var(--surface)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: "var(--text-muted)", cursor: "pointer" }}><IconCamera size={18}/>Фото</button>
+          <button onClick={handleDoc} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 0", borderRadius: 12, border: "0.5px solid var(--border)", background: "var(--surface-2)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: "var(--text-muted)", cursor: "pointer" }}><IconDoc size={18}/>Документ</button>
+          <button onClick={handlePhoto} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 0", borderRadius: 12, border: "0.5px solid var(--border)", background: "var(--surface-2)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: "var(--text-muted)", cursor: "pointer" }}><IconCamera size={18}/>Фото</button>
           <VoiceButton onResult={(text) => { setInput(text); setTimeout(() => slide === 4 ? sendMsg() : sendExpense(text), 800); }} />
         </div>
       </div>
@@ -3103,7 +3103,7 @@ function VoiceButton({ onResult, onError }) {
     );
   };
   return (
-    <button onClick={handle} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 0", borderRadius: 12, border: "0.5px solid " + (active ? "var(--danger)" : "var(--border)"), background: active ? "var(--danger-tint)" : "var(--surface)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: active ? "var(--danger)" : "var(--text-muted)", cursor: "pointer" }}>
+    <button onClick={handle} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 0", borderRadius: 12, border: "0.5px solid " + (active ? "var(--danger)" : "var(--border)"), background: active ? "var(--danger-tint)" : "var(--surface-2)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: active ? "var(--danger)" : "var(--text-muted)", cursor: "pointer" }}>
       <IconMic size={18} color={active ? "var(--danger)" : undefined}/>
       {active ? "Стоп" : "Голос"}
     </button>
