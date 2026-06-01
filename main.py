@@ -2240,4 +2240,16 @@ async def test_push(user=Depends(get_current_user)):
 
 # ═════════════════════════════════════════════════════════════════
 
+@app.post("/api/v1/auth/logout-all")
+async def logout_all(user=Depends(get_current_user)):
+    """Удалить все сессии пользователя — выход со всех устройств"""
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    async with db_pool.acquire() as conn:
+        deleted = await conn.fetchval(
+            "DELETE FROM sessions WHERE user_id=$1 RETURNING COUNT(*)",
+            user["id"]
+        )
+    return {"status": "ok", "sessions_deleted": deleted or 0}
+
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
