@@ -5128,6 +5128,203 @@ function PinSetupFlow({ mode, onDone, onCancel }) {
 // ─────────────────────────────────────────────────────────────
 // SecurityScreen — раздел «Безопасность» в профиле
 // ─────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────
+// PushTestSheet — диагностика push-уведомлений
+// 5 шагов: бэк → разрешение браузера → SW → подписка → тест push
+// ─────────────────────────────────────────────────────────────
+function PushTestSheet({ onClose }) {
+  const [steps, setSteps] = React.useState([
+    { id: 'backend',     label: 'Проверка бэкенда', status: 'pending', detail: '' },
+    { id: 'permission',  label: 'Разрешение браузера', status: 'pending', detail: '' },
+    { id: 'sw',          label: 'Service Worker', status: 'pending', detail: '' },
+    { id: 'subscribe',   label: 'Подписка на push', status: 'pending', detail: '' },
+    { id: 'test',        label: 'Тестовое уведомление', status: 'pending', detail: '' },
+  ]);
+  const [running, setRunning] = React.useState(false);
+  const [done, setDone] = React.useState(false);
+
+  const updateStep = (id, status, detail) => {
+    setSteps(s => s.map(st => st.id === id ? { ...st, status, detail } : st));
+  };
+
+  const runDiagnostic = async () => {
+    setRunning(true);
+    setSteps(s => s.map(st => ({ ...st, status: 'pending', detail: '' })));
+
+    // 1. Бэкенд
+    updateStep('backend', 'running', '');
+    let backendOk = false;
+    try {
+      const r = await fetch('/api/v1/push/diagnostic');
+      const d = await r.json();
+      if (d.status === 'ok') {
+        updateStep('backend', 'ok', `VAPID настроен, подписок в БД: ${d.total_subscriptions || 0}`);
+        backendOk = true;
+      } else {
+        updateStep('backend', 'error', (d.issues || []).join('; '));
+      }
+    } catch(e) {
+      updateStep('backend', 'error', 'Не удалось связаться с сервером: ' + e.message);
+    }
+
+    if (!backendOk) { setDone(true); setRunning(false); return; }
+
+    // 2. Разрешение
+    updateStep('permission', 'running', '');
+    if (!('Notification' in window)) {
+      updateStep('permission', 'error', 'Браузер не поддерживает уведомления');
+      setDone(true); setRunning(false); return;
+    }
+    let perm = Notification.permission;
+    if (perm === 'default') {
+      perm = await Notification.requestPermission();
+    }
+    if (perm !== 'granted') {
+      updateStep('permission', 'error', perm === 'denied'
+        ? 'Заблокировано. Откройте настройки сайта в браузере и разрешите уведомления'
+        : 'Не выдано');
+      setDone(true); setRunning(false); return;
+    }
+    updateStep('permission', 'ok', 'Разрешено');
+
+    // 3. Service Worker
+    updateStep('sw', 'running', '');
+    if (!('serviceWorker' in navigator)) {
+      updateStep('sw', 'error', 'Не поддерживается браузером');
+      setDone(true); setRunning(false); return;
+    }
+    let reg;
+    try {
+      reg = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      updateStep('sw', 'ok', 'Зарегистрирован');
+    } catch(e) {
+      updateStep('sw', 'error', e.message);
+      setDone(true); setRunning(false); return;
+    }
+
+    // 4. Подписка
+    updateStep('subscribe', 'running', '');
+    try {
+      const keyResp = await fetch('/api/v1/push/vapid-key');
+      const { public_key } = await keyResp.json();
+      const rawKey = public_key.replace(/-/g, '+').replace(/_/g, '/');
+      const padding = '='.repeat((4 - rawKey.length % 4) % 4);
+      const keyBytes = Uint8Array.from(atob(rawKey + padding), c => c.charCodeAt(0));
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: keyBytes
+      });
+      const subJson = sub.toJSON();
+      const saveResp = await authSend('/api/v1/push/subscribe', 'POST', {
+        endpoint: subJson.endpoint,
+        p256dh: subJson.keys.p256dh,
+        auth: subJson.keys.auth
+      });
+      if (!saveResp) {
+        updateStep('subscribe', 'error', 'Не удалось сохранить на сервере (возможно, нет авторизации)');
+        setDone(true); setRunning(false); return;
+      }
+      updateStep('subscribe', 'ok', 'Подписка сохранена');
+    } catch(e) {
+      updateStep('subscribe', 'error', e.message);
+      setDone(true); setRunning(false); return;
+    }
+
+    // 5. Тестовый push
+    updateStep('test', 'running', '');
+    try {
+      const result = await authSend('/api/v1/push/test', 'POST', {});
+      if (result && result.sent > 0) {
+        updateStep('test', 'ok', `Отправлено ${result.sent} уведомлений. Сейчас придёт push.`);
+      } else if (result && result.status === 'no_subscriptions') {
+        updateStep('test', 'error', 'Подписка не найдена в БД');
+      } else {
+        updateStep('test', 'error', 'Сервер не смог отправить push (возможно, VAPID_PRIVATE_PEM некорректный)');
+      }
+    } catch(e) {
+      updateStep('test', 'error', e.message);
+    }
+
+    setDone(true); setRunning(false);
+  };
+
+  React.useEffect(() => { runDiagnostic(); }, []);
+
+  const StepIcon = ({ status }) => {
+    if (status === 'pending') return <div style={{ width:20, height:20, borderRadius:'50%', border:'1.5px dashed var(--border-strong)' }}/>;
+    if (status === 'running') return <div style={{ width:20, height:20, border:'2px solid var(--primary)', borderTopColor:'transparent', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>;
+    if (status === 'ok') return (
+      <div style={{ width:20, height:20, borderRadius:'50%', background:'var(--success)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+    );
+    return (
+      <div style={{ width:20, height:20, borderRadius:'50%', background:'var(--danger)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </div>
+    );
+  };
+
+  const allOk = done && steps.every(s => s.status === 'ok');
+  const hasError = done && steps.some(s => s.status === 'error');
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:200 }}/>
+      <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'var(--bg)', borderRadius:'20px 20px 0 0', zIndex:201, maxHeight:'92%', overflowY:'auto', paddingBottom:'calc(24px + env(safe-area-inset-bottom))' }}>
+        <div style={{ width:40, height:4, background:'var(--border-strong)', borderRadius:99, margin:'14px auto 0' }}/>
+        <div style={{ padding:'16px 20px 4px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ fontSize:18, fontWeight:800 }}>Диагностика push</div>
+          <button onClick={onClose} style={{ background:'var(--surface-2)', border:'none', borderRadius:10, width:36, height:36, cursor:'pointer', fontSize:18, color:'var(--text-muted)' }}>✕</button>
+        </div>
+        <div style={{ padding:'4px 20px 12px', fontSize:13, color:'var(--text-muted)' }}>
+          Проверяю каждый шаг от сервера до вашего браузера
+        </div>
+
+        <div style={{ padding:'12px 20px 0', display:'flex', flexDirection:'column', gap:10 }}>
+          {steps.map(s => (
+            <div key={s.id} style={{ display:'flex', gap:12, padding:'12px 14px', background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:12 }}>
+              <StepIcon status={s.status}/>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:14, fontWeight:600 }}>{s.label}</div>
+                {s.detail && <div style={{ fontSize:12, color: s.status === 'error' ? 'var(--danger)' : 'var(--text-muted)', marginTop:3, lineHeight:1.5, wordBreak:'break-word' }}>{s.detail}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {done && (
+          <div style={{ padding:'16px 20px 0' }}>
+            {allOk && (
+              <div style={{ padding:'14px 16px', background:'var(--success-tint)', color:'var(--success)', borderRadius:12, fontSize:14, fontWeight:600 }}>
+                Всё работает! Push-уведомление должно появиться в течение нескольких секунд.
+              </div>
+            )}
+            {hasError && (
+              <div style={{ padding:'14px 16px', background:'var(--danger-tint)', color:'var(--danger)', borderRadius:12, fontSize:13, lineHeight:1.6 }}>
+                Найдена проблема. Посмотрите на красные шаги выше — там описание ошибки.
+              </div>
+            )}
+            <div style={{ display:'flex', gap:10, marginTop:14 }}>
+              <button onClick={runDiagnostic} disabled={running} style={{ flex:1, padding:'12px', borderRadius:12, border:'0.5px solid var(--border)', background:'var(--surface-2)', fontFamily:'inherit', fontSize:14, fontWeight:600, cursor:'pointer' }}>
+                Повторить
+              </button>
+              <button onClick={onClose} style={{ flex:1, padding:'12px', borderRadius:12, border:'none', background:'var(--primary)', color:'#fff', fontFamily:'inherit', fontSize:14, fontWeight:600, cursor:'pointer' }}>
+                Закрыть
+              </button>
+            </div>
+          </div>
+        )}
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    </>
+  );
+}
+
+
 function SecurityScreen({ onClose }) {
   const [pinEnabled, setPinEnabled]   = React.useState(isPinEnabled());
   const [bioEnabled, setBioEnabled]   = React.useState(isBioEnabled());
@@ -5135,6 +5332,7 @@ function SecurityScreen({ onClose }) {
   const [flow, setFlow]               = React.useState(null); // null | 'set' | 'change' | 'disable_verify'
   const [toast, setToast]             = React.useState('');
   const [logoutConfirm, setLogoutConfirm] = React.useState(false);
+  const [showPushTest, setShowPushTest] = React.useState(false);
 
   React.useEffect(() => {
     // Проверим поддержку биометрии
@@ -5275,6 +5473,14 @@ function SecurityScreen({ onClose }) {
             )}
           </div>
 
+          {/* Push-уведомления */}
+          <Section title="Push-уведомления"/>
+          <div style={{ background:'var(--surface)', borderTop:'0.5px solid var(--border)', borderBottom:'0.5px solid var(--border)' }}>
+            <Row label="Проверить уведомления" sub="Запустит полную диагностику и пришлёт тестовый push" onClick={() => setShowPushTest(true)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-subtle)" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </Row>
+          </div>
+
           {/* Сессия */}
           <Section title="Сессия"/>
           <div style={{ background:'var(--surface)', borderTop:'0.5px solid var(--border)', borderBottom:'0.5px solid var(--border)' }}>
@@ -5312,6 +5518,9 @@ function SecurityScreen({ onClose }) {
           </div>
         </div>
       )}
+
+      {/* Push test sheet */}
+      {showPushTest && <PushTestSheet onClose={() => setShowPushTest(false)}/>}
 
       {/* Toast */}
       {toast && (
@@ -6089,6 +6298,15 @@ function App() {
     const handler = () => onLogout();
     window.addEventListener('oktolk-unauth', handler);
     return () => window.removeEventListener('oktolk-unauth', handler);
+  }, []);
+
+  // Регистрация Service Worker при загрузке (для push-уведомлений)
+  React.useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('[SW] зарегистрирован, scope:', reg.scope))
+        .catch(err => console.warn('[SW] ошибка регистрации:', err));
+    }
   }, []);
 
   const [voiceResult, setVoiceResult] = React.useState(null);

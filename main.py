@@ -2056,19 +2056,35 @@ def send_web_push(subscription_info: dict, title: str, body: str, icon: str = "/
         print(f"[push] Ошибка отправки: {e}")
         return False
 
+# Состояние scheduler для диагностики
+_push_scheduler_state = {
+    "started_at": None,
+    "last_check": None,
+    "checks_count": 0,
+    "last_error": None,
+    "pushes_sent": 0,
+}
+
 async def push_scheduler():
     """Фоновой планировщик — каждую минуту проверяет расписание лекарств"""
     from datetime import date
+    global _push_scheduler_state
     print("[push_scheduler] Запущен — проверка каждую минуту")
+    _push_scheduler_state["started_at"] = datetime.now().isoformat()
     # Защита от запуска до полной готовности БД
     await asyncio.sleep(5)
     while True:
         try:
             await asyncio.sleep(60)
+            _push_scheduler_state["last_check"] = datetime.now().isoformat()
+            _push_scheduler_state["checks_count"] = _push_scheduler_state.get("checks_count", 0) + 1
             if not db_pool:
+                _push_scheduler_state["last_error"] = "db_pool is None"
                 continue
             if not VAPID_PRIVATE_PEM:
+                _push_scheduler_state["last_error"] = "VAPID_PRIVATE_PEM не задан"
                 continue
+            _push_scheduler_state["last_error"] = None
             now = datetime.now()
             # Окно: уведомляем за 10 минут до приёма
             target = now + timedelta(minutes=10)
@@ -2111,6 +2127,7 @@ async def push_scheduler():
                             body=body
                         )
                         if sent:
+                            _push_scheduler_state["pushes_sent"] = _push_scheduler_state.get("pushes_sent", 0) + 1
                             print(f"[push] ✅ {med['name']} → user {med['user_id']} @ {target_time}")
         except Exception as e:
             print(f"[push_scheduler] Ошибка цикла: {e}")
@@ -2239,6 +2256,46 @@ async def test_push(user=Depends(get_current_user)):
     return {"status": "ok", "sent": sent, "total": len(subs)}
 
 # ═════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/push/diagnostic")
+async def push_diagnostic():
+    """Диагностика состояния push-уведомлений. Возвращает что работает, что нет"""
+    diag = {
+        "vapid_public_key_set": bool(VAPID_PUBLIC_KEY),
+        "vapid_private_pem_set": bool(VAPID_PRIVATE_PEM),
+        "vapid_private_length": len(VAPID_PRIVATE_PEM) if VAPID_PRIVATE_PEM else 0,
+        "db_pool_ready": db_pool is not None,
+        "scheduler": _push_scheduler_state,
+        "pywebpush_available": False,
+    }
+    try:
+        from pywebpush import webpush
+        diag["pywebpush_available"] = True
+    except ImportError as e:
+        diag["pywebpush_error"] = str(e)
+    # Общее количество подписок
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                diag["total_subscriptions"] = await conn.fetchval(
+                    "SELECT COUNT(*) FROM push_subscriptions"
+                ) or 0
+        except Exception as e:
+            diag["subscriptions_error"] = str(e)
+    # Итоговый вердикт
+    diag["status"] = "ok" if (
+        diag["vapid_public_key_set"] and
+        diag["vapid_private_pem_set"] and
+        diag["db_pool_ready"] and
+        diag["pywebpush_available"]
+    ) else "broken"
+    diag["issues"] = []
+    if not diag["vapid_public_key_set"]: diag["issues"].append("VAPID_PUBLIC_KEY не задан")
+    if not diag["vapid_private_pem_set"]: diag["issues"].append("VAPID_PRIVATE_PEM не задан в Amvera env")
+    if not diag["db_pool_ready"]: diag["issues"].append("База данных недоступна")
+    if not diag["pywebpush_available"]: diag["issues"].append("pywebpush не установлен")
+    if diag["scheduler"]["started_at"] is None: diag["issues"].append("Scheduler не запущен")
+    return diag
 
 @app.post("/api/v1/auth/logout-all")
 async def logout_all(user=Depends(get_current_user)):
