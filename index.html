@@ -2208,32 +2208,32 @@ function TabBar({ active, onChange }) {
 function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, setFacts }) {
   const [pending, setPending] = React.useState(false);
   const [input, setInput] = React.useState('');
+  const [showClip, setShowClip] = React.useState(false);
+  const [analysisStep, setAnalysisStep] = React.useState('');
   const chatRef = React.useRef(null);
+  const chatHistory = React.useRef([]);
 
   React.useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
-  }, [messages, pending]);
+  }, [messages, pending, analysisStep]);
 
   const allFacts = facts.join('\n---\n');
 
-  const analysisStepRef = React.useRef('');
-  const [analysisStep, setAnalysisStep] = React.useState('');
-
   const runAnalysis = async (updatedFacts) => {
     setPending(true);
-    const steps = ['Читаю материалы…', 'Анализирую…', 'Думаю…', 'Готово!'];
+    const steps = ['Извлекаю факты', 'Проверяю признаки', 'Готовлю рекомендации'];
     let i = 0;
     setAnalysisStep(steps[0]);
     const stepTimer = setInterval(() => {
       i++;
       if (i < steps.length) setAnalysisStep(steps[i]);
       else clearInterval(stepTimer);
-    }, 1800);
+    }, 1500);
     try {
       const analyzeRes = await fetch('/api/v1/antiscam/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ facts: updatedFacts.join('\\n---\\n') })
+        body: JSON.stringify({ facts: updatedFacts.join('\n---\n') })
       });
       const result = await analyzeRes.json();
       clearInterval(stepTimer);
@@ -2248,47 +2248,66 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
     }
   };
 
-  const extractAndAnalyze = async (imageBase64, mimeType, audioBase64, audioMime, url, text, userLabel, isGrouped) => {
+  const extractAndAnalyze = async (imageBase64, mimeType, audioBase64, audioMime, url, text) => {
     try {
       const extractRes = await fetch('/api/v1/antiscam/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          image_base64: imageBase64 || null,
-          mime_type: mimeType || 'image/jpeg',
-          audio_base64: audioBase64 || null,
-          audio_mime: audioMime || 'audio/webm',
-          url: url || null,
-          text: text || null
+          image_base64: imageBase64 || null, mime_type: mimeType || 'image/jpeg',
+          audio_base64: audioBase64 || null, audio_mime: audioMime || 'audio/webm',
+          url: url || null, text: text || null
         })
       });
       const extractData = await extractRes.json();
-      const newFacts = extractData.facts || '';
-      const updatedFacts = [...facts, newFacts];
+      const updatedFacts = [...facts, extractData.facts || ''];
       setFacts(updatedFacts);
       return updatedFacts;
-    } catch(e) {
-      return facts;
+    } catch(e) { return facts; }
+  };
+
+  // Отправка текста (или ссылки, если входит http)
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    const txt = input.trim();
+    const isUrl = /^https?:\/\//i.test(txt);
+    setMessages(m => [...m, { role: 'user', type: isUrl ? 'link' : 'text', text: txt }]);
+    setInput('');
+    // Если уже есть анализ — это вопрос к чату
+    if (facts.length > 0 && !isUrl) {
+      chatHistory.current.push({ role: 'user', content: txt });
+      setPending(true);
+      setAnalysisStep('Думаю');
+      try {
+        const res = await fetch('/api/v1/antiscam/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ facts: allFacts, question: txt, history: chatHistory.current.slice(-10) })
+        });
+        const result = await res.json();
+        const reply = result.reply || 'Не удалось получить ответ';
+        chatHistory.current.push({ role: 'assistant', content: reply });
+        setMessages(m => [...m, { role: 'ai', type: 'text', text: reply }]);
+      } catch(e) {
+        setMessages(m => [...m, { role: 'ai', text: 'Ошибка. Попробуйте снова.', type: 'text' }]);
+      } finally { setPending(false); setAnalysisStep(''); }
+    } else {
+      const updatedFacts = await extractAndAnalyze(null, null, null, null, isUrl ? txt : null, isUrl ? null : txt);
+      runAnalysis(updatedFacts);
     }
   };
 
-  const handleText = async () => {
-    if (!input.trim()) return;
-    const txt = input.trim();
-    setMessages(m => [...m, { role: 'user', text: txt }]);
-    setInput('');
-    const updatedFacts = await extractAndAnalyze(null, null, null, null, null, txt, '', true);
-    runAnalysis(updatedFacts, 1);
-  };
-
-  const handlePhoto = () => {
+  const pickFile = (accept, label, kind) => {
     const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
+    inp.type = 'file';
+    inp.accept = accept;
+    if (kind === 'photo') inp.multiple = true;
     inp.onchange = async (e) => {
       const files = Array.from(e.target.files);
       if (!files.length) return;
-      const label = files.length > 1 ? '📷 Скриншотов отправлено: ' + files.length : '📷 Скриншот отправлен';
-      setMessages(m => [...m, { role: 'user', text: label }]);
+      setShowClip(false);
+      // Показываем карточки-аттачи
+      for (const f of files) {
+        setMessages(m => [...m, { role: 'user', type: kind, name: f.name, size: f.size }]);
+      }
       let updatedFacts = facts;
       for (const file of files) {
         const base64 = await new Promise(res => {
@@ -2296,38 +2315,15 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
           r.onloadend = () => res(r.result.split(',')[1]);
           r.readAsDataURL(file);
         });
-        updatedFacts = await extractAndAnalyze(base64, file.type, null, null, null, null, '', true);
+        if (kind === 'audio') {
+          updatedFacts = await extractAndAnalyze(null, null, base64, file.type, null, null);
+        } else {
+          updatedFacts = await extractAndAnalyze(base64, file.type, null, null, null, null);
+        }
       }
-      runAnalysis(updatedFacts, files.length);
+      runAnalysis(updatedFacts);
     };
     inp.click();
-  };
-
-  const handleAudio = () => {
-    const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = 'audio/*,video/mp4';
-    inp.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      setMessages(m => [...m, { role: 'user', text: '🎵 Аудио отправлено' }]);
-      const base64 = await new Promise(res => {
-        const r = new FileReader();
-        r.onloadend = () => res(r.result.split(',')[1]);
-        r.readAsDataURL(file);
-      });
-      const updatedFacts = await extractAndAnalyze(null, null, base64, file.type, null, null, '', true);
-      runAnalysis(updatedFacts, 1);
-    };
-    inp.click();
-  };
-
-  const handleUrl = async () => {
-    const url = input.trim();
-    if (!url) return;
-    setMessages(m => [...m, { role: 'user', text: '🔗 ' + url }]);
-    setInput('');
-    const updatedFacts = await extractAndAnalyze(null, null, null, null, url, null, '', true);
-    runAnalysis(updatedFacts, 1);
   };
 
   const handleVoice = () => {
@@ -2339,244 +2335,225 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
     );
   };
 
-  const chatHistory = React.useRef([]);
+  // ── Render ────────────────────────────────────────────────────
+  const fmtSize = (b) => b < 1024 ? b + ' Б' : b < 1024*1024 ? Math.round(b/1024) + ' КБ' : (b/1048576).toFixed(1) + ' МБ';
 
-  const askQuestion = async () => {
-    if (!input.trim()) return;
-    const q = input.trim();
-    setMessages(m => [...m, { role: 'user', text: q }]);
-    chatHistory.current.push({ role: 'user', content: q });
-    setInput('');
-    setPending(true);
-    setAnalysisStep('Думаю…');
-    try {
-      const res = await fetch('/api/v1/antiscam/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          facts: allFacts || 'Контекст не задан',
-          question: q,
-          history: chatHistory.current.slice(-10)
-        })
-      });
-      const result = await res.json();
-      const reply = result.reply || 'Не удалось получить ответ';
-      chatHistory.current.push({ role: 'assistant', content: reply });
-      setMessages(m => [...m, { role: 'ai', type: 'text', text: reply }]);
-    } catch(e) {
-      setMessages(m => [...m, { role: 'ai', text: 'Ошибка. Попробуйте снова.', type: 'text' }]);
-    } finally {
-      setPending(false);
-      setAnalysisStep('');
-    }
+  // Цвета по уровню риска
+  const getVerdictClass = (data) => {
+    const lvl = data?.risk_level ?? 3;
+    const conf = data?.confidence;
+    if (conf === 'низкая') return 'warn';
+    if (lvl === 0) return 'success';
+    if (lvl <= 2) return 'warn';
+    return 'danger';
   };
-
-  // Цвета: зелёный=безопасно, жёлтый=мало данных/подозрительно, красный=опасно
-  const getRiskColor = (level, confidence) => {
-    if (confidence === 'низкая') return '#D97706';
-    if (level === 0) return '#1F8A5B';
-    if (level <= 2) return '#D97706';
-    return '#C0392B';
+  const getVerdictLabel = (data) => {
+    const lvl = data?.risk_level ?? 3;
+    const conf = data?.confidence;
+    if (conf === 'низкая') return 'Недостаточно данных';
+    if (lvl === 0) return 'Безопасно';
+    if (lvl <= 2) return 'Подозрительно';
+    return 'Опасно';
   };
-  const getRiskBg = (level, confidence) => {
-    if (confidence === 'низкая') return '#FEF3C7';
-    if (level === 0) return '#D1FAE5';
-    if (level <= 2) return '#FEF3C7';
-    return '#FFE5E5';
-  };
-  const getRiskEmoji = (level, confidence) => {
-    if (confidence === 'низкая') return '🟡';
-    if (level === 0) return '✅';
-    if (level <= 2) return '⚠️';
-    return '🚨';
-  };
-  const riskColors = { 0: '#1F8A5B', 1: '#D97706', 2: '#D97706', 3: '#C0392B', 4: '#C0392B', 5: '#C0392B' };
-  const riskBg = { 0: '#D1FAE5', 1: '#FEF3C7', 2: '#FEF3C7', 3: '#FFE5E5', 4: '#FFE5E5', 5: '#FFE5E5' };
-  const riskEmoji = { 0: '✅', 1: '🔶', 2: '⚠️', 3: '🚨', 4: '🚨', 5: '🚨' };
+  const getVerdictTitle = (data) => data?.title || (data?.risk_level === 0 ? 'Угрозы не обнаружены' : data?.risk_level >= 3 ? 'Это мошенничество' : 'Будьте осторожны');
 
   return (
-    <>
-      <div className="stop-sheet-overlay" onClick={onClose}/>
-      <div className="stop-sheet">
-        <div onClick={onClose} onTouchStart={(e) => { window._touchY = e.touches[0].clientY; }} onTouchEnd={(e) => { if (e.changedTouches[0].clientY - window._touchY > 40) onClose(); }} style={{ width: 40, height: 4, background: '#E0E0E8', borderRadius: 2, margin: '12px auto 0', flexShrink: 0, cursor: 'pointer', touchAction: 'none' }}/>
+    <div style={{ position:'absolute', inset:0, background:'var(--bg)', display:'flex', flexDirection:'column', zIndex:8 }}>
+      {/* TopBar */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 18px 10px', flexShrink:0 }}>
+        <button onClick={onClose} style={{ width:44, height:44, borderRadius:'var(--r-md)', background:'var(--surface)', border:'0.5px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div style={{ fontSize:17, fontWeight:700, letterSpacing:'-0.02em' }}>Стоп Мошенник</div>
+        <div style={{ width:44 }}/>
+      </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 12px', borderBottom: '1px solid #F0F0EC', flexShrink: 0 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #C0392B, #E74C3C)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <IconShield size={20} sw={2.5} color="white"/>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.02em' }}>Стоп Мошенник</div>
-            <div style={{ fontSize: 11, color: '#9B9BA3', marginTop: 1 }}>
-              {facts.length > 0 ? `${facts.length} материал(ов) проанализировано` : 'AI проверка · задавайте вопросы'}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <div style={{ background: '#FFF0F0', borderRadius: 10, padding: '5px 10px', textAlign: 'center' }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#C0392B' }}>2 841</div>
-              <div style={{ fontSize: 9, fontWeight: 600, color: '#9B9BA3' }}>угроз</div>
-            </div>
-          </div>
-        </div>
+      {/* Hero — точно как другие разделы */}
+      <div className="hero danger" style={{ flexShrink:0 }}>
+        <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.12em', textTransform:'uppercase', opacity:0.78, marginBottom:4, textAlign:'center' }}>Защита от мошенников</div>
+        <div className="hero-title" style={{ fontSize:18, textAlign:'center' }}>Стоп Мошенник</div>
+        <div style={{ fontSize:13, opacity:0.85, marginTop:3, textAlign:'center' }}>отправьте материал — разберём за минуту</div>
+      </div>
 
-        <div ref={chatRef} style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {messages.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '20px 10px' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>🛡️</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Отправьте материалы для проверки</div>
-              <div style={{ fontSize: 12, color: '#9B9BA3', lineHeight: 1.5 }}>Скриншот переписки, ссылку, аудиозапись звонка или опишите ситуацию текстом</div>
+      {/* Scroll messages */}
+      <div ref={chatRef} style={{ flex:1, minHeight:0, overflowY:'auto', padding:'14px', display:'flex', flexDirection:'column', gap:10 }}>
+        {messages.length === 0 && (
+          <div style={{ textAlign:'center', padding:'28px 14px' }}>
+            <div style={{ width:56, height:56, borderRadius:16, background:'var(--danger-tint)', color:'var(--danger)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 12px' }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             </div>
-          )}
-          {messages.map((m, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, flexDirection: m.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-start' }}>
-              {m.role === 'ai' && (
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#C0392B,#E74C3C)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>🛡️</div>
-              )}
-              {m.type === 'verdict' && m.data ? (
-                <div style={{ maxWidth: '88%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ background: getRiskBg(m.data.risk_level || 0, m.data.confidence), border: `1.5px solid ${getRiskColor(m.data.risk_level || 0, m.data.confidence)}44`, borderRadius: 16, padding: '14px 16px' }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, color: getRiskColor(m.data.risk_level || 0, m.data.confidence), marginBottom: 10 }}>
-                      {getRiskEmoji(m.data.risk_level || 0, m.data.confidence)} Риск: {m.data.risk_level}/5
-                      {m.data.confidence === 'низкая' && <span style={{ fontSize: 11, fontWeight: 600, marginLeft: 8, color: '#D97706' }}>· нужно больше данных</span>}
-                      {m.data.scheme && <span style={{ fontSize: 11, fontWeight: 600, marginLeft: 8, opacity: 0.8 }}>· {m.data.scheme}</span>}
-                    </div>
-                    {m.data.what_doing && (
-                      <div style={{ marginBottom: 8 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9BA3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Что делает мошенник</div>
-                        <div style={{ fontSize: 13, color: '#16161A', lineHeight: 1.5 }}>{m.data.what_doing}</div>
-                      </div>
-                    )}
-                    {m.data.risk_description && (
-                      <div style={{ marginBottom: 8 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9BA3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Риски</div>
-                        <div style={{ fontSize: 13, color: '#16161A', lineHeight: 1.5 }}>{m.data.risk_description}</div>
-                      </div>
-                    )}
-                    {m.data.consequences && (
-                      <div style={{ marginBottom: 8 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9BA3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Последствия</div>
-                        <div style={{ fontSize: 13, color: '#16161A', lineHeight: 1.5 }}>{m.data.consequences}</div>
-                      </div>
-                    )}
-                    {m.data.recommendation && (
-                      <div style={{ background: 'rgba(0,0,0,0.05)', borderRadius: 10, padding: '10px 12px', marginTop: 4 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#9B9BA3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Рекомендация</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: getRiskColor(m.data.risk_level || 0, m.data.confidence), lineHeight: 1.5 }}>👉 {m.data.recommendation}</div>
-                      </div>
-                    )}
+            <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>Что вас насторожило?</div>
+            <div style={{ fontSize:13, color:'var(--text-muted)', lineHeight:1.6 }}>Прикрепите скриншот, документ, запись звонка или опишите ситуацию словами</div>
+          </div>
+        )}
+
+        {messages.map((m, idx) => {
+          // Вердикт
+          if (m.type === 'verdict') {
+            const cls = getVerdictClass(m.data);
+            const label = getVerdictLabel(m.data);
+            const title = getVerdictTitle(m.data);
+            const summary = m.data?.summary || m.data?.reply || '';
+            const reasons = m.data?.reasons || m.data?.signs || [];
+            const icon = cls === 'success'
+              ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              : cls === 'warn'
+                ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+            return (
+              <div key={idx} className={"hero " + cls} style={{ borderRadius:'var(--r-xl)', overflow:'hidden', margin:0, padding:0 }}>
+                <div style={{ padding:'16px 18px 12px', display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ width:42, height:42, borderRadius:12, background:'rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{icon}</div>
+                  <div>
+                    <div style={{ fontSize:11, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', opacity:0.8 }}>{label}</div>
+                    <div style={{ fontSize:18, fontWeight:800, letterSpacing:'-0.025em', marginTop:2 }}>{title}</div>
                   </div>
                 </div>
-              ) : (
-                <div style={{ maxWidth: '82%', position: 'relative' }}>
-                  <div style={{ padding: '10px 14px', borderRadius: 18, fontSize: 13, lineHeight: 1.7, background: m.role === 'user' ? '#3B4FE0' : '#F5F5F1', color: m.role === 'user' ? '#fff' : '#16161A', borderBottomRightRadius: m.role === 'user' ? 4 : 18, borderBottomLeftRadius: m.role === 'ai' ? 4 : 18, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {m.text}
-                  </div>
-                  {m.role === 'ai' && (
-                    <button onClick={() => { navigator.clipboard.writeText(m.text); }} style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '3px 8px', borderRadius: 6, border: 'none', background: '#E8E8E4', cursor: 'pointer', fontSize: 11, color: '#6B6B72', fontFamily: 'inherit' }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B6B72" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                      Копировать
-                    </button>
+                <div style={{ padding:'0 18px 16px' }}>
+                  {summary && <div style={{ fontSize:14, lineHeight:1.55, opacity:0.95, marginBottom: reasons.length ? 12 : 0 }}>{summary}</div>}
+                  {reasons.length > 0 && (
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      {reasons.slice(0,5).map((r, i) => (
+                        <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:8, fontSize:13, lineHeight:1.5, background:'rgba(255,255,255,0.13)', padding:'8px 12px', borderRadius:10 }}>
+                          <div style={{ width:16, height:16, borderRadius:'50%', background:'rgba(255,255,255,0.25)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:1 }}>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </div>
+                          {typeof r === 'string' ? r : (r.text || JSON.stringify(r))}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-          ))}
-          {pending && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#C0392B,#E74C3C)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🛡️</div>
-              <div style={{ padding: '10px 16px', background: '#FFF0F0', borderRadius: 18, borderBottomLeftRadius: 4, fontSize: 13, color: '#C0392B', fontWeight: 600 }}>
-                {analysisStep || 'Читаю материалы…'}
               </div>
+            );
+          }
+
+          // Аттачмент-карточки (фото/документ/аудио)
+          if (m.role === 'user' && (m.type === 'photo' || m.type === 'document' || m.type === 'audio')) {
+            const iconBg = 'rgba(255,255,255,0.22)';
+            const isAudio = m.type === 'audio';
+            const ic = m.type === 'photo'
+              ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              : m.type === 'document'
+                ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>;
+            const lbl = m.type === 'photo' ? 'фото' : m.type === 'document' ? 'документ' : 'аудиозапись';
+            return (
+              <div key={idx} style={{ display:'flex', flexDirection:'row-reverse', gap:8 }}>
+                <div style={{ width:30, height:30, borderRadius:'50%', background:'var(--primary-tint)', color:'var(--primary)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                </div>
+                <div style={{ background:'var(--primary)', color:'#fff', borderRadius:14, borderBottomRightRadius:4, padding:10, display:'flex', alignItems:'center', gap:10, maxWidth:'78%' }}>
+                  <div style={{ width:36, height:36, borderRadius:10, background:iconBg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{ic}</div>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:200 }}>{m.name}</div>
+                    <div style={{ fontSize:11, opacity:0.75, marginTop:1 }}>{lbl} · {fmtSize(m.size)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // Обычные сообщения (текст / ссылка)
+          const isUser = m.role === 'user';
+          return (
+            <div key={idx} style={{ display:'flex', gap:8, flexDirection: isUser ? 'row-reverse' : 'row', alignItems:'flex-start' }}>
+              <div style={{ width:30, height:30, borderRadius:'50%', background: isUser ? 'var(--primary-tint)' : 'var(--danger-tint)', color: isUser ? 'var(--primary)' : 'var(--danger)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                {isUser
+                  ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                  : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                }
+              </div>
+              <div style={{
+                maxWidth:'80%', padding:'10px 14px', borderRadius:14, fontSize:14, lineHeight:1.5,
+                background: isUser ? 'var(--primary)' : 'var(--surface)',
+                color: isUser ? '#fff' : 'var(--text)',
+                border: isUser ? 'none' : '0.5px solid var(--border)',
+                borderBottomRightRadius: isUser ? 4 : 14,
+                borderBottomLeftRadius: isUser ? 14 : 4,
+                boxShadow: isUser ? 'none' : 'var(--shadow-soft)',
+                wordBreak: 'break-word'
+              }}>{m.text}</div>
             </div>
-          )}
-        </div>
+          );
+        })}
 
-        <div style={{ padding: '8px 16px 0', flexShrink: 0, display: 'flex', gap: 6, overflowX: 'auto' }}>
-          <button onClick={handlePhoto} style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 20, border: 'none', background: '#F5F5F1', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B6B72', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
-            📷 Скриншот
-          </button>
-          <button onClick={handleUrl} style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 20, border: 'none', background: '#F5F5F1', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B6B72', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
-            🔗 Ссылка
-          </button>
-          <button onClick={handleAudio} style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 20, border: 'none', background: '#F5F5F1', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B6B72', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
-            🎵 Аудио
-          </button>
-          <button onClick={handleVoice} style={{ flexShrink: 0, padding: '7px 12px', borderRadius: 20, border: 'none', background: '#F5F5F1', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#6B6B72', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
-            🎤 Голос
-          </button>
-        </div>
-
-        <div style={{ padding: '10px 16px 24px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, background: '#F5F5F1', borderRadius: 16, padding: '10px 10px 10px 14px' }}>
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onInput={e => { e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
-              onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); input.startsWith('http') ? handleUrl() : (facts.length > 0 ? askQuestion() : handleText()); } }}
-              placeholder={facts.length > 0 ? "Задайте уточняющий вопрос…" : "Опишите ситуацию или вставьте ссылку…"}
-              rows={1}
-              style={{ flex:1, border:'none', outline:'none', background:'transparent', fontSize:14, fontFamily:'inherit', color:'var(--text)', resize:'none', minHeight:22, maxHeight:100 }}
-            />
-            <button
-              onClick={() => input.startsWith('http') ? handleUrl() : (facts.length > 0 ? askQuestion() : handleText())}
-              style={{ width:38, height:38, borderRadius:12, background:'#C0392B', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-              <IconSend size={16} sw={2.5} color="white"/>
-            </button>
+        {/* Stages */}
+        {pending && analysisStep && (
+          <div style={{ background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:14, padding:'12px 14px', boxShadow:'var(--shadow-soft)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:'var(--text-subtle)', marginBottom:10 }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Анализирую материал
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 10px', borderRadius:10, background:'var(--primary-tint)', color:'var(--primary)', fontSize:13, fontWeight:600 }}>
+              <div style={{ width:11, height:11, border:'2px solid var(--primary)', borderTopColor:'transparent', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>
+              {analysisStep}
+            </div>
           </div>
-        </div>
+        )}
       </div>
-    </>
-  );
-}
 
+      {/* Bottom composer */}
+      <div style={{ padding:'10px 14px 14px', borderTop:'0.5px solid var(--border)', background:'var(--bg)', flexShrink:0, display:'flex', flexDirection:'column', gap:8, position:'relative' }}>
 
-function WeatherWidget() {
-  const [w, setW] = React.useState(() => { try { const cached = localStorage.getItem("oktolk_weather"); if (cached) { const { data, ts } = JSON.parse(cached); if (Date.now() - ts < 1800000) return data; } } catch(e) {} return null; });
-  React.useEffect(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(async (pos) => {
-      try {
-        const lat = pos.coords.latitude.toFixed(2);
-        const lon = pos.coords.longitude.toFixed(2);
-        const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=2';
-        const r = await fetch(url);
-        const d = await r.json();
-        const ico = (c) => c===0?'☀️':c<=2?'⛅':c<=3?'☁️':c<=48?'🌫️':c<=67?'🌧️':c<=77?'❄️':'⛈️';
-        const txt = (c) => c===0?'ясно':c<=2?'малооблачно':c<=3?'облачно':c<=48?'туман':c<=67?'дождь':c<=77?'снег':'гроза';
-        const wd = { ti:ico(d.daily.weathercode[0]), tt:txt(d.daily.weathercode[0]), tmax:Math.round(d.daily.temperature_2m_max[0]), tmin:Math.round(d.daily.temperature_2m_min[0]), mi:ico(d.daily.weathercode[1]), mt:txt(d.daily.weathercode[1]), mmax:Math.round(d.daily.temperature_2m_max[1]), mmin:Math.round(d.daily.temperature_2m_min[1]) }; localStorage.setItem("oktolk_weather", JSON.stringify({ data: wd, ts: Date.now() })); setW(wd);
-      } catch(e) {}
-    }, () => {});
-  }, []);
-  if (!w) return null;
-  return (
-    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:20, padding:'16px 18px', width:'100%', animation:'weatherIn 0.4s ease-out' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <span style={{ fontSize:44, lineHeight:1 }}>{w.ti}</span>
-          <div>
-            <div style={{ fontSize:42, fontWeight:700, color:'var(--text)', lineHeight:1 }}>{w.tmax}°</div>
-            <div style={{ fontSize:14, color:'var(--text-muted)', marginTop:4 }}>{w.tt}</div>
-          </div>
+        {/* Clip menu */}
+        {showClip && (
+          <>
+            <div onClick={() => setShowClip(false)} style={{ position:'fixed', inset:0, zIndex:25 }}/>
+            <div style={{ position:'absolute', bottom:'calc(100% + 4px)', left:14, background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:14, boxShadow:'0 10px 40px rgba(0,0,0,0.15)', padding:6, display:'flex', flexDirection:'column', gap:2, zIndex:30, minWidth:200 }}>
+              <button onClick={() => pickFile('image/*', 'Фото', 'photo')} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:10, cursor:'pointer', fontSize:14, color:'var(--text)', fontFamily:'inherit', border:'none', background:'transparent', textAlign:'left' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.75"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                Фото из галереи
+              </button>
+              <button onClick={() => pickFile('.pdf,.doc,.docx,.txt,application/pdf', 'Документ', 'document')} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:10, cursor:'pointer', fontSize:14, color:'var(--text)', fontFamily:'inherit', border:'none', background:'transparent', textAlign:'left' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.75"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Документ
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Composer with clip */}
+        <div style={{ display:'flex', alignItems:'center', gap:6, background:'var(--surface)', border:'0.5px solid var(--border)', borderRadius:'var(--r-lg)', padding:'8px 8px 8px 6px', boxShadow:'var(--shadow-soft)' }}>
+          <button onClick={() => setShowClip(!showClip)} style={{ width:36, height:36, borderRadius:10, background: showClip ? 'var(--surface-2)' : 'transparent', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color: showClip ? 'var(--primary)' : 'var(--text-muted)', flexShrink:0 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <textarea
+            rows={1} value={input}
+            onChange={e => { setInput(e.target.value); e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight, 100)+'px'; }}
+            onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey && input.trim()) { e.preventDefault(); handleSend(); } }}
+            placeholder={facts.length > 0 ? "Задайте вопрос..." : "Опишите ситуацию или вставьте ссылку..."}
+            style={{ flex:1, border:'none', outline:'none', fontFamily:'inherit', fontSize:15, background:'transparent', resize:'none', padding:'6px 0', color:'var(--text)', minHeight:24 }}
+          />
+          <button onClick={handleSend} disabled={!input.trim() || pending}
+            style={{ width:36, height:36, borderRadius:10, background: input.trim() && !pending ? 'var(--danger)' : 'var(--surface-2)', color: input.trim() && !pending ? '#fff' : 'var(--text-subtle)', border:'none', cursor: input.trim() && !pending ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
         </div>
-        <div style={{ textAlign:'right' }}>
-          <div style={{ fontSize:13, color:'var(--text-subtle)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>Сегодня</div>
-          <div style={{ fontSize:14, color:'var(--text-muted)', marginTop:4 }}>мин {w.tmin}° · макс {w.tmax}°</div>
-        </div>
-      </div>
-      <div style={{ height:1, background:'var(--border)', margin:'14px 0' }}/>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:22 }}>{w.mi}</span>
-          <span style={{ fontSize:15, color:'var(--text-muted)' }}>{w.mt}</span>
-        </div>
-        <div style={{ fontSize:13, color:'var(--text-subtle)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>Завтра</div>
-        <div style={{ textAlign:'right' }}>
-          <div style={{ fontSize:18, fontWeight:600, color:'var(--text)' }}>{w.mmax}°</div>
-          <div style={{ fontSize:13, color:'var(--text-subtle)' }}>мин {w.mmin}°</div>
+
+        {/* Аудио / Фото / Голос */}
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={() => pickFile('audio/*,video/mp4', 'Аудио', 'audio')} disabled={pending}
+            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:44, borderRadius:12, border:'0.5px solid var(--border)', background:'var(--surface)', color:'var(--text-muted)', fontFamily:'inherit', fontSize:13, fontWeight:600, cursor: pending ? 'default' : 'pointer' }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            Аудио
+          </button>
+          <button onClick={() => pickFile('image/*', 'Фото', 'photo')} disabled={pending}
+            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:44, borderRadius:12, border:'0.5px solid var(--border)', background:'var(--surface)', color:'var(--text-muted)', fontFamily:'inherit', fontSize:13, fontWeight:600, cursor: pending ? 'default' : 'pointer' }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Фото
+          </button>
+          <button onClick={handleVoice} disabled={pending}
+            style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:44, borderRadius:12, border:'0.5px solid var(--border)', background:'var(--surface)', color:'var(--text-muted)', fontFamily:'inherit', fontSize:13, fontWeight:600, cursor: pending ? 'default' : 'pointer' }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+            Голос
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
 
 
 function HomeScreen({ onAsk, onMode, name = 'Евгений', voiceText, onVoiceClear }) {
