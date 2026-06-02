@@ -2172,18 +2172,16 @@ function formatUserDate(isoString) {
 (function syncTzOnLoad() {
   try {
     const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const stored = localStorage.getItem('oktolk_timezone');
-    if (stored !== browserTz) {
-      localStorage.setItem('oktolk_timezone', browserTz);
-      // Отправим на сервер если есть токен
-      const token = localStorage.getItem('oktolk_token');
-      if (token) {
-        fetch('/api/v1/profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ timezone: browserTz })
-        }).catch(() => {});
-      }
+    // Всегда сохраняем в localStorage
+    localStorage.setItem('oktolk_timezone', browserTz);
+    // Отправляем на сервер через специальный эндпоинт (быстрее чем profile)
+    const token = localStorage.getItem('oktolk_token');
+    if (token) {
+      fetch('/api/v1/auth/sync-timezone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ timezone: browserTz })
+      }).catch(() => {});
     }
   } catch(e) {}
 })();
@@ -5127,7 +5125,7 @@ function PinPad({ value, onChange, onBio, showBio }) {
 // ─────────────────────────────────────────────────────────────
 // PinLockScreen — экран блокировки при входе
 // ─────────────────────────────────────────────────────────────
-function PinLockScreen({ onUnlock }) {
+function PinLockScreen({ onUnlock, onUsePassword }) {
   const [pin, setPin] = React.useState('');
   const [error, setError] = React.useState(false);
   const [shake, setShake] = React.useState(false);
@@ -5176,6 +5174,10 @@ function PinLockScreen({ onUnlock }) {
         <PinDots count={pin.length}/>
       </div>
       <PinPad value={pin} onChange={setPin} showBio={isBioEnabled()} onBio={tryBio}/>
+      {/* Выход на форму входа с паролем */}
+      <button onClick={onUsePassword} style={{ marginTop:24, background:'none', border:'none', color:'var(--text-muted)', fontSize:13, cursor:'pointer', fontFamily:'inherit', textDecoration:'underline' }}>
+        Войти с паролем
+      </button>
       <style>{`@keyframes pinShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}`}</style>
     </div>
   );
@@ -6360,6 +6362,8 @@ function App() {
   const [overlay, setOverlay] = React.useState(null);
   // PIN lock
   const [locked, setLocked] = React.useState(() => isPinEnabled());
+  // Показывать форму входа (после logout)
+  const [showLogin, setShowLogin] = React.useState(false);
 
   const [user, setUser] = React.useState(() => {
     const token = localStorage.getItem('oktolk_token');
@@ -6371,10 +6375,10 @@ function App() {
   });
   const [authLoading, setAuthLoading] = React.useState(false);
 
-  // Авто-демо: если нет токена — создаём анонимного демо-пользователя
+  // Авто-демо: если нет токена И не показываем форму входа — создаём демо
   const demoAttempts = React.useRef(0);
   React.useEffect(() => {
-    if (!user && !authLoading && demoAttempts.current < 3) {
+    if (!user && !authLoading && !showLogin && demoAttempts.current < 3) {
       demoAttempts.current += 1;
       setAuthLoading(true);
       const timeout = setTimeout(() => {
@@ -6412,14 +6416,18 @@ function App() {
 
   React.useLayoutEffect(() => { applyTheme(t); }, [t]);
 
-  const onAuth = (userData) => setUser(userData);
+  const onAuth = (userData) => { setUser(userData); setShowLogin(false); };
 
   const onLogout = () => {
     localStorage.removeItem('oktolk_token');
     localStorage.removeItem('oktolk_user_id');
     localStorage.removeItem('oktolk_name');
     localStorage.removeItem('oktolk_tariff');
+    // Сбрасываем PIN блокировку
+    if (isPinEnabled()) setLocked(false);
     setUser(null);
+    setShowLogin(true); // показываем форму входа
+    demoAttempts.current = 99; // блокируем авто-демо
   };
 
   React.useEffect(() => {
@@ -6444,6 +6452,11 @@ function App() {
   const [stopFacts, setStopFacts] = React.useState([]);
 
 
+  // После logout — сразу показываем форму входа
+  if (showLogin || (!user && demoAttempts.current >= 99)) {
+    return <AuthScreen onAuth={onAuth}/>;
+  }
+
   if (!user) return (
     <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: 'var(--bg)' }}>
       <div style={{ width: 44, height: 44, borderRadius: '50%', border: '3px solid var(--primary-tint)', borderTopColor: 'var(--primary)', animation: 'spin 1s linear infinite' }}/>
@@ -6467,7 +6480,17 @@ function App() {
 
   return (
     <React.Fragment>
-      {locked && <PinLockScreen onUnlock={() => setLocked(false)}/>}
+      {locked && <PinLockScreen
+        onUnlock={() => setLocked(false)}
+        onUsePassword={() => {
+          // Сброс PIN и показ формы входа
+          clearPin();
+          setLocked(false);
+          setUser(null);
+          setShowLogin(true);
+          demoAttempts.current = 99;
+        }}
+      />}
       <div className="app">
         <div className="app-scroll" style={{ paddingTop: 0 }}>
           <TopBar
