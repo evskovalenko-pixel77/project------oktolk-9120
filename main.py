@@ -2633,4 +2633,13 @@ async def logout_all(user=Depends(get_current_user)):
         )
     return {"status": "ok", "sessions_deleted": deleted or 0}
 
+@app.get("/finance")
+@app.get("/health")
+@app.get("/news")
+@app.get("/search")
+async def spa_routes():
+    """SPA fallback — все фронтовые маршруты отдают index.html"""
+    from fastapi.responses import FileResponse
+    return FileResponse("index.html")
+
 app.mount("/", StaticFiles(directory=".", html=True), name="static")

@@ -6538,9 +6538,33 @@ async function authSend(url, method, body) {
   return r.json();
 }
 
+// ─────────────────────────────────────────────────────────────
+// Router — маршрутизация URL ↔ вкладки
+// ─────────────────────────────────────────────────────────────
+const ROUTE_TO_TAB = {
+  '/':        'home',
+  '/finance': 'finance',
+  '/health':  'health',
+  '/news':    'news',
+  '/search':  'search',
+};
+const TAB_TO_ROUTE = {
+  'home':    '/',
+  'finance': '/finance',
+  'health':  '/health',
+  'news':    '/news',
+  'search':  '/search',
+};
+
+function getInitialTab() {
+  const path = window.location.pathname;
+  return ROUTE_TO_TAB[path] || 'home';
+}
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [tab, setTab] = React.useState('home');
+  // Начальный таб определяется по URL
+  const [tab, setTab] = React.useState(getInitialTab);
   const [chat, setChat] = React.useState(null);
   const [overlay, setOverlay] = React.useState(null);
   const [unread, setUnread] = React.useState(0);
@@ -6570,6 +6594,36 @@ function App() {
     const interval = setInterval(fetchUnread, 120000);
     return () => clearInterval(interval);
   }, [user]);
+
+  // Синхронизация URL ↔ таб
+  React.useEffect(() => {
+    const route = TAB_TO_ROUTE[tab] || '/';
+    if (window.location.pathname !== route) {
+      history.pushState({ tab }, '', route);
+    }
+    // Обновляем title страницы
+    const titles = {
+      home: 'OkTolk — AI-помощник',
+      finance: 'OkTolk — Финансы',
+      health: 'OkTolk — Здоровье',
+      news: 'OkTolk — Новости',
+      search: 'OkTolk — Поиск',
+    };
+    document.title = titles[tab] || 'OkTolk';
+  }, [tab]);
+
+  // Кнопка «Назад/Вперёд» в браузере
+  React.useEffect(() => {
+    const onPopState = (e) => {
+      const newTab = e.state?.tab || ROUTE_TO_TAB[window.location.pathname] || 'home';
+      setTab(newTab);
+      // Закрываем оверлеи при навигации назад
+      setOverlay(null);
+      setChat(null);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   // Авто-демо: если нет токена И не показываем форму входа — создаём демо
   React.useEffect(() => {
@@ -6700,7 +6754,15 @@ function App() {
           {tab === 'news'    && <NewsScreen onAsk={onAsk}/>}
           {tab === 'sites'   && <SitesScreen/>}
         </div>
-                <TabBar active={tab} onChange={setTab}/>
+                <TabBar active={tab} onChange={(newTab) => {
+                  const route = TAB_TO_ROUTE[newTab] || '/';
+                  if (window.location.pathname !== route) {
+                    history.pushState({ tab: newTab }, '', route);
+                  }
+                  const titles = { home:'OkTolk — AI-помощник', finance:'OkTolk — Финансы', health:'OkTolk — Здоровье', news:'OkTolk — Новости', search:'OkTolk — Поиск' };
+                  document.title = titles[newTab] || 'OkTolk';
+                  setTab(newTab);
+                }}/>
 
         {chat !== null && <ChatOverlay initialMsg={chat} mode={chatMode} onClose={() => { setChat(null); setChatMode(null); }}/>}
         {overlay === 'profile' && <ProfileSheet onClose={() => setOverlay(null)} name={user?.name || 'Гость'} onLogout={onLogout} onOpenSettings={() => setOverlay('settings')}/>}
