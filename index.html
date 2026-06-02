@@ -3947,6 +3947,7 @@ function HealthScreen({ onAsk, onMode }) {
 function MedsScreen({ onBack, onMedsChange }) {
   const [meds, setMeds] = React.useState([]);
   const [showAdd, setShowAdd] = React.useState(false);
+  const [editMed, setEditMed] = React.useState(null); // {id, ...данные} для редактирования
   const [loading, setLoading] = React.useState(true);
 
   const FOOD_RULES = {
@@ -4031,9 +4032,14 @@ function MedsScreen({ onBack, onMedsChange }) {
                     {med.food_minutes ? ` · за ${med.food_minutes} мин` : ''}
                   </div>
                 </div>
-                <button onClick={() => deleteMed(med.id)} style={{ padding:6, background:'none', border:'none', cursor:'pointer', color:'var(--text-subtle)', display:'flex' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-                </button>
+                <div style={{ display:'flex', gap:2 }}>
+                  <button onClick={() => setEditMed(med)} style={{ padding:6, background:'none', border:'none', cursor:'pointer', color:'var(--text-subtle)', display:'flex' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                  <button onClick={() => deleteMed(med.id)} style={{ padding:6, background:'none', border:'none', cursor:'pointer', color:'var(--text-subtle)', display:'flex' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                  </button>
+                </div>
               </div>
               {/* Слоты времени */}
               <div style={{ borderTop:'0.5px solid var(--border)', padding:'10px 14px', display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
@@ -4074,20 +4080,38 @@ function MedsScreen({ onBack, onMedsChange }) {
 
       {/* Add Sheet */}
       {showAdd && <MedAddSheet onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }}/>}
+      {editMed && <MedAddSheet
+        onClose={() => setEditMed(null)}
+        onSaved={() => { setEditMed(null); load(); }}
+        initialData={editMed}
+        editId={editMed.id}
+      />}
     </div>
   );
 }
 
-function MedAddSheet({ onClose, onSaved }) {
-  const [name, setName] = React.useState('');
-  const [dose, setDose] = React.useState('');
-  const [doseUnit, setDoseUnit] = React.useState('мг');
-  const [freq, setFreq] = React.useState(1);
-  const [times, setTimes] = React.useState(['09:00']);
-  const [foodRule, setFoodRule] = React.useState('after');
-  const [foodMin, setFoodMin] = React.useState(30);
-  const [notify, setNotify] = React.useState(true);
-  const [saving, setSaving] = React.useState(false);
+function MedAddSheet({ onClose, onSaved, initialData = null, editId = null }) {
+  // Парсим дозу из строки "50 мг" → {dose: "50", unit: "мг"}
+  const parseDose = (doseStr) => {
+    if (!doseStr) return { dose: '', unit: 'мг' };
+    const m = doseStr.match(/^([\d.,]+)\s*(.*)$/);
+    return m ? { dose: m[1], unit: m[2].trim() || 'мг' } : { dose: doseStr, unit: 'мг' };
+  };
+  const parsed = parseDose(initialData?.dose);
+
+  const [name, setName]         = React.useState(initialData?.name || '');
+  const [dose, setDose]         = React.useState(parsed.dose);
+  const [doseUnit, setDoseUnit] = React.useState(parsed.unit || 'мг');
+  const [freq, setFreq]         = React.useState(initialData?.times_per_day || 1);
+  const [times, setTimes]       = React.useState(() => {
+    try { return JSON.parse(initialData?.times_json || '["09:00"]'); } catch { return ['09:00']; }
+  });
+  const [foodRule, setFoodRule] = React.useState(initialData?.food_rule || 'after');
+  const [foodMin, setFoodMin]   = React.useState(initialData?.food_minutes || 30);
+  const [notify, setNotify]     = React.useState(initialData?.notify ?? true);
+  const [saving, setSaving]     = React.useState(false);
+
+  const isEdit = !!editId;
 
   const DEFAULTS = ['09:00', '13:00', '18:00', '21:00'];
   const RULES = [
@@ -4099,25 +4123,31 @@ function MedAddSheet({ onClose, onSaved }) {
 
   const setFreqN = (n) => {
     setFreq(n);
-    setTimes(Array.from({ length: n }, (_, i) => DEFAULTS[i]));
+    // При увеличении — добавляем дефолтные слоты, при уменьшении — обрезаем
+    setTimes(prev => {
+      const next = Array.from({ length: n }, (_, i) => prev[i] || DEFAULTS[i]);
+      return next;
+    });
   };
 
   const save = async () => {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      await authSend('/api/v1/health/meds', 'POST', {
+      const payload = {
         name: name.trim(), dose: dose || null, dose_unit: doseUnit,
         times_per_day: freq, times, food_rule: foodRule,
         food_minutes: foodRule === 'before' ? foodMin : null, notify
-      });
-
-      // Web Push подписка если уведомления включены
-      if (notify) {
-        try { await subscribeToPush(); }
-        catch(e) { console.warn('[push] Не удалось подписаться:', e); }
+      };
+      if (isEdit) {
+        await authSend('/api/v1/health/meds/' + editId, 'PUT', payload);
+      } else {
+        await authSend('/api/v1/health/meds', 'POST', payload);
+        if (notify) {
+          try { await subscribeToPush(); }
+          catch(e) { console.warn('[push]', e); }
+        }
       }
-
       onSaved();
     } catch(e) { setSaving(false); }
   };
@@ -4131,7 +4161,7 @@ function MedAddSheet({ onClose, onSaved }) {
       <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'var(--bg)', borderRadius:'20px 20px 0 0', zIndex:21, maxHeight:'92%', overflowY:'auto', paddingBottom:24 }}>
         {/* Handle */}
         <div style={{ width:40, height:4, background:'rgba(15,15,20,0.14)', borderRadius:99, margin:'14px auto 0' }}/>
-        <div style={{ padding:'16px 20px 4px', fontSize:18, fontWeight:800 }}>Добавить лекарство</div>
+        <div style={{ padding:'16px 20px 4px', fontSize:18, fontWeight:800 }}>{isEdit ? 'Редактировать лекарство' : 'Добавить лекарство'}</div>
         <div style={{ padding:'12px 20px 0', display:'flex', flexDirection:'column', gap:16 }}>
 
           {/* Название */}
@@ -4215,7 +4245,7 @@ function MedAddSheet({ onClose, onSaved }) {
 
           {/* Кнопка сохранить */}
           <button onClick={save} disabled={!name.trim() || saving} style={{ padding:15, background:'linear-gradient(135deg,#15493A,#2E8E73)', color:'#fff', border:'none', borderRadius:14, fontFamily:'inherit', fontSize:16, fontWeight:700, cursor: name.trim() ? 'pointer' : 'default', opacity: name.trim() ? 1 : 0.5, letterSpacing:'-0.01em' }}>
-            {saving ? 'Сохранение…' : 'Сохранить'}
+            {saving ? 'Сохранение…' : isEdit ? 'Сохранить изменения' : 'Сохранить'}
           </button>
         </div>
       </div>

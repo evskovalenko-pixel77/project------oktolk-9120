@@ -1020,6 +1020,25 @@ async def add_medication(req: MedRequest, user=Depends(get_current_user)):
         )
         return {"id": row_id, "status": "ok"}
 
+@app.put("/api/v1/health/meds/{med_id}")
+async def update_medication(med_id: int, req: MedRequest, user=Depends(get_current_user)):
+    """Обновить лекарство"""
+    import json as _json
+    dose_str = f"{req.dose} {req.dose_unit}".strip() if req.dose else req.dose_unit or ""
+    async with db_pool.acquire() as conn:
+        await conn.execute("""
+            UPDATE medications SET
+                name=$3, dose=$4, schedule=$5, times_per_day=$6,
+                times_json=$7, food_rule=$8, notify=$9
+            WHERE id=$1 AND user_id=$2
+        """, med_id, user["id"],
+            req.name, dose_str, req.food_rule,
+            req.times_per_day,
+            _json.dumps(req.times or []),
+            req.food_rule, req.notify
+        )
+    return {"status": "ok", "id": med_id}
+
 @app.delete("/api/v1/health/meds/{med_id}")
 async def delete_medication(med_id: int, user=Depends(get_current_user)):
     """Удалить лекарство (soft delete)"""
@@ -2414,24 +2433,41 @@ async def push_diagnostic():
     # Лекарства с уведомлениями — показываем что видит scheduler
     if db_pool:
         try:
+            import pytz as _pytz
+            from datetime import timedelta as _td
+            _now_utc = datetime.now(_pytz.utc)
             async with db_pool.acquire() as conn:
-                from datetime import datetime as dt
-                now = dt.now()
-                meds = await conn.fetch(
-                    "SELECT id, name, times_per_day, times_json, notify, is_active FROM medications WHERE notify=TRUE"
-                )
+                meds = await conn.fetch("""
+                    SELECT m.id, m.name, m.times_per_day, m.times_json,
+                           m.notify, m.is_active,
+                           COALESCE(u.timezone, 'Europe/Moscow') as user_timezone
+                    FROM medications m
+                    JOIN users u ON u.id = m.user_id
+                    WHERE m.notify=TRUE
+                    ORDER BY m.id
+                """)
                 diag["meds_with_notify"] = []
                 for m in meds:
+                    try:
+                        _tz = _pytz.timezone(m["user_timezone"])
+                        _now_user = _now_utc.astimezone(_tz)
+                        _target = _now_user + _td(minutes=10)
+                        _target_str = f"{_target.hour:02d}:{_target.minute:02d}"
+                        _now_str = f"{_now_user.hour:02d}:{_now_user.minute:02d}"
+                    except:
+                        _target_str = "error"
+                        _now_str = "error"
                     diag["meds_with_notify"].append({
                         "id": m["id"],
                         "name": m["name"],
-                        "times_per_day": m["times_per_day"],
                         "times_json": m["times_json"],
-                        "notify": m["notify"],
                         "is_active": m["is_active"],
-                        "next_target": f"{(now + __import__('datetime').timedelta(minutes=10)).hour:02d}:{(now + __import__('datetime').timedelta(minutes=10)).minute:02d}",
+                        "user_timezone": m["user_timezone"],
+                        "now_in_user_tz": _now_str,
+                        "scheduler_checks_at": _target_str,
                     })
                 diag["meds_with_notify_count"] = len(diag["meds_with_notify"])
+                diag["server_time_utc"] = _now_utc.strftime("%H:%M")
         except Exception as e:
             diag["meds_error"] = str(e)
     # Итоговый вердикт
@@ -2457,6 +2493,30 @@ async def push_diagnostic():
     elif not sdb.get("alive"):
         diag["issues"].append(f"Scheduler не отвечает {sdb.get('seconds_since_last_check', 0)} сек")
     return diag
+
+@app.post("/api/v1/auth/sync-timezone")
+async def sync_timezone(request: Request):
+    """Обновить timezone пользователя. Не требует авторизации если токен невалидный."""
+    data = await request.json()
+    tz = data.get("timezone", "Europe/Moscow")
+    # Валидируем timezone
+    try:
+        import pytz
+        pytz.timezone(tz)
+    except Exception:
+        return {"status": "ignored", "reason": "invalid_timezone"}
+    # Сохраняем в localStorage на фронте (это делает фронт сам)
+    # Обновляем в БД только если авторизован
+    token = request.headers.get("authorization", "").replace("Bearer ", "").strip()
+    if not token or token == "local_demo" or not db_pool:
+        return {"status": "ok", "timezone": tz, "saved_to_db": False}
+    try:
+        user = await get_current_user(authorization=request.headers.get("authorization"))
+        async with db_pool.acquire() as conn:
+            await conn.execute("UPDATE users SET timezone=$1 WHERE id=$2", tz, user["id"])
+        return {"status": "ok", "timezone": tz, "saved_to_db": True}
+    except Exception:
+        return {"status": "ok", "timezone": tz, "saved_to_db": False}
 
 @app.post("/api/v1/auth/logout-all")
 async def logout_all(user=Depends(get_current_user)):
