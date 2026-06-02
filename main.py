@@ -187,6 +187,9 @@ async def init_db():
             ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_consent BOOLEAN DEFAULT FALSE;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo BOOLEAN DEFAULT FALSE;
             ALTER TABLE users ALTER COLUMN phone TYPE VARCHAR(40);
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Москва';
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) DEFAULT 'Europe/Moscow';
+            ALTER TABLE medications ADD COLUMN IF NOT EXISTS user_timezone VARCHAR(50) DEFAULT 'Europe/Moscow';
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS alcohol INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking_years INTEGER;
@@ -668,6 +671,8 @@ class ProfileRequest(BaseModel):
     activity: Optional[str] = None
     alcohol: Optional[int] = 0
     smoking: Optional[int] = 0
+    city: Optional[str] = None
+    timezone: Optional[str] = None
     smoking_years: Optional[int] = None
     heredity: Optional[str] = None
     chronic: Optional[str] = None
@@ -675,12 +680,19 @@ class ProfileRequest(BaseModel):
 
 @app.get("/api/v1/profile")
 async def get_profile(user=Depends(get_current_user)):
-    """Получить профиль текущего пользователя (user_id из токена)"""
+    """Получить профиль текущего пользователя"""
     if not db_pool:
         return {}
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow("SELECT * FROM user_profile WHERE user_id=$1", user["id"])
-        return dict(row) if row else {}
+        # Берём city/timezone из таблицы users
+        u = await conn.fetchrow("SELECT city, timezone, name FROM users WHERE id=$1", user["id"])
+        result = dict(row) if row else {}
+        if u:
+            result["city"] = u["city"] or "Москва"
+            result["timezone"] = u["timezone"] or "Europe/Moscow"
+            result["name"] = u["name"]
+        return result
 
 @app.post("/api/v1/profile")
 async def save_profile(req: ProfileRequest, user=Depends(get_current_user)):
@@ -704,6 +716,14 @@ async def save_profile(req: ProfileRequest, user=Depends(get_current_user)):
             req.hobbies, req.work_pressure_1, req.work_pressure_2, req.work_pulse,
             req.base_sugar, req.habits, req.activity, req.alcohol, req.smoking,
             req.smoking_years, req.heredity, req.chronic, req.income)
+        # Сохраняем city/timezone в таблицу users
+        if req.city is not None or req.timezone is not None:
+            await conn.execute("""
+                UPDATE users SET
+                    city = COALESCE($2, city),
+                    timezone = COALESCE($3, timezone)
+                WHERE id=$1
+            """, uid, req.city, req.timezone)
         return {"status": "ok"}
 
 # ── Credits & Loans ──────────────────────────────────────────────
@@ -2149,21 +2169,37 @@ async def push_scheduler():
                 if not VAPID_PRIVATE_PEM:
                     continue
 
-                # Окно: уведомляем за 10 минут до приёма
-                target = now + timedelta(minutes=10)
-                target_time = f"{target.hour:02d}:{target.minute:02d}"
+                # Текущее время в UTC — потом конвертируем для каждого пользователя
+                import pytz
+                now_utc = datetime.now(pytz.utc)
 
                 async with db_pool.acquire() as conn:
-                    meds = await conn.fetch(
-                        "SELECT id, user_id, name, dose, times_json, taken_today, taken_date, notify "
-                        "FROM medications WHERE is_active=TRUE AND notify=TRUE"
-                    )
+                    # Берём лекарства вместе с timezone пользователя
+                    meds = await conn.fetch("""
+                        SELECT m.id, m.user_id, m.name, m.dose, m.times_json,
+                               m.taken_today, m.taken_date, m.notify,
+                               COALESCE(u.timezone, 'Europe/Moscow') as user_timezone
+                        FROM medications m
+                        JOIN users u ON u.id = m.user_id
+                        WHERE m.is_active=TRUE AND m.notify=TRUE
+                    """)
                     for med in meds:
                         try:
                             times = json.loads(med["times_json"] or "[]")
                             times = [_normalize_time(t) for t in times]
                         except:
                             times = []
+                        if not times:
+                            continue
+                        # Конвертируем UTC в timezone пользователя
+                        try:
+                            user_tz = pytz.timezone(med["user_timezone"])
+                        except Exception:
+                            user_tz = pytz.timezone("Europe/Moscow")
+                        now_user = now_utc.astimezone(user_tz)
+                        target_user = now_user + timedelta(minutes=10)
+                        target_time = f"{target_user.hour:02d}:{target_user.minute:02d}"
+
                         if target_time not in times:
                             continue
                         # Проверяем что не принято сегодня
@@ -2332,8 +2368,7 @@ async def test_push(user=Depends(get_current_user)):
 
 @app.get("/api/v1/push/diagnostic")
 async def push_diagnostic():
-    """Диагностика состояния push-уведомлений. Возвращает что работает, что нет.
-    Состояние scheduler читается из БД — чтобы любой воркер видел реальную картину."""
+    """Диагностика push-уведомлений + состояние лекарств в БД"""
     diag = {
         "vapid_public_key_set": bool(VAPID_PUBLIC_KEY),
         "vapid_private_pem_set": bool(VAPID_PRIVATE_PEM),
@@ -2376,6 +2411,29 @@ async def push_diagnostic():
                     diag["scheduler_db_note"] = "Запись scheduler в БД ещё не создана. Подождите 1-2 минуты после деплоя."
         except Exception as e:
             diag["subscriptions_error"] = str(e)
+    # Лекарства с уведомлениями — показываем что видит scheduler
+    if db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                from datetime import datetime as dt
+                now = dt.now()
+                meds = await conn.fetch(
+                    "SELECT id, name, times_per_day, times_json, notify, is_active FROM medications WHERE notify=TRUE"
+                )
+                diag["meds_with_notify"] = []
+                for m in meds:
+                    diag["meds_with_notify"].append({
+                        "id": m["id"],
+                        "name": m["name"],
+                        "times_per_day": m["times_per_day"],
+                        "times_json": m["times_json"],
+                        "notify": m["notify"],
+                        "is_active": m["is_active"],
+                        "next_target": f"{(now + __import__('datetime').timedelta(minutes=10)).hour:02d}:{(now + __import__('datetime').timedelta(minutes=10)).minute:02d}",
+                    })
+                diag["meds_with_notify_count"] = len(diag["meds_with_notify"])
+        except Exception as e:
+            diag["meds_error"] = str(e)
     # Итоговый вердикт
     scheduler_alive = diag.get("scheduler_db", {}) and diag["scheduler_db"].get("alive", False)
     diag["status"] = "ok" if (

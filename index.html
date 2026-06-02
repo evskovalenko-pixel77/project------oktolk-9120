@@ -2079,6 +2079,115 @@ Object.assign(window, {
 // ─────────────────────────────────────────────────────────────
 // Web Push подписка
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Timezone helpers — единое время по всему приложению
+// ─────────────────────────────────────────────────────────────
+
+// Словарь город → timezone (Россия и популярные города мира)
+const CITY_TIMEZONE = {
+  // Россия UTC+2
+  'Калининград': 'Europe/Kaliningrad',
+  // Россия UTC+3 (МСК)
+  'Москва': 'Europe/Moscow', 'Санкт-Петербург': 'Europe/Moscow',
+  'Петербург': 'Europe/Moscow', 'СПб': 'Europe/Moscow',
+  'Краснодар': 'Europe/Moscow', 'Воронеж': 'Europe/Moscow',
+  'Нижний Новгород': 'Europe/Moscow', 'Казань': 'Europe/Moscow',
+  'Ростов-на-Дону': 'Europe/Moscow', 'Самара': 'Europe/Samara',
+  'Уфа': 'Europe/Samara', 'Тольятти': 'Europe/Samara',
+  // Россия UTC+4
+  'Ижевск': 'Europe/Samara',
+  // Россия UTC+5
+  'Екатеринбург': 'Asia/Yekaterinburg', 'Челябинск': 'Asia/Yekaterinburg',
+  'Пермь': 'Asia/Yekaterinburg', 'Тюмень': 'Asia/Yekaterinburg',
+  // Россия UTC+6
+  'Омск': 'Asia/Omsk',
+  // Россия UTC+7
+  'Новосибирск': 'Asia/Novosibirsk', 'Красноярск': 'Asia/Krasnoyarsk',
+  'Томск': 'Asia/Tomsk', 'Барнаул': 'Asia/Barnaul',
+  // Россия UTC+8
+  'Иркутск': 'Asia/Irkutsk', 'Улан-Удэ': 'Asia/Irkutsk',
+  // Россия UTC+9
+  'Якутск': 'Asia/Yakutsk', 'Чита': 'Asia/Chita',
+  // Россия UTC+10
+  'Владивосток': 'Asia/Vladivostok', 'Хабаровск': 'Asia/Vladivostok',
+  // Россия UTC+11
+  'Магадан': 'Asia/Magadan', 'Южно-Сахалинск': 'Asia/Sakhalin',
+  // Россия UTC+12
+  'Камчатка': 'Asia/Kamchatka', 'Петропавловск-Камчатский': 'Asia/Kamchatka',
+  // СНГ
+  'Минск': 'Europe/Minsk', 'Киев': 'Europe/Kiev', 'Харьков': 'Europe/Kiev',
+  'Алматы': 'Asia/Almaty', 'Нур-Султан': 'Asia/Almaty', 'Астана': 'Asia/Almaty',
+  'Бишкек': 'Asia/Bishkek', 'Ташкент': 'Asia/Tashkent',
+  'Ереван': 'Asia/Yerevan', 'Баку': 'Asia/Baku', 'Тбилиси': 'Asia/Tbilisi',
+  // Мир
+  'Берлин': 'Europe/Berlin', 'Париж': 'Europe/Paris', 'Лондон': 'Europe/London',
+  'Токио': 'Asia/Tokyo', 'Пекин': 'Asia/Shanghai', 'Дубай': 'Asia/Dubai',
+  'Стамбул': 'Europe/Istanbul', 'Анкара': 'Europe/Istanbul',
+};
+
+function cityToTimezone(city) {
+  if (!city) return getUserTz();
+  // Прямое совпадение
+  if (CITY_TIMEZONE[city]) return CITY_TIMEZONE[city];
+  // Частичное (регистр-нечувствительное)
+  const lower = city.toLowerCase();
+  const found = Object.keys(CITY_TIMEZONE).find(k => k.toLowerCase().includes(lower) || lower.includes(k.toLowerCase()));
+  return found ? CITY_TIMEZONE[found] : 'Europe/Moscow';
+}
+
+// Получить timezone пользователя (из localStorage → фоллбек Europe/Moscow)
+function getUserTz() {
+  return localStorage.getItem('oktolk_timezone')
+    || Intl.DateTimeFormat().resolvedOptions().timeZone
+    || 'Europe/Moscow';
+}
+
+// Форматировать дату/время по timezone пользователя
+function formatUserTime(isoString, opts = {}) {
+  if (!isoString) return '';
+  try {
+    const tz = getUserTz();
+    const d = new Date(isoString);
+    const defaults = { hour: '2-digit', minute: '2-digit', timeZone: tz };
+    return d.toLocaleString('ru', { ...defaults, ...opts });
+  } catch(e) {
+    return new Date(isoString).toLocaleString('ru');
+  }
+}
+
+// Форматировать только время (09:00)
+function formatUserTimeOnly(isoString) {
+  return formatUserTime(isoString, { hour: '2-digit', minute: '2-digit', year: undefined, month: undefined, day: undefined });
+}
+
+// Форматировать дату (12 мая)
+function formatUserDate(isoString) {
+  try {
+    const tz = getUserTz();
+    return new Date(isoString).toLocaleDateString('ru', { day: 'numeric', month: 'short', timeZone: tz });
+  } catch(e) { return ''; }
+}
+
+// Обновляем timezone при каждой загрузке (без входа)
+(function syncTzOnLoad() {
+  try {
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const stored = localStorage.getItem('oktolk_timezone');
+    if (stored !== browserTz) {
+      localStorage.setItem('oktolk_timezone', browserTz);
+      // Отправим на сервер если есть токен
+      const token = localStorage.getItem('oktolk_token');
+      if (token) {
+        fetch('/api/v1/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ timezone: browserTz })
+        }).catch(() => {});
+      }
+    }
+  } catch(e) {}
+})();
+
 async function subscribeToPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     throw new Error('Push не поддерживается');
@@ -4779,7 +4888,14 @@ function ProfileSettingsSheet({ onClose }) {
 
   const save = async () => {
     try {
-      await authSend('/api/v1/profile', 'POST', p);
+      // Если город изменился — определяем timezone по нему
+      const saveData = { ...p };
+      if (p.city) {
+        const tz = cityToTimezone(p.city);
+        saveData.timezone = tz;
+        localStorage.setItem('oktolk_timezone', tz);
+      }
+      await authSend('/api/v1/profile', 'POST', saveData);
       await Promise.all([
         ...credits.map(cr => authSend('/api/v1/credits', 'POST', cr)),
         ...loans.map(ln => authSend('/api/v1/loans', 'POST', ln))
@@ -4820,6 +4936,7 @@ function ProfileSettingsSheet({ onClose }) {
           {loading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-subtle)' }}>Загрузка…</div>}
 
           {!loading && tab === 'personal' && <>
+            <PField p={p} upd={upd} label="Мой город" k="city" placeholder="Москва" hint="Используется для точного времени уведомлений"/>
             <PChoice p={p} upd={upd} label="Пол" k="gender" options={[{v:'м',l:'Мужской'},{v:'ж',l:'Женский'}]}/>
             <PField p={p} upd={upd} label="Возраст" k="age" type="number" placeholder="55" unit="лет"/>
             <PField p={p} upd={upd} label="Рост" k="height" type="number" placeholder="170" unit="см"/>
@@ -5921,6 +6038,16 @@ function AuthScreen({ onAuth }) {
       localStorage.setItem('oktolk_user_id', String(data.user_id));
       localStorage.setItem('oktolk_name', data.name);
       localStorage.setItem('oktolk_tariff', data.tariff || 'demo');
+      // Сохраняем timezone браузера на сервере
+      const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      localStorage.setItem('oktolk_timezone', browserTz);
+      try {
+        await fetch('/api/v1/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.token },
+          body: JSON.stringify({ timezone: browserTz })
+        });
+      } catch(e) { /* не критично */ }
       onAuth({ token: data.token, user_id: data.user_id, name: data.name, tariff: data.tariff });
     } catch(e) {
       setError('Нет соединения с сервером');
@@ -6070,7 +6197,7 @@ const PF_STYLE = { width: '100%', boxSizing: 'border-box', padding: '13px 14px',
 const PF_LABEL = { fontSize: 13, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' };
 const PF_GROUP = { marginBottom: 14 };
 
-function PField({ p, upd, label, k, type = 'text', placeholder, unit }) {
+function PField({ p, upd, label, k, type = 'text', placeholder, unit, hint }) {
   return (
     <div style={PF_GROUP}>
       <label style={PF_LABEL}>{label}</label>
@@ -6080,6 +6207,7 @@ function PField({ p, upd, label, k, type = 'text', placeholder, unit }) {
           style={{ ...PF_STYLE, paddingRight: unit ? 48 : 14 }} inputMode={type === 'number' ? 'decimal' : 'text'}/>
         {unit && <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-subtle)', pointerEvents: 'none' }}>{unit}</span>}
       </div>
+      {hint && <div style={{ fontSize: 11, color: 'var(--text-subtle)', marginTop: 4 }}>{hint}</div>}
     </div>
   );
 }
