@@ -190,6 +190,18 @@ async def init_db():
             ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT 'Москва';
             ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) DEFAULT 'Europe/Moscow';
             ALTER TABLE medications ADD COLUMN IF NOT EXISTS user_timezone VARCHAR(50) DEFAULT 'Europe/Moscow';
+            CREATE TABLE IF NOT EXISTS notifications (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                type VARCHAR(20) NOT NULL,
+                title VARCHAR(200) NOT NULL,
+                body TEXT,
+                is_read BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, created_at DESC);
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens_used INTEGER DEFAULT 0;
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens_limit INTEGER DEFAULT 50000;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS alcohol INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking_years INTEGER;
@@ -1233,6 +1245,24 @@ async def fetch_tavily_news() -> list:
 
     _news_cache["data"] = results
     _news_cache["at"] = now
+
+    # Создаём уведомления для опасных новостей всем пользователям
+    danger_items = [r for r in results if r["cat"] == "danger"]
+    if danger_items and db_pool:
+        try:
+            async with db_pool.acquire() as conn:
+                user_ids = await conn.fetch("SELECT id FROM users WHERE is_demo=FALSE OR is_demo IS NULL")
+                for uid in user_ids:
+                    for item in danger_items[:2]:  # максимум 2 уведомления за обновление
+                        await create_notification(
+                            user_id=uid["id"],
+                            type="scam",
+                            title=item["title"],
+                            body=item.get("body", "")[:200]
+                        )
+        except Exception as e:
+            print(f"[news notif] {e}")
+
     return results
 
 @app.get("/news")
@@ -2247,6 +2277,13 @@ async def push_scheduler():
                             if sent:
                                 _push_scheduler_state["pushes_sent"] = _push_scheduler_state.get("pushes_sent", 0) + 1
                                 print(f"[push] ✅ {med['name']} → user {med['user_id']} @ {target_time}")
+                                # Создаём уведомление в БД
+                                await create_notification(
+                                    user_id=med["user_id"],
+                                    type="med",
+                                    title=f"Время принять {med['name']}",
+                                    body=body
+                                )
             except Exception as e:
                 print(f"[push_scheduler] Ошибка цикла: {e}")
     except Exception as e:
@@ -2384,6 +2421,78 @@ async def test_push(user=Depends(get_current_user)):
     return {"status": "ok", "sent": sent, "total": len(subs)}
 
 # ═════════════════════════════════════════════════════════════════
+
+
+# ── Notifications ──────────────────────────────────────────────────────────
+
+async def create_notification(user_id: int, type: str, title: str, body: str = None):
+    """Создать уведомление в БД. type: med | scam | system | tokens"""
+    if not db_pool:
+        return
+    try:
+        async with db_pool.acquire() as conn:
+            # Чистим старые > 7 дней
+            await conn.execute(
+                "DELETE FROM notifications WHERE created_at < NOW() - INTERVAL '7 days'"
+            )
+            # Не дублируем одинаковые уведомления в течение 5 минут
+            recent = await conn.fetchval("""
+                SELECT id FROM notifications
+                WHERE user_id=$1 AND title=$2
+                  AND created_at > NOW() - INTERVAL '5 minutes'
+                LIMIT 1
+            """, user_id, title)
+            if recent:
+                return
+            await conn.execute(
+                "INSERT INTO notifications (user_id, type, title, body) VALUES ($1,$2,$3,$4)",
+                user_id, type, title, body
+            )
+    except Exception as e:
+        print(f"[notif] Ошибка: {e}")
+
+@app.get("/api/v1/notifications")
+async def get_notifications(user=Depends(get_current_user)):
+    """Получить уведомления пользователя за последние 7 дней"""
+    if not db_pool:
+        return {"items": [], "unread": 0}
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT id, type, title, body, is_read,
+                   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as created_at
+            FROM notifications
+            WHERE user_id=$1
+              AND created_at > NOW() - INTERVAL '7 days'
+            ORDER BY created_at DESC
+            LIMIT 50
+        """, user["id"])
+        items = [dict(r) for r in rows]
+        unread = sum(1 for r in items if not r["is_read"])
+        return {"items": items, "unread": unread}
+
+@app.post("/api/v1/notifications/read-all")
+async def read_all_notifications(user=Depends(get_current_user)):
+    """Отметить все уведомления как прочитанные"""
+    if not db_pool:
+        return {"status": "ok"}
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE notifications SET is_read=TRUE WHERE user_id=$1 AND is_read=FALSE",
+            user["id"]
+        )
+    return {"status": "ok"}
+
+@app.post("/api/v1/notifications/{notif_id}/read")
+async def read_notification(notif_id: int, user=Depends(get_current_user)):
+    """Отметить одно уведомление как прочитанное"""
+    if not db_pool:
+        return {"status": "ok"}
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE notifications SET is_read=TRUE WHERE id=$1 AND user_id=$2",
+            notif_id, user["id"]
+        )
+    return {"status": "ok"}
 
 @app.get("/api/v1/push/diagnostic")
 async def push_diagnostic():

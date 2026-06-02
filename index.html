@@ -400,6 +400,19 @@ button { font-family: inherit; }
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+@keyframes bellSwing {
+  0%   { transform: rotate(0deg); }
+  10%  { transform: rotate(18deg); }
+  20%  { transform: rotate(-16deg); }
+  30%  { transform: rotate(14deg); }
+  40%  { transform: rotate(-10deg); }
+  50%  { transform: rotate(6deg); }
+  60%  { transform: rotate(-4deg); }
+  70%  { transform: rotate(2deg); }
+  80%  { transform: rotate(-1deg); }
+  100% { transform: rotate(0deg); }
+}
+.bell-swing { animation: bellSwing 1.4s ease-in-out; transform-origin: top center; }
 .h-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 99px; outline: none; background: var(--surface-2); }
 .h-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 3px solid #1F6E54; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
 .h-slider::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 3px solid #1F6E54; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
@@ -2018,6 +2031,7 @@ const Icon = ({ size = 22, stroke = 'currentColor', sw = 1.75, children, style }
   </svg>
 );
 
+const IconInfo = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></Icon>;
 const IconBell = (p) => <Icon {...p}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></Icon>;
 const IconUser = (p) => <Icon {...p}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></Icon>;
 const IconShield = (p) => <Icon {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></Icon>;
@@ -2247,12 +2261,42 @@ window.apiFetch = apiFetch;
 // ─────────────────────────────────────────────────────────────
 // TopBar — shared header
 // ─────────────────────────────────────────────────────────────
-function TopBar({ onProfile, onNotif, onSettings, hasNotif = true }) {
+function TopBar({ onProfile, onNotif, onSettings, unread = 0 }) {
+  const [swinging, setSwinging] = React.useState(false);
+  // Запускаем качание при появлении непрочитанных
+  React.useEffect(() => {
+    if (unread > 0) {
+      setSwinging(true);
+      const t = setTimeout(() => setSwinging(false), 1500);
+      // Повторяем каждые 10 секунд пока есть непрочитанные
+      const interval = setInterval(() => {
+        setSwinging(false);
+        setTimeout(() => setSwinging(true), 100);
+        setTimeout(() => setSwinging(false), 1600);
+      }, 10000);
+      return () => { clearTimeout(t); clearInterval(interval); };
+    }
+  }, [unread]);
+
   return (
     <div className="topbar">
-      <button className="topbar-icon" onClick={onNotif} aria-label="Уведомления">
-        <IconBell size={20} sw={1.8}/>
-        {hasNotif && <span className="dot" />}
+      <button className="topbar-icon" onClick={onNotif} aria-label="Уведомления" style={{ position:'relative' }}>
+        <span className={swinging ? 'bell-swing' : ''} style={{ display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <IconBell size={20} sw={1.8}/>
+        </span>
+        {unread > 0 && (
+          <span style={{
+            position:'absolute', top:6, right:6,
+            width: unread > 9 ? 18 : 14, height:14,
+            borderRadius:99, background:'var(--danger)',
+            color:'#fff', fontSize:9, fontWeight:700,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            border:'2px solid var(--bg)', lineHeight:1,
+            minWidth:14
+          }}>
+            {unread > 99 ? '99' : unread}
+          </span>
+        )}
       </button>
       <div className="brand">OkTolk<span className="dot"/></div>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -5819,41 +5863,135 @@ function VoiceModal({ onClose, onResult }) {
 }
 
 
-function NotifSheet({ onClose }) {
-  const items = [
-    { icon: IconAlert, t: 'Подозрительный СМС', sub: 'Проверьте сообщение от «Сбер»', age: '14 мин', danger: true },
-    { icon: IconCheck, t: 'Пенсия зачислена', sub: '32 480 ₽ от СФР', age: '2 ч', success: true },
-    { icon: IconBell,  t: 'Новость дня', sub: 'Перерасчёт пенсий с 1 июня', age: '5 ч' },
-    { icon: IconClock, t: 'Напоминание', sub: 'Передать показания счётчиков', age: 'Вчера' },
-  ];
+function NotifSheet({ onClose, onUnreadChange }) {
+  const [items, setItems]     = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  const load = async () => {
+    try {
+      const data = await authSend('/api/v1/notifications', 'GET');
+      if (data && data.items) {
+        setItems(data.items);
+        onUnreadChange && onUnreadChange(data.unread || 0);
+      }
+    } catch(e) {}
+    setLoading(false);
+  };
+
+  React.useEffect(() => { load(); }, []);
+
+  const readAll = async () => {
+    try {
+      await authSend('/api/v1/notifications/read-all', 'POST', {});
+      setItems(prev => prev.map(i => ({ ...i, is_read: true })));
+      onUnreadChange && onUnreadChange(0);
+    } catch(e) {}
+  };
+
+  const readOne = async (id) => {
+    try {
+      await authSend(`/api/v1/notifications/${id}/read`, 'POST', {});
+      setItems(prev => prev.map(i => i.id === id ? { ...i, is_read: true } : i));
+      const newUnread = items.filter(i => i.id !== id && !i.is_read).length;
+      onUnreadChange && onUnreadChange(newUnread);
+    } catch(e) {}
+  };
+
+  // Форматируем время
+  const fmtAge = (iso) => {
+    if (!iso) return '';
+    try {
+      const diff = (Date.now() - new Date(iso)) / 1000;
+      if (diff < 60)   return 'только что';
+      if (diff < 3600) return Math.floor(diff/60) + ' мин';
+      if (diff < 86400) return Math.floor(diff/3600) + ' ч';
+      return Math.floor(diff/86400) + ' дн';
+    } catch { return ''; }
+  };
+
+  // Иконка и цвет по типу
+  const typeStyle = (type) => ({
+    med:    { icon: IconBell,   tint:'var(--success-tint)', color:'var(--success)' },
+    scam:   { icon: IconAlert,  tint:'var(--danger-tint)',  color:'var(--danger)'  },
+    system: { icon: IconInfo,   tint:'var(--primary-tint)', color:'var(--primary)' },
+    tokens: { icon: IconAlert,  tint:'var(--warn-tint)',    color:'var(--warn)'    },
+  })[type] || { icon: IconBell, tint:'var(--surface-2)', color:'var(--text)' };
+
+  const unreadCount = items.filter(i => !i.is_read).length;
+
   return (
     <>
       <div className="sheet-backdrop" onClick={onClose}/>
       <div className="sheet">
         <div className="sheet-handle"/>
-        <div style={{ padding: '4px 20px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>Уведомления</div>
-          <button className="chip" style={{ height: 34 }} onClick={onClose}>Прочитать все</button>
+        <div style={{ padding:'4px 20px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ fontSize:20, fontWeight:700, letterSpacing:'-0.02em' }}>
+            Уведомления
+            {unreadCount > 0 && (
+              <span style={{ marginLeft:8, background:'var(--danger)', color:'#fff', fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:99 }}>
+                {unreadCount}
+              </span>
+            )}
+          </div>
+          {unreadCount > 0 && (
+            <button className="chip" style={{ height:34 }} onClick={readAll}>
+              Прочитать все
+            </button>
+          )}
         </div>
-        <div>
-          {items.map((r, i) => {
-            const I = r.icon;
-            const tint = r.danger ? 'var(--danger-tint)' : r.success ? 'var(--success-tint)' : 'var(--surface-2)';
-            const color = r.danger ? 'var(--danger)' : r.success ? 'var(--success)' : 'var(--text)';
-            return (
-              <div key={i} className="list-row">
-                <div className="list-row-icon" style={{ background: tint, color }}>
-                  <I size={18}/>
-                </div>
-                <div className="list-row-text">
-                  <div className="list-row-title">{r.t}</div>
-                  <div className="list-row-sub">{r.sub}</div>
-                </div>
-                <span style={{ fontSize: 11.5, color: 'var(--text-subtle)' }}>{r.age}</span>
+
+        {loading && (
+          <div style={{ padding:'32px 20px', textAlign:'center', color:'var(--text-muted)', fontSize:14 }}>
+            Загрузка…
+          </div>
+        )}
+
+        {!loading && items.length === 0 && (
+          <div style={{ padding:'48px 20px', textAlign:'center' }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--border-strong)" strokeWidth="1.5" style={{ margin:'0 auto 12px', display:'block' }}>
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+            </svg>
+            <div style={{ fontSize:16, fontWeight:600, color:'var(--text-muted)' }}>Нет уведомлений</div>
+            <div style={{ fontSize:13, color:'var(--text-subtle)', marginTop:4 }}>Напоминания о лекарствах и важные новости появятся здесь</div>
+          </div>
+        )}
+
+        {!loading && items.map(item => {
+          const s = typeStyle(item.type);
+          const I = s.icon;
+          return (
+            <div key={item.id}
+              onClick={() => !item.is_read && readOne(item.id)}
+              style={{
+                display:'flex', gap:12, padding:'12px 20px',
+                background: item.is_read ? 'transparent' : 'rgba(59,79,224,0.03)',
+                borderLeft: item.is_read ? '3px solid transparent' : '3px solid var(--primary)',
+                cursor: item.is_read ? 'default' : 'pointer',
+                transition:'background 0.2s'
+              }}>
+              <div style={{ width:40, height:40, borderRadius:11, background:s.tint, color:s.color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <I size={18}/>
               </div>
-            );
-          })}
-        </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:14, fontWeight: item.is_read ? 500 : 700, color:'var(--text)', lineHeight:1.3 }}>
+                  {item.title}
+                </div>
+                {item.body && (
+                  <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:3, lineHeight:1.5,
+                    display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+                    {item.body}
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize:11, color:'var(--text-subtle)', flexShrink:0, marginTop:2, whiteSpace:'nowrap' }}>
+                {fmtAge(item.created_at)}
+              </div>
+            </div>
+          );
+        })}
+
+        <div style={{ height:'calc(16px + env(safe-area-inset-bottom))' }}/>
       </div>
     </>
   );
@@ -6390,6 +6528,21 @@ function App() {
   const [tab, setTab] = React.useState('home');
   const [chat, setChat] = React.useState(null);
   const [overlay, setOverlay] = React.useState(null);
+  const [unread, setUnread] = React.useState(0);
+
+  // Загружаем счётчик непрочитанных при старте и каждые 2 минуты
+  React.useEffect(() => {
+    if (!user) return;
+    const fetchUnread = async () => {
+      try {
+        const data = await authSend('/api/v1/notifications', 'GET');
+        if (data && typeof data.unread === 'number') setUnread(data.unread);
+      } catch(e) {}
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 120000);
+    return () => clearInterval(interval);
+  }, [user]);
   // PIN lock
   const [locked, setLocked] = React.useState(() => isPinEnabled());
   // Показывать форму входа (после logout)
@@ -6527,6 +6680,7 @@ function App() {
             onProfile={() => setOverlay('profile')}
             onNotif={() => setOverlay('notif')}
             onSettings={() => setOverlay('settings')}
+            unread={unread}
           />
           {tab === 'home'    && <HomeScreen onAsk={onAsk} onMode={onMode} voiceText={voiceText} onVoiceClear={() => setVoiceText(null)}/>}
           {tab === 'finance' && <FinanceScreen onAsk={onAskFinance}/>}
@@ -6541,7 +6695,7 @@ function App() {
         {overlay === 'settings' && <ProfileSettingsSheet onClose={() => setOverlay(null)}/>}
         {overlay === 'voice'   && <VoiceModal   onClose={() => setOverlay(null)} onResult={onVoiceResult}/>}
         {overlay === 'stop' && <StopMoshennnikSheet onClose={() => setOverlay(null)} onAsk={onAsk} messages={stopMessages} setMessages={setStopMessages} facts={stopFacts} setFacts={setStopFacts}/>}
-        {overlay === 'notif'   && <NotifSheet   onClose={() => setOverlay(null)}/>}
+        {overlay === 'notif'   && <NotifSheet   onClose={() => setOverlay(null)} onUnreadChange={setUnread}/>}
       </div>
     </React.Fragment>
   );
