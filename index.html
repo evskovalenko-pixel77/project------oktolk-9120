@@ -2221,7 +2221,14 @@ async function subscribeToPush() {
   const padding = '='.repeat((4 - rawKey.length % 4) % 4);
   const keyBytes = Uint8Array.from(atob(rawKey + padding), c => c.charCodeAt(0));
 
-  // Подписываемся
+  // Отписываемся от старой подписки (если VAPID-ключ менялся)
+  const existingSub = await reg.pushManager.getSubscription();
+  if (existingSub) {
+    await existingSub.unsubscribe();
+    console.log('[push] Старая подписка удалена');
+  }
+
+  // Подписываемся с актуальным ключом
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: keyBytes
@@ -5405,6 +5412,14 @@ function PushTestSheet({ onClose }) {
       const rawKey = public_key.replace(/-/g, '+').replace(/_/g, '/');
       const padding = '='.repeat((4 - rawKey.length % 4) % 4);
       const keyBytes = Uint8Array.from(atob(rawKey + padding), c => c.charCodeAt(0));
+
+      // Сначала отписываемся от старой подписки если она есть
+      // (нужно если VAPID-ключ менялся)
+      const existingSub = await reg.pushManager.getSubscription();
+      if (existingSub) {
+        await existingSub.unsubscribe();
+      }
+
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: keyBytes
@@ -5419,7 +5434,7 @@ function PushTestSheet({ onClose }) {
         updateStep('subscribe', 'error', 'Не удалось сохранить на сервере (возможно, нет авторизации)');
         setDone(true); setRunning(false); return;
       }
-      updateStep('subscribe', 'ok', 'Подписка сохранена');
+      updateStep('subscribe', 'ok', 'Подписка обновлена и сохранена');
     } catch(e) {
       updateStep('subscribe', 'error', e.message);
       setDone(true); setRunning(false); return;
