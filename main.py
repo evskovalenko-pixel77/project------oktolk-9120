@@ -2140,12 +2140,14 @@ PUSH_SCHEDULER_LOCK_ID = 8675309
 
 async def push_scheduler():
     """Фоновой планировщик — каждую минуту проверяет расписание лекарств.
-    Использует PostgreSQL advisory lock — только ОДИН воркер становится лидером.
-    Состояние heartbeat пишется в БД, чтобы любой воркер видел реальную картину.
+    Использует pg_try_advisory_xact_lock — lock берётся и автоматически
+    освобождается вместе с транзакцией. Это надёжнее чем session lock
+    при rolling restart: старый воркер умер → транзакция закрылась → lock освободился.
     """
     from datetime import date
+    import pytz
     global _push_scheduler_state
-    print("[push_scheduler] Поток запущен")
+    print(f"[push_scheduler] Поток запущен (PID {os.getpid()})")
     _push_scheduler_state["started_at"] = datetime.now().isoformat()
     await asyncio.sleep(5)
 
@@ -2168,61 +2170,60 @@ async def push_scheduler():
                 );
             """)
     except Exception as e:
-        print(f"[push_scheduler] Ошибка создания таблицы heartbeat: {e}")
+        print(f"[push_scheduler] Ошибка создания таблицы: {e}")
 
-    # Попытка захватить advisory lock — только ОДИН воркер станет лидером
-    leader_conn = None
-    try:
-        leader_conn = await db_pool.acquire()
-        got_lock = await leader_conn.fetchval(
-            "SELECT pg_try_advisory_lock($1)", PUSH_SCHEDULER_LOCK_ID
-        )
-        if not got_lock:
-            print("[push_scheduler] Этот воркер НЕ лидер — другой уже работает. Выхожу.")
-            await db_pool.release(leader_conn)
-            return
-        print(f"[push_scheduler] ✅ Стал лидером (PID {os.getpid()})")
-        _push_scheduler_state["is_leader"] = True
+    print(f"[push_scheduler] Начинаю цикл — буду пробовать стать лидером каждую минуту")
 
-        # Записать в БД что мы стали лидером
-        async with db_pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO scheduler_state (name, started_at, last_check, checks_count, pushes_sent, last_error, leader_pid)
-                VALUES ('push', $1, NULL, 0, 0, NULL, $2)
-                ON CONFLICT (name) DO UPDATE SET started_at=$1, leader_pid=$2, last_error=NULL, checks_count=0, pushes_sent=0
-            """, datetime.now(), os.getpid())
+    while True:
+        try:
+            await asyncio.sleep(60)
+            now = datetime.now()
 
-        # Основной цикл
-        while True:
-            try:
-                await asyncio.sleep(60)
-                now = datetime.now()
-                _push_scheduler_state["last_check"] = now.isoformat()
-                _push_scheduler_state["checks_count"] += 1
+            # Пробуем захватить транзакционный advisory lock
+            # pg_try_advisory_xact_lock: освобождается АВТОМАТИЧЕСКИ при конце транзакции
+            # Даже если процесс умер — PostgreSQL сам освобождает lock
+            async with db_pool.acquire() as conn:
+                async with conn.transaction():
+                    got_lock = await conn.fetchval(
+                        "SELECT pg_try_advisory_xact_lock($1)", PUSH_SCHEDULER_LOCK_ID
+                    )
+                    if not got_lock:
+                        # Другой воркер сейчас работает — пропускаем итерацию
+                        _push_scheduler_state["is_leader"] = False
+                        continue
 
-                last_err = None
-                if not VAPID_PRIVATE_PEM:
-                    last_err = "VAPID_PRIVATE_PEM не задан"
-                    _push_scheduler_state["last_error"] = last_err
-                else:
-                    _push_scheduler_state["last_error"] = None
+                    # Мы лидер в этой итерации
+                    _push_scheduler_state["is_leader"] = True
+                    _push_scheduler_state["last_check"] = now.isoformat()
+                    _push_scheduler_state["checks_count"] += 1
 
-                # Heartbeat в БД
-                async with db_pool.acquire() as conn:
+                    last_err = None
+                    if not VAPID_PRIVATE_PEM:
+                        last_err = "VAPID_PRIVATE_PEM не задан"
+                        _push_scheduler_state["last_error"] = last_err
+
+                    # Heartbeat в БД
                     await conn.execute("""
-                        UPDATE scheduler_state SET last_check=$1, checks_count=$2, pushes_sent=$3, last_error=$4
-                        WHERE name='push'
-                    """, now, _push_scheduler_state["checks_count"],
-                        _push_scheduler_state["pushes_sent"], last_err)
+                        INSERT INTO scheduler_state
+                            (name, started_at, last_check, checks_count, pushes_sent, last_error, leader_pid)
+                        VALUES ('push', $1, $2, $3, $4, $5, $6)
+                        ON CONFLICT (name) DO UPDATE SET
+                            last_check=$2, checks_count=$3, pushes_sent=$4,
+                            last_error=$5, leader_pid=$6,
+                            started_at=CASE WHEN scheduler_state.leader_pid!=$6
+                                           THEN $1 ELSE scheduler_state.started_at END
+                    """, now, now,
+                        _push_scheduler_state["checks_count"],
+                        _push_scheduler_state["pushes_sent"],
+                        last_err, os.getpid())
 
-                if not VAPID_PRIVATE_PEM:
-                    continue
+                    if not VAPID_PRIVATE_PEM:
+                        # lock освободится при выходе из transaction
+                        continue
 
-                # Текущее время в UTC — потом конвертируем для каждого пользователя
-                import pytz
-                now_utc = datetime.now(pytz.utc)
+                    # Текущее время UTC
+                    now_utc = datetime.now(pytz.utc)
 
-                async with db_pool.acquire() as conn:
                     # Берём лекарства вместе с timezone пользователя
                     meds = await conn.fetch("""
                         SELECT m.id, m.user_id, m.name, m.dose, m.times_json,
@@ -2232,6 +2233,7 @@ async def push_scheduler():
                         JOIN users u ON u.id = m.user_id
                         WHERE m.is_active=TRUE AND m.notify=TRUE
                     """)
+
                     for med in meds:
                         try:
                             times = json.loads(med["times_json"] or "[]")
@@ -2275,27 +2277,19 @@ async def push_scheduler():
                                 body=body
                             )
                             if sent:
-                                _push_scheduler_state["pushes_sent"] = _push_scheduler_state.get("pushes_sent", 0) + 1
+                                _push_scheduler_state["pushes_sent"] += 1
                                 print(f"[push] ✅ {med['name']} → user {med['user_id']} @ {target_time}")
-                                # Создаём уведомление в БД
                                 await create_notification(
                                     user_id=med["user_id"],
                                     type="med",
                                     title=f"Время принять {med['name']}",
                                     body=body
                                 )
-            except Exception as e:
-                print(f"[push_scheduler] Ошибка цикла: {e}")
-    except Exception as e:
-        print(f"[push_scheduler] Критическая ошибка лидера: {e}")
-    finally:
-        if leader_conn is not None:
-            try:
-                await leader_conn.execute("SELECT pg_advisory_unlock($1)", PUSH_SCHEDULER_LOCK_ID)
-                await db_pool.release(leader_conn)
-            except: pass
-        _push_scheduler_state["is_leader"] = False
-        print("[push_scheduler] Лидерство отпущено")
+                    # Транзакция завершается → lock автоматически освобождается
+
+        except Exception as e:
+            print(f"[push_scheduler] Ошибка итерации: {e}")
+            _push_scheduler_state["last_error"] = str(e)
 
 # ── Service Worker (с push-обработчиком и pushsubscriptionchange) ──
 SW_CONTENT = """
