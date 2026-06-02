@@ -2633,6 +2633,63 @@ async def logout_all(user=Depends(get_current_user)):
         )
     return {"status": "ok", "sessions_deleted": deleted or 0}
 
+@app.get("/robots.txt")
+async def robots_txt():
+    from fastapi.responses import PlainTextResponse
+    content = """User-agent: *
+Allow: /
+Allow: /finance
+Allow: /health
+Allow: /news
+Allow: /search
+Allow: /about
+Disallow: /api/
+Disallow: /sw.js
+
+Sitemap: https://oktolk.ru/sitemap.xml
+"""
+    return PlainTextResponse(content, media_type="text/plain")
+
+@app.get("/sitemap.xml")
+async def sitemap_xml():
+    from fastapi.responses import Response
+    from datetime import date
+    today = date.today().isoformat()
+    content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://oktolk.ru/</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://oktolk.ru/finance</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://oktolk.ru/health</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://oktolk.ru/news</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://oktolk.ru/search</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+</urlset>"""
+    return Response(content=content, media_type="application/xml")
+
 @app.get("/finance")
 @app.get("/health")
 @app.get("/news")
