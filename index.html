@@ -6529,6 +6529,18 @@ function App() {
   const [chat, setChat] = React.useState(null);
   const [overlay, setOverlay] = React.useState(null);
   const [unread, setUnread] = React.useState(0);
+  const [locked, setLocked] = React.useState(() => isPinEnabled());
+  const [showLogin, setShowLogin] = React.useState(false);
+  const [user, setUser] = React.useState(() => {
+    const token = localStorage.getItem('oktolk_token');
+    const name = localStorage.getItem('oktolk_name');
+    const user_id = localStorage.getItem('oktolk_user_id');
+    const tariff = localStorage.getItem('oktolk_tariff');
+    if (token && name) return { token, name, user_id: parseInt(user_id), tariff };
+    return null;
+  });
+  const [authLoading, setAuthLoading] = React.useState(false);
+  const demoAttempts = React.useRef(0);
 
   // Загружаем счётчик непрочитанных при старте и каждые 2 минуты
   React.useEffect(() => {
@@ -6543,23 +6555,8 @@ function App() {
     const interval = setInterval(fetchUnread, 120000);
     return () => clearInterval(interval);
   }, [user]);
-  // PIN lock
-  const [locked, setLocked] = React.useState(() => isPinEnabled());
-  // Показывать форму входа (после logout)
-  const [showLogin, setShowLogin] = React.useState(false);
-
-  const [user, setUser] = React.useState(() => {
-    const token = localStorage.getItem('oktolk_token');
-    const name = localStorage.getItem('oktolk_name');
-    const user_id = localStorage.getItem('oktolk_user_id');
-    const tariff = localStorage.getItem('oktolk_tariff');
-    if (token && name) return { token, name, user_id: parseInt(user_id), tariff };
-    return null;
-  });
-  const [authLoading, setAuthLoading] = React.useState(false);
 
   // Авто-демо: если нет токена И не показываем форму входа — создаём демо
-  const demoAttempts = React.useRef(0);
   React.useEffect(() => {
     if (!user && !authLoading && !showLogin && demoAttempts.current < 3) {
       demoAttempts.current += 1;
