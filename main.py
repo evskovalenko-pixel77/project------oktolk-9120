@@ -23,7 +23,7 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1/"
 SECRET_KEY        = os.getenv("SECRET_KEY", "oktolk-super-secret-key-2026-production")
 
 # VAPID ключи для Web Push (хранить в env Amvera!)
-VAPID_PUBLIC_KEY  = os.getenv("VAPID_PUBLIC_KEY",  "BKkeZ1rrVz29eRFV9oG0Wd3JVoncDcNspP4AJRv-6mdTeHg1oQCCUbLBNVpfaU8Ew8nkPwT4Q-l44lzciK_n2-k")
+VAPID_PUBLIC_KEY  = os.getenv("VAPID_PUBLIC_KEY",  "BPuepfkM-HSrhHb8NZPZ2HfhFDNYEZd2TUiwZN7tvCij3qNNhqMyUMWDtuOObEEGbeYnWnhBaSF8sGdeSQrApt4")
 VAPID_PRIVATE_PEM = os.getenv("VAPID_PRIVATE_PEM", "")  # полный PEM в env переменной
 VAPID_CLAIMS      = {"sub": "mailto:info@oktolk.ru"}
 
