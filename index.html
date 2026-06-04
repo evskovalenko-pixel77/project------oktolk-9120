@@ -2997,7 +2997,7 @@ function RecentCard({ onAsk }) {
 // ─────────────────────────────────────────────────────────────
 // Finance screen
 // ─────────────────────────────────────────────────────────────
-function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
+function CategoryDetailScreen({ cat, summary, onBack, onAsk, onRefresh }) {
   const catMap = { "Магазины": "shop", "Медицина": "pharmacy", "ЖКУ": "utility", "Кредиты": "credit", "Транспорт": "transport", "Досуг": "leisure", "Прочее": "other" };
   const catKey = catMap[cat.label] || "other";
   const CI = cat.icon;
@@ -3027,7 +3027,7 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
   };
   const chips = subcatChips[catKey] || [];
   const [activeChip, setActiveChip] = React.useState(null);
-  const subcatLabels = { taxi:"Такси", public:"Метро/автобус", fuel:"Бензин", parking:"Парковка", service:"ТО/ремонт", other_transport:"Авиа/ж.д.", drugs:"Аптека", doctor:"Врач/клиника", tests:"Анализы", hospital:"Стационар", groceries:"Продукты", clothes:"Одежда", household:"Хозтовары" };
+  const subcatLabels = { taxi:"Такси", public:"Метро/автобус", fuel:"Бензин", parking:"Парковка", service:"ТО/ремонт", other_transport:"Авиа/ж.д.", drugs:"Аптека", doctor:"Врач/клиника", tests:"Анализы", hospital:"Стационар", groceries:"Продукты", clothes:"Одежда", household:"Хозтовары", cinema:"Кино", cafe:"Кафе/ресторан", subscription:"Подписка", sport:"Спорт", other:"Прочее", shop:"Магазины", pharmacy:"Медицина", utility:"ЖКУ", credit:"Кредиты", transport:"Транспорт", leisure:"Досуг" };
 
   React.useEffect(() => {
     if (isCredit) { authGet("/api/v1/finance/credits-overview").then(d => { if (d) setCredits(d); }).catch(() => {}); }
@@ -3081,7 +3081,7 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
         // Показываем каждую запись отдельно
         const msgs = data.items.map(it => "✓ " + (it.comment || "Трата") + " — " + it.amount.toLocaleString("ru") + " ₽");
         setExpenseMsgs(m => [...m, ...msgs]);
-        if (!isCredit) authGet("/api/v1/finance/category/" + catKey).then(d => { if (d) setDetail(d); });
+        if (!isCredit) authGet("/api/v1/finance/category/" + catKey).then(d => { if (d) setDetail(d); }); if (onRefresh) onRefresh();
         const r2 = await apiFetch("/api/v1/finance/records?category=" + catKey);
         const d2 = await r2.json();
         setRecords((d2.records || d2 || []).slice(0, 20));
@@ -3124,7 +3124,7 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk }) {
     try {
       await apiFetch("/api/v1/finance/records/" + id, { method: "DELETE" });
       setRecords(r => r.filter(x => x.id !== id));
-      if (!isCredit) authGet("/api/v1/finance/category/" + catKey).then(d => { if (d) setDetail(d); });
+      if (!isCredit) authGet("/api/v1/finance/category/" + catKey).then(d => { if (d) setDetail(d); }); if (onRefresh) onRefresh();
     } catch(e) {}
   };
 
@@ -3477,7 +3477,7 @@ function FinanceScreen({ onAsk, onMode }) {
     { icon: IconSparkles,   label: 'Досуг' },
   ];
 
-  if (selectedCat) return <CategoryDetailScreen cat={selectedCat} summary={summary} onBack={() => setSelectedCat(null)} onAsk={onAsk}/>;
+  if (selectedCat) return <CategoryDetailScreen cat={selectedCat} summary={summary} onBack={() => setSelectedCat(null)} onAsk={onAsk} onRefresh={loadSummary}/>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '4px 14px 8px', gap: 8, boxSizing: 'border-box' }}>
