@@ -720,10 +720,25 @@ async def save_profile(req: ProfileRequest, user=Depends(get_current_user)):
                  habits, activity, alcohol, smoking, smoking_years, heredity, chronic, income, updated_at)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW())
             ON CONFLICT (user_id) DO UPDATE SET
-                gender=$2, age=$3, height=$4, weight=$5, profession=$6, hobbies=$7,
-                work_pressure_1=$8, work_pressure_2=$9, work_pulse=$10, base_sugar=$11,
-                habits=$12, activity=$13, alcohol=$14, smoking=$15, smoking_years=$16,
-                heredity=$17, chronic=$18, income=$19, updated_at=NOW()
+                gender=COALESCE($2, user_profile.gender),
+                age=COALESCE($3, user_profile.age),
+                height=COALESCE($4, user_profile.height),
+                weight=COALESCE($5, user_profile.weight),
+                profession=COALESCE($6, user_profile.profession),
+                hobbies=COALESCE($7, user_profile.hobbies),
+                work_pressure_1=COALESCE($8, user_profile.work_pressure_1),
+                work_pressure_2=COALESCE($9, user_profile.work_pressure_2),
+                work_pulse=COALESCE($10, user_profile.work_pulse),
+                base_sugar=COALESCE($11, user_profile.base_sugar),
+                habits=COALESCE($12, user_profile.habits),
+                activity=COALESCE($13, user_profile.activity),
+                alcohol=COALESCE($14, user_profile.alcohol),
+                smoking=COALESCE($15, user_profile.smoking),
+                smoking_years=COALESCE($16, user_profile.smoking_years),
+                heredity=COALESCE($17, user_profile.heredity),
+                chronic=COALESCE($18, user_profile.chronic),
+                income=COALESCE($19, user_profile.income),
+                updated_at=NOW()
         """, uid, req.gender, req.age, req.height, req.weight, req.profession,
             req.hobbies, req.work_pressure_1, req.work_pressure_2, req.work_pulse,
             req.base_sugar, req.habits, req.activity, req.alcohol, req.smoking,
