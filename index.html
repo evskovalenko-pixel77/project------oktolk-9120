@@ -3589,17 +3589,48 @@ function HealthDetailScreen({ metric, onBack }) {
     setAiLoading(false);
   };
 
+  const isHealthQuestion = (text) => {
+    const q = text.toLowerCase();
+    return q.includes('?') || q.includes('почему') || q.includes('как ') ||
+      q.includes('что делать') || q.includes('план') || q.includes('совет') ||
+      q.includes('помог') || q.includes('хочу') || q.includes('составь') ||
+      q.includes('расскажи') || q.includes('можно') || q.includes('стоит') ||
+      q.includes('норма') || q.includes('опасно') || q.includes('страшно') ||
+      q.includes('снизить') || q.includes('повысить') || q.includes('улучшить') ||
+      q.includes('рекоменд') || q.includes('помоги') || q.includes('объясни') ||
+      q.includes('что значит') || q.includes('почему') || q.includes('питани') ||
+      q.includes('тренир') || q.includes('упражнен') || q.includes('диет');
+  };
+
   const sendHealthInput = async (text) => {
     if (!text.trim()) return;
+    setInput('');
+    if (isHealthQuestion(text)) {
+      try {
+        setPending(true);
+        const data = await authSend('/api/v1/health/chat', 'POST', { type: metric.type, text: text });
+        if (data && data.reply) {
+          setAiText(data.reply);
+        }
+      } catch(e) {
+        setAiText('Не удалось получить ответ. Попробуйте снова.');
+      } finally {
+        setPending(false);
+      }
+      return;
+    }
     try {
       const data = await authSend('/api/v1/health/parse', 'POST', { type: metric.type, text: text });
       if (data && data.value_1) {
         const d2 = await authGet('/api/v1/health/records?type=' + metric.type + '&days=' + period);
         setRecords(Array.isArray(d2) ? d2 : (d2.records || []));
         setAiText('');
-        setInput('');
+      } else {
+        setAiText('Не удалось распознать показатель. Попробуйте написать иначе, например: 120/80 или 75 кг');
       }
-    } catch(e) {}
+    } catch(e) {
+      setAiText('Ошибка. Попробуйте снова.');
+    }
   };
 
   const sendPhotoHealth = (file) => {

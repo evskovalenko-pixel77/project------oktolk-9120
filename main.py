@@ -960,6 +960,77 @@ async def parse_health_photo(req: HealthParseRequest, user=Depends(get_current_u
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка распознавания: {str(e)}")
 
+
+@app.post("/api/v1/health/chat")
+async def health_chat(req: dict = Body(...), user=Depends(get_current_user)):
+    """AI-чат по здоровью с контекстом данных пользователя"""
+    text = req.get("text", "")
+    metric_type = req.get("type", "")
+    if not text:
+        raise HTTPException(status_code=400, detail="Нет текста")
+    try:
+        context_parts = []
+        if db_pool:
+            async with db_pool.acquire() as conn:
+                # Профиль пользователя
+                profile = await conn.fetchrow("SELECT * FROM user_profile WHERE user_id=$1", user["id"])
+                if profile:
+                    p = dict(profile)
+                    parts = []
+                    if p.get("age"): parts.append(f"возраст {p['age']} лет")
+                    if p.get("gender"): parts.append(f"пол: {p['gender']}")
+                    if p.get("height"): parts.append(f"рост {p['height']} см")
+                    if p.get("weight"): parts.append(f"вес {p['weight']} кг")
+                    if p.get("work_pressure_1") and p.get("work_pressure_2"):
+                        parts.append(f"рабочее давление {p['work_pressure_1']}/{p['work_pressure_2']}")
+                    if parts:
+                        context_parts.append("Данные пользователя: " + ", ".join(parts))
+                # Последние записи по типу
+                if metric_type:
+                    records = await conn.fetch(
+                        """SELECT type, value_1, value_2, comment, recorded_at 
+                           FROM health_records WHERE user_id=$1 AND type=$2 
+                           ORDER BY recorded_at DESC LIMIT 10""",
+                        user["id"], metric_type
+                    )
+                else:
+                    records = await conn.fetch(
+                        """SELECT type, value_1, value_2, comment, recorded_at 
+                           FROM health_records WHERE user_id=$1 
+                           ORDER BY recorded_at DESC LIMIT 20""",
+                        user["id"]
+                    )
+                if records:
+                    rec_parts = []
+                    for r in records:
+                        type_names = {"pressure": "Давление", "pulse": "Пульс", "sugar": "Сахар", "weight": "Вес"}
+                        tname = type_names.get(r["type"], r["type"])
+                        if r["value_2"]:
+                            rec_parts.append(f"{tname}: {r['value_1']}/{r['value_2']}")
+                        else:
+                            rec_parts.append(f"{tname}: {r['value_1']}")
+                    context_parts.append("Последние показатели: " + "; ".join(rec_parts))
+
+        context = "
+".join(context_parts)
+        system = HEALTH_PROMPT + ("
+
+Контекст пользователя:
+" + context if context else "")
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": text}
+        ]
+        reply = call_ai(messages)
+        return {"reply": reply}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        ]
+        reply = call_ai(messages)
+        return {"reply": reply}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/v1/health/meds")
 async def get_medications(user=Depends(get_current_user)):
     """Список активных лекарств пользователя"""
