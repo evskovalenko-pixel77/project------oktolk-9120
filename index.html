@@ -3607,7 +3607,7 @@ function HealthDetailScreen({ metric, onBack }) {
     setInput('');
     if (isHealthQuestion(text)) {
       try {
-        setPending(true);
+        setAiLoading(true);
         const data = await authSend('/api/v1/health/chat', 'POST', { type: metric.type, text: text });
         if (data && data.reply) {
           setAiText(data.reply);
@@ -3615,7 +3615,7 @@ function HealthDetailScreen({ metric, onBack }) {
       } catch(e) {
         setAiText('Не удалось получить ответ. Попробуйте снова.');
       } finally {
-        setPending(false);
+        setAiLoading(false);
       }
       return;
     }

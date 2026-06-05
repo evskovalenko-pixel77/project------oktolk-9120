@@ -1,6 +1,6 @@
 import sys, os, requests, json, re, hashlib, secrets, asyncio
 from datetime import datetime, timedelta
-from fastapi import FastAPI, Depends, HTTPException, Header, Request
+from fastapi import FastAPI, Depends, HTTPException, Header, Request, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -1011,20 +1011,11 @@ async def health_chat(req: dict = Body(...), user=Depends(get_current_user)):
                             rec_parts.append(f"{tname}: {r['value_1']}")
                     context_parts.append("Последние показатели: " + "; ".join(rec_parts))
 
-        context = "
-".join(context_parts)
-        system = HEALTH_PROMPT + ("
-
-Контекст пользователя:
-" + context if context else "")
+        context = "\n".join(context_parts)
+        system = HEALTH_PROMPT + ("\n\nКонтекст пользователя:\n" + context if context else "")
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": text}
-        ]
-        reply = call_ai(messages)
-        return {"reply": reply}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
         ]
         reply = call_ai(messages)
         return {"reply": reply}
