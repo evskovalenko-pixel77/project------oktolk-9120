@@ -2606,6 +2606,7 @@ function StopMoshennnikSheet({ onClose, onAsk, messages, setMessages, facts, set
     inp.accept = accept;
     if (kind === 'photo') inp.multiple = true;
     inp.onchange = async (e) => {
+      restoreFullscreen();
       const files = Array.from(e.target.files);
       if (!files.length) return;
       setShowClip(false);
@@ -3095,12 +3096,12 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk, onRefresh }) {
 
   const handlePhoto = () => {
     const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*"; inp.capture = "environment";
-    inp.onchange = async (e) => { const file = e.target.files[0]; if (!file) return; const base64 = await new Promise(res => { const r = new FileReader(); r.onloadend = () => res(r.result.split(",")[1]); r.readAsDataURL(file); }); sendExpense(null, base64, file.type); };
+    inp.onchange = async (e) => { restoreFullscreen(); const file = e.target.files[0]; if (!file) return; const base64 = await new Promise(res => { const r = new FileReader(); r.onloadend = () => res(r.result.split(",")[1]); r.readAsDataURL(file); }); sendExpense(null, base64, file.type); };
     inp.click();
   };
   const handleDoc = () => {
     const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".pdf,.doc,.docx,.txt,image/*";
-    inp.onchange = (e) => { const f = e.target.files[0]; if (f && onAsk) onAsk("Помогите разобрать документ: " + f.name); };
+    inp.onchange = (e) => { restoreFullscreen(); const f = e.target.files[0]; if (f && onAsk) onAsk("Помогите разобрать документ: " + f.name); };
     inp.click();
   };
 
@@ -3638,6 +3639,7 @@ function HealthDetailScreen({ metric, onBack }) {
   };
 
   const sendPhotoHealth = (file) => {
+    restoreFullscreen();
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const base64 = ev.target.result.split(',')[1];
@@ -4850,6 +4852,7 @@ function SitesScreen({ onAsk }) {
     const inp = document.createElement('input');
     inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
     inp.onchange = async (e) => {
+      restoreFullscreen();
       const file = e.target.files[0]; if (!file) return;
       const base64 = await new Promise(res => { const r = new FileReader(); r.onloadend = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
       setInput(''); setQuery('Поиск по фото');
@@ -5310,6 +5313,20 @@ const BIO_ENABLED  = 'oktolk_bio_enabled';
 const BIO_CRED_KEY = 'oktolk_bio_cred_id';
 
 function isPinEnabled()  { return localStorage.getItem(PIN_ENABLED) === '1'; }
+
+function requestFullscreen() {
+  const el = document.documentElement;
+  if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+}
+
+function restoreFullscreen() {
+  setTimeout(() => {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      requestFullscreen();
+    }
+  }, 300);
+}
 function isBioEnabled()  { return localStorage.getItem(BIO_ENABLED) === '1'; }
 async function checkPin(pin) {
   const hash = await sha256(pin);
