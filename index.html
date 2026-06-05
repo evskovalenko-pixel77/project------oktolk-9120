@@ -3144,6 +3144,8 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk, onRefresh }) {
     </div>
   );
 
+  const realSlide = (!isCredit && !hasSubcats && slide >= 1) ? slide + 1 : slide;
+
   const renderCreditSlide = () => {
     const c = credits;
     if (!c) return <div style={{ ...slideStyle, alignItems: "center", justifyContent: "center" }}><div style={{ color: "var(--text-muted)" }}>Загрузка…</div></div>;
@@ -3263,7 +3265,6 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk, onRefresh }) {
     }
 
     // ── Слайд 1: Разбивка ──
-    const realSlide = (!isCredit && !hasSubcats && slide >= 1) ? slide + 1 : slide;
     if (realSlide === 1) {
       const subs = d.subcategories;
       const tot = subs.reduce((a, s) => a + s.total, 0) || 1;
