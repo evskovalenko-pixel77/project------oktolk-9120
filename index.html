@@ -3002,8 +3002,8 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk, onRefresh }) {
   const catKey = catMap[cat.label] || "other";
   const CI = cat.icon;
   const isCredit = catKey === "credit";
-  const SLIDES = 5;
-
+  const hasSubcats = detail && detail.subcategories && detail.subcategories.length > 0;
+  const SLIDES = isCredit ? 5 : (hasSubcats ? 5 : 4);
   const [slide, setSlide] = React.useState(0);
   const [detail, setDetail] = React.useState(null);
   const [credits, setCredits] = React.useState(null);
@@ -3035,7 +3035,10 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk, onRefresh }) {
     apiFetch("/api/v1/finance/records?category=" + catKey).then(r => r.json()).then(data => setRecords((data.records || data || []).slice(0, 20))).catch(() => {});
   }, []);
 
-  React.useEffect(() => { if (slide === 4 && !aiText && !aiLoading) loadAI(); }, [slide]);
+  React.useEffect(() => {
+    const rs = (!isCredit && !hasSubcats && slide >= 1) ? slide + 1 : slide;
+    if (rs === 4 && !aiText && !aiLoading) loadAI();
+  }, [slide, hasSubcats]);
 
   const loadAI = async () => {
     setAiLoading(true);
@@ -3112,7 +3115,7 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk, onRefresh }) {
 
   const fmt = (dt) => { try { const d = new Date(dt); return d.toLocaleDateString("ru", { day: "numeric", month: "short" }) + " · " + d.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" }); } catch(e) { return ""; } };
   const slideStyle = { display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", flex: 1, minHeight: 0 };
-  const SLIDE_NAMES = isCredit ? ["Обзор", "Нагрузка", "Кредиты", "История", "AI совет"] : ["Обзор", "Разбивка", "График", "История", "AI анализ"];
+  const SLIDE_NAMES = isCredit ? ["Обзор", "Нагрузка", "Кредиты", "История", "AI совет"] : hasSubcats ? ["Обзор", "Разбивка", "График", "История", "AI анализ"] : ["Обзор", "График", "История", "AI анализ"];
 
   // Пастельные hero-цвета (полупрозрачный фон)
   const heroBg = { shop: "rgba(245,158,11,0.07)", pharmacy: "rgba(239,68,68,0.07)", utility: "rgba(16,185,129,0.07)", credit: "rgba(209,67,67,0.07)", transport: "rgba(59,79,224,0.07)", leisure: "rgba(139,92,246,0.07)", other: "rgba(107,114,128,0.07)" };
@@ -3186,7 +3189,7 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk, onRefresh }) {
         </div>
       </div>
     );
-    if (slide === 3) return (
+    if (realSlide === 3) return (
       <div style={slideStyle}>
         <div className="card">
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>История платежей</div>
@@ -3260,7 +3263,8 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk, onRefresh }) {
     }
 
     // ── Слайд 1: Разбивка ──
-    if (slide === 1) {
+    const realSlide = (!isCredit && !hasSubcats && slide >= 1) ? slide + 1 : slide;
+    if (realSlide === 1) {
       const subs = d.subcategories;
       const tot = subs.reduce((a, s) => a + s.total, 0) || 1;
       return (
@@ -3295,7 +3299,7 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk, onRefresh }) {
     }
 
     // ── Слайд 2: График ──
-    if (slide === 2) {
+    if (realSlide === 2) {
       const m = d.monthly;
       const max = Math.max(...m.map(x => x.total), 1);
       const monthNames = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
