@@ -3002,10 +3002,10 @@ function CategoryDetailScreen({ cat, summary, onBack, onAsk, onRefresh }) {
   const catKey = catMap[cat.label] || "other";
   const CI = cat.icon;
   const isCredit = catKey === "credit";
-  const hasSubcats = detail && detail.subcategories && detail.subcategories.length > 0;
-  const SLIDES = isCredit ? 5 : (hasSubcats ? 5 : 4);
   const [slide, setSlide] = React.useState(0);
   const [detail, setDetail] = React.useState(null);
+  const hasSubcats = detail && detail.subcategories && detail.subcategories.length > 0;
+  const SLIDES = isCredit ? 5 : (hasSubcats ? 5 : 4);
   const [credits, setCredits] = React.useState(null);
   const [records, setRecords] = React.useState([]);
   const [chatMsgs, setChatMsgs] = React.useState([]);
