@@ -1,8 +1,7 @@
-// OkTolk Service Worker v2 - no cache
+// OkTolk Service Worker v3 - resilient
 self.addEventListener('install', function(e) {
   self.skipWaiting();
 });
-
 self.addEventListener('activate', function(e) {
   e.waitUntil(
     caches.keys().then(function(names) {
@@ -10,7 +9,11 @@ self.addEventListener('activate', function(e) {
     }).then(function() { return self.clients.claim(); })
   );
 });
-
 self.addEventListener('fetch', function(e) {
-  e.respondWith(fetch(e.request));
+  if (e.request.method !== 'GET') return;
+  e.respondWith(
+    fetch(e.request).catch(function() {
+      return new Response('', { status: 503, statusText: 'Offline' });
+    })
+  );
 });
