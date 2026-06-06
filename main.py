@@ -1203,9 +1203,15 @@ async def get_finance_summary(user=Depends(get_current_user)):
         """, user["id"])
         return {"month": datetime.now().strftime("%Y-%m"), "categories": [dict(r) for r in rows]}
 
-# ── Legacy endpoints (backward compat) ──────────────────────────
+# ── Landing & App routes ─────────────────────────────────────────
 @app.get("/")
 async def root():
+    """Лендинг — главная страница для поисковиков и новых посетителей"""
+    return FileResponse("landing.html")
+
+@app.get("/app")
+async def app_route():
+    """PWA приложение OkTolk"""
     return FileResponse("index.html")
 
 @app.post("/chat")
@@ -2715,11 +2721,15 @@ async def robots_txt():
     from fastapi.responses import PlainTextResponse
     content = """User-agent: *
 Allow: /
+Allow: /app
+Allow: /app/finance
+Allow: /app/health
+Allow: /app/news
+Allow: /app/search
 Allow: /finance
 Allow: /health
 Allow: /news
 Allow: /search
-Allow: /about
 Disallow: /api/
 Disallow: /sw.js
 
@@ -2741,25 +2751,31 @@ async def sitemap_xml():
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://oktolk.ru/finance</loc>
+    <loc>https://oktolk.ru/app</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://oktolk.ru/app/finance</loc>
     <lastmod>{today}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://oktolk.ru/health</loc>
+    <loc>https://oktolk.ru/app/health</loc>
     <lastmod>{today}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://oktolk.ru/news</loc>
+    <loc>https://oktolk.ru/app/news</loc>
     <lastmod>{today}</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://oktolk.ru/search</loc>
+    <loc>https://oktolk.ru/app/search</loc>
     <lastmod>{today}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -2767,13 +2783,20 @@ async def sitemap_xml():
 </urlset>"""
     return Response(content=content, media_type="application/xml")
 
+@app.get("/app/finance")
+@app.get("/app/health")
+@app.get("/app/news")
+@app.get("/app/search")
+async def spa_app_routes():
+    """SPA fallback для маршрутов /app/* — отдают index.html"""
+    return FileResponse("index.html")
+
 @app.get("/finance")
 @app.get("/health")
 @app.get("/news")
 @app.get("/search")
-async def spa_routes():
-    """SPA fallback — все фронтовые маршруты отдают index.html"""
-    from fastapi.responses import FileResponse
+async def spa_routes_legacy():
+    """Обратная совместимость — старые маршруты тоже работают"""
     return FileResponse("index.html")
 
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
