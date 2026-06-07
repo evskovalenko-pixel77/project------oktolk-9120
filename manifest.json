@@ -2,10 +2,10 @@
   "name": "OkTolk — простой AI-помощник",
   "short_name": "OkTolk",
   "description": "Простой AI-помощник. Чат, проверка документов, антискам-анализ сообщений. Без сложных настроек.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/app",
+  "scope": "/app",
   "display": "standalone",
-  "theme_color": "#2A7D4F",
+  "theme_color": "#3B4FE0",
   "background_color": "#FFFFFF",
   "orientation": "portrait-primary",
   "icons": [
@@ -30,7 +30,10 @@
       "form_factor": "narrow"
     }
   ],
-  "categories": ["productivity", "utilities"],
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
   "shortcuts": [
     {
       "name": "Новый вопрос",
