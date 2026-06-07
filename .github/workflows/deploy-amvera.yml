@@ -7,21 +7,34 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      AMVERA_USER: ${{ secrets.AMVERA_USER }}
-      AMVERA_PASS: ${{ secrets.AMVERA_PASS }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Configure git credentials
+        env:
+          AMVERA_USER: ${{ secrets.AMVERA_USER }}
+          AMVERA_PASS: ${{ secrets.AMVERA_PASS }}
+        run: |
+          git config --global credential.helper store
+          python3 -c "
+          import urllib.parse, os
+          u = os.environ['AMVERA_USER']
+          p = urllib.parse.quote(os.environ['AMVERA_PASS'], safe='')
+          with open(os.path.expanduser('~/.git-credentials'), 'w') as f:
+              f.write(f'https://{u}:{p}@git.msk0.amvera.ru\n')
+          "
+
+      - name: Test connectivity
+        run: |
+          curl -s -o /dev/null -w "HTTP %{http_code}" https://git.msk0.amvera.ru || echo "Connection failed"
+
       - name: Push to Amvera
         run: |
-          python3 -c "
-          import urllib.parse, os, subprocess
-          user = os.environ['AMVERA_USER']
-          pwd = urllib.parse.quote(os.environ['AMVERA_PASS'], safe='')
-          url = f'https://{user}:{pwd}@git.msk0.amvera.ru/{user}/oktolk.git'
-          subprocess.run(['git', 'remote', 'add', 'amvera', url], check=True)
-          " 
-          git push amvera HEAD:master --force
+          git remote add amvera https://git.msk0.amvera.ru/kes/oktolk.git
+          git push amvera HEAD:master --force 2>&1 || echo "PUSH_FAILED"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.git-credentials
