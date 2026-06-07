@@ -1,0 +1,22 @@
+name: Deploy to Amvera
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to Amvera
+        env:
+          AMVERA_USER: ${{ secrets.AMVERA_USER }}
+          AMVERA_PASS: ${{ secrets.AMVERA_PASS }}
+        run: |
+          ENCODED_PASS=$(python3 -c "import urllib.parse,os; print(urllib.parse.quote(os.environ['AMVERA_PASS'], safe=''))")
+          git remote add amvera "https://${AMVERA_USER}:${ENCODED_PASS}@git.msk0.amvera.ru/kes/oktolk.git"
+          git push amvera HEAD:master --force
