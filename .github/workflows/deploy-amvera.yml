@@ -19,24 +19,32 @@ jobs:
           AMVERA_PASS: ${{ secrets.AMVERA_PASS }}
         run: |
           set -e
-          ENC=$(python3 -c "import urllib.parse,os;print(urllib.parse.quote(os.environ['AMVERA_PASS'],safe=''))")
-          AMVERA_URL="https://${AMVERA_USER}:${ENC}@git.msk0.amvera.ru/${AMVERA_USER}/oktolk.git"
+          # Рабочий способ авторизации — credential helper (НЕ креды в URL)
+          git config --global credential.helper store
+          python3 -c "
+          import urllib.parse, os
+          u = os.environ['AMVERA_USER']
+          p = urllib.parse.quote(os.environ['AMVERA_PASS'], safe='')
+          with open(os.path.expanduser('~/.git-credentials'),'w') as f:
+              f.write(f'https://{u}:{p}@git.msk0.amvera.ru\n')
+          "
+          git config --global user.email "ci@oktolk.ru"
+          git config --global user.name "GitHub CI"
 
-          # Клонируем текущий Amvera-репозиторий (сохраняем его историю)
-          git clone "$AMVERA_URL" amvera_repo
+          # Клонируем текущий Amvera-репо (без кредов в URL — берутся из helper)
+          git clone https://git.msk0.amvera.ru/kes/oktolk.git amvera_repo
           cd amvera_repo
-          git config user.email "ci@oktolk.ru"
-          git config user.name "GitHub CI"
 
-          # Синхронизируем содержимое из GitHub (кроме .git и самих workflow)
+          # Синхронизируем содержимое из GitHub (кроме .git)
           rsync -a --delete --exclude='.git' ../gh_src/ ./
 
-          # Коммитим и пушим обычным fast-forward → Amvera видит новый коммит → собирает
+          # Fast-forward коммит → Amvera видит новый коммит → собирает
           git add -A
           if git diff --cached --quiet; then
             echo "Нет изменений для деплоя"
           else
             git commit -m "deploy: sync from GitHub $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             git push origin master
-            echo "✅ Запушено на Amvera (fast-forward) — сборка стартует"
+            echo "Запушено на Amvera (fast-forward) — сборка стартует"
           fi
+          rm -f ~/.git-credentials
