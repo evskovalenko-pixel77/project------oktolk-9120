@@ -9,5 +9,5 @@ email-validator
 requests
 aiofiles
 asyncpg
-pywebpush
+pywebpush==2.0.0
 pytz
