@@ -9,7 +9,5 @@ email-validator
 requests
 aiofiles
 asyncpg
-aiohttp
-pywebpush
 pywebpush
 pytz

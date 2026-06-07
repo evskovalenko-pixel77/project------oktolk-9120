@@ -1261,7 +1261,7 @@ async def simplify_news_ai(title: str, body: str) -> dict:
 
 async def fetch_tavily_news() -> list:
     """Получить новости через Tavily с официальных источников + AI упрощение"""
-    import time, aiohttp
+    import time
     now = time.time()
     if _news_cache["data"] and now - _news_cache["at"] < 3600:  # кеш 1 час
         return _news_cache["data"]
@@ -1273,36 +1273,42 @@ async def fetch_tavily_news() -> list:
         ("льготные лекарства бесплатные препараты Минздрав", "success", "Льготы"),
         ("мошенничество госуслуги фишинг безопасность", "danger", "Опасно"),
     ]
+
+    def _fetch_tavily_sync(q):
+        """Синхронный запрос к Tavily (requests). Вызывается через asyncio.to_thread."""
+        payload = {
+            "api_key": TAVILY_API_KEY,
+            "query": q,
+            "search_depth": "basic",
+            "max_results": 2,
+            "include_answer": True,
+            "days": 30,
+            "country": "russia"
+        }
+        try:
+            resp = requests.post("https://api.tavily.com/search", json=payload, timeout=10)
+            if resp.status_code != 200:
+                return None
+            return resp.json()
+        except Exception:
+            return None
+
     raw = []
     try:
-        async with aiohttp.ClientSession() as session:
-            for i, (q, cat, tag) in enumerate(queries):
-                payload = {
-                    "api_key": TAVILY_API_KEY,
-                    "query": q,
-                    "search_depth": "basic",
-                    "max_results": 2,
-                    "include_answer": True,
-                    "days": 30,
-                    "country": "russia"
-                }
-                try:
-                    async with session.post("https://api.tavily.com/search", json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        if resp.status != 200:
-                            continue
-                        data = await resp.json()
-                        items = data.get("results", [])
-                        if not items:
-                            continue
-                        item = items[0]
-                        title = item.get("title", "").strip()
-                        body = (data.get("answer") or item.get("content", "")).strip()
-                        url = item.get("url", "")
-                        source = url.split("/")[2].replace("www.", "").split(".")[0].upper() if url and "/" in url else "Источник"
-                        if title and body:
-                            raw.append({"id": i+1, "cat": cat, "tag": tag, "raw_title": title, "raw_body": body, "source": source, "url": url, "age": "сегодня"})
-                except Exception:
-                    continue
+        for i, (q, cat, tag) in enumerate(queries):
+            data = await asyncio.to_thread(_fetch_tavily_sync, q)
+            if not data:
+                continue
+            items = data.get("results", [])
+            if not items:
+                continue
+            item = items[0]
+            title = item.get("title", "").strip()
+            body = (data.get("answer") or item.get("content", "")).strip()
+            url = item.get("url", "")
+            source = url.split("/")[2].replace("www.", "").split(".")[0].upper() if url and "/" in url else "Источник"
+            if title and body:
+                raw.append({"id": i+1, "cat": cat, "tag": tag, "raw_title": title, "raw_body": body, "source": source, "url": url, "age": "сегодня"})
     except Exception:
         pass
 
