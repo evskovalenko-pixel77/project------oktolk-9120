@@ -8,33 +8,35 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout GitHub repo (source content)
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          path: gh_src
 
-      - name: Configure git credentials
+      - name: Sync content to Amvera and push (fast-forward)
         env:
           AMVERA_USER: ${{ secrets.AMVERA_USER }}
           AMVERA_PASS: ${{ secrets.AMVERA_PASS }}
         run: |
-          git config --global credential.helper store
-          python3 -c "
-          import urllib.parse, os
-          u = os.environ['AMVERA_USER']
-          p = urllib.parse.quote(os.environ['AMVERA_PASS'], safe='')
-          with open(os.path.expanduser('~/.git-credentials'), 'w') as f:
-              f.write(f'https://{u}:{p}@git.msk0.amvera.ru\n')
-          "
+          set -e
+          ENC=$(python3 -c "import urllib.parse,os;print(urllib.parse.quote(os.environ['AMVERA_PASS'],safe=''))")
+          AMVERA_URL="https://${AMVERA_USER}:${ENC}@git.msk0.amvera.ru/${AMVERA_USER}/oktolk.git"
 
-      - name: Test connectivity
-        run: |
-          curl -s -o /dev/null -w "HTTP %{http_code}" https://git.msk0.amvera.ru || echo "Connection failed"
+          # Клонируем текущий Amvera-репозиторий (сохраняем его историю)
+          git clone "$AMVERA_URL" amvera_repo
+          cd amvera_repo
+          git config user.email "ci@oktolk.ru"
+          git config user.name "GitHub CI"
 
-      - name: Push to Amvera
-        run: |
-          git remote add amvera https://git.msk0.amvera.ru/kes/oktolk.git
-          git push amvera HEAD:master --force 2>&1 || echo "PUSH_FAILED"
+          # Синхронизируем содержимое из GitHub (кроме .git и самих workflow)
+          rsync -a --delete --exclude='.git' ../gh_src/ ./
 
-      - name: Cleanup
-        if: always()
-        run: rm -f ~/.git-credentials
+          # Коммитим и пушим обычным fast-forward → Amvera видит новый коммит → собирает
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Нет изменений для деплоя"
+          else
+            git commit -m "deploy: sync from GitHub $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push origin master
+            echo "✅ Запушено на Amvera (fast-forward) — сборка стартует"
+          fi
