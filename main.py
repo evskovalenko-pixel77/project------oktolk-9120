@@ -1435,7 +1435,7 @@ async def topics_to_queries(topics_text: str) -> list:
 async def fetch_tavily_news(topics_text: str = None) -> list:
     """Получить новости через Tavily + AI упрощение.
     topics_text — персональные темы пользователя (если заданы)."""
-    import asyncio
+    import asyncio, time
     now = time.time()
     personalized = bool(topics_text and topics_text.strip())
 
