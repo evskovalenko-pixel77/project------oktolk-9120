@@ -8811,12 +8811,41 @@ function NewsScreen({
   const [news, setNews] = React.useState(null);
   const [error, setError] = React.useState(false);
   const scrollRef = React.useRef(null);
-  React.useEffect(() => {
-    fetch('/api/v1/news').then(r => r.json()).then(data => setNews(Array.isArray(data) ? data : [])).catch(() => {
+  const [showSettings, setShowSettings] = React.useState(false);
+  const [topics, setTopics] = React.useState('');
+  const [topicsInput, setTopicsInput] = React.useState('');
+  const [savingTopics, setSavingTopics] = React.useState(false);
+  const loadNews = React.useCallback(() => {
+    setNews(null);
+    setError(false);
+    apiFetch('/api/v1/news').then(r => r.json()).then(data => setNews(Array.isArray(data) ? data : [])).catch(() => {
       setError(true);
       setNews([]);
     });
   }, []);
+  React.useEffect(() => {
+    loadNews();
+    // Загружаем сохранённые темы пользователя
+    apiFetch('/api/v1/news/topics').then(r => r.json()).then(d => {
+      setTopics(d.topics || '');
+      setTopicsInput(d.topics || '');
+    }).catch(() => {});
+  }, [loadNews]);
+  const saveTopics = async (value) => {
+    setSavingTopics(true);
+    try {
+      const r = await apiFetch('/api/v1/news/topics', {
+        method: 'POST',
+        body: JSON.stringify({ topics: value })
+      });
+      const d = await r.json();
+      setTopics(d.topics || '');
+      setTopicsInput(d.topics || '');
+      setShowSettings(false);
+      loadNews();
+    } catch (e) {}
+    setSavingTopics(false);
+  };
   const items = news || [];
   const counts = {
     all: items.length,
@@ -8887,7 +8916,84 @@ function NewsScreen({
       height: '100%',
       boxSizing: 'border-box'
     }
+  }, showSettings && React.createElement("div", {
+    onClick: () => setShowSettings(false),
+    style: {
+      position: 'fixed', inset: 0, zIndex: 1000,
+      background: 'rgba(0,0,0,0.45)',
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center'
+    }
   }, React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      background: 'var(--bg)', width: '100%', maxWidth: 480,
+      borderRadius: '20px 20px 0 0', padding: '20px 18px 28px',
+      maxHeight: '88vh', overflowY: 'auto',
+      boxShadow: '0 -8px 30px rgba(0,0,0,0.18)'
+    }
+  }, React.createElement("div", {
+    style: { width: 40, height: 4, borderRadius: 2, background: 'var(--border)', margin: '0 auto 16px' }
+  }), React.createElement("div", {
+    style: { fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }
+  }, "Какие новости вам интересны?"), React.createElement("div", {
+    style: { fontSize: 14, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.45 }
+  }, "Напишите своими словами, о чём хотите читать. Можно перечислить несколько тем — мы будем подбирать свежие новости именно по ним."), React.createElement("textarea", {
+    value: topicsInput,
+    onChange: e => setTopicsInput(e.target.value),
+    placeholder: "Например: пенсии и выплаты, новости Краснодара, здоровье и лекарства, курс валют",
+    rows: 4,
+    style: {
+      width: '100%', boxSizing: 'border-box', padding: '12px 14px',
+      fontSize: 15, lineHeight: 1.45, fontFamily: 'inherit',
+      border: '1px solid var(--border)', borderRadius: 14,
+      background: 'var(--surface)', color: 'var(--text)', resize: 'vertical',
+      marginBottom: 14
+    }
+  }), React.createElement("div", {
+    style: { fontSize: 12.5, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }
+  }, "Подсказки — нажмите, чтобы добавить"), React.createElement("div", {
+    style: { display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }
+  }, ['Пенсии и выплаты', 'Новости моего города', 'Здоровье и лекарства', 'Льготы пенсионерам', 'Сад и огород', 'Курс валют и цены', 'Мошенники и безопасность', 'Погода'].map(chip => React.createElement("button", {
+    key: chip,
+    onClick: () => {
+      setTopicsInput(prev => {
+        const t = (prev || '').trim();
+        if (t.toLowerCase().includes(chip.toLowerCase())) return prev;
+        return t ? t + ', ' + chip.toLowerCase() : chip;
+      });
+    },
+    style: {
+      padding: '8px 14px', borderRadius: 999, fontSize: 13.5,
+      border: '1px solid var(--border)', background: 'var(--surface)',
+      color: 'var(--text)', cursor: 'pointer', fontFamily: 'inherit'
+    }
+  }, '+ ' + chip))), React.createElement("button", {
+    className: "btn-primary",
+    onClick: () => saveTopics(topicsInput),
+    disabled: savingTopics,
+    style: {
+      width: '100%', justifyContent: 'center', marginBottom: 10,
+      background: 'var(--news-grad, #2C2B36)', color: '#fff',
+      opacity: savingTopics ? 0.6 : 1, fontSize: 15.5, height: 50
+    }
+  }, savingTopics ? 'Сохраняем…' : 'Сохранить и обновить ленту'), topics && React.createElement("button", {
+    onClick: () => saveTopics(''),
+    disabled: savingTopics,
+    style: {
+      width: '100%', justifyContent: 'center', marginBottom: 10,
+      background: 'transparent', border: '1px solid var(--border)',
+      color: 'var(--text-muted)', fontSize: 14, height: 46,
+      borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit'
+    }
+  }, 'Вернуться к общей ленте'), React.createElement("button", {
+    onClick: () => setShowSettings(false),
+    style: {
+      width: '100%', justifyContent: 'center',
+      background: 'transparent', border: 'none',
+      color: 'var(--text-muted)', fontSize: 14, height: 40,
+      cursor: 'pointer', fontFamily: 'inherit'
+    }
+  }, 'Закрыть'))), React.createElement("div", {
     style: {
       padding: '4px 14px 0',
       flexShrink: 0
@@ -8932,7 +9038,24 @@ function NewsScreen({
     size: 18
   }), radioStatus === 'playing' ? 'Остановить' : radioStatus === 'loading' ? 'Загрузка…' : 'Слушать ленту как радио', radioStatus === 'idle' && React.createElement(IconArrowRight, {
     size: 16
-  })))), React.createElement("div", {
+  })), React.createElement("button", {
+    className: "btn-primary",
+    onClick: () => { setTopicsInput(topics); setShowSettings(true); },
+    style: {
+      marginTop: 8,
+      background: 'rgba(255,255,255,0.10)',
+      border: '0.5px solid rgba(255,255,255,0.20)',
+      color: '#fff',
+      fontSize: 13.5
+    }
+  }, React.createElement(IconSettings, { size: 16 }), topics ? 'Мои темы новостей' : 'Настроить мои новости'), topics && React.createElement("div", {
+    style: {
+      fontSize: 11.5,
+      opacity: 0.72,
+      marginTop: 6,
+      textAlign: 'center'
+    }
+  }, '✦ Лента подобрана по вашим темам'))), React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8,
