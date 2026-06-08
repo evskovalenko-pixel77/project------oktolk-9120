@@ -1487,8 +1487,7 @@ async def fetch_tavily_news(topics_text: str = None) -> list:
     raw = []
     try:
         for i, (q, cat, tag) in enumerate(queries):
-            # Дефолтные = только РФ источники; персональные = без ограничений (пользователь сам задал)
-            data = await asyncio.to_thread(_fetch_tavily_sync, q, not personalized)
+            data = await asyncio.to_thread(_fetch_tavily_sync, q, True)
             if not data:
                 continue
             items = data.get("results", [])
