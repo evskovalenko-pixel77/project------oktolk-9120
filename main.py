@@ -22,6 +22,11 @@ DEEPSEEK_API_KEY  = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1/"
 SECRET_KEY        = os.getenv("SECRET_KEY", "oktolk-super-secret-key-2026-production")
 
+# Ticketland партнёрская программа (Advcake)
+# Формат: вставить шаблон из личного кабинета Advcake, где {url} — целевая страница Ticketland
+# Пример: https://advcake.ru/cgi-bin/go.pl?a=clickstream&p=ticketlandru&id=12345&dl={url}
+TICKETLAND_AFFILIATE_TEMPLATE = os.getenv("TICKETLAND_AFFILIATE_TEMPLATE", "")
+
 # VAPID ключи для Web Push (хранить в env Amvera!)
 VAPID_PUBLIC_KEY  = os.getenv("VAPID_PUBLIC_KEY",  "BPuepfkM-HSrhHb8NZPZ2HfhFDNYEZd2TUiwZN7tvCij3qNNhqMyUMWDtuOObEEGbeYnWnhBaSF8sGdeSQrApt4")
 VAPID_PRIVATE_PEM = os.getenv("VAPID_PRIVATE_PEM", "")  # полный PEM в env переменной
@@ -1362,6 +1367,71 @@ async def get_news():
 async def get_news_v1():
     """Новости через Tavily API с AI-упрощением, кеш 1 час"""
     return await fetch_tavily_news()
+
+# ═══════════════════════════════════════════════════════════════
+# Ticketland: реферальные ссылки через Advcake
+# ═══════════════════════════════════════════════════════════════
+
+def build_ticketland_url(title: str, event_url: str = "", sub1: str = "") -> str:
+    """
+    Строит реферальную ссылку на Ticketland.
+    - Если есть event_url от KudaGo и он ведёт на ticketland.ru — используем его напрямую
+    - Иначе — поиск по названию: ticketland.ru/search/?q=TITLE
+    - Если задан TICKETLAND_AFFILIATE_TEMPLATE — оборачиваем в Advcake deeplink
+    """
+    from urllib.parse import quote
+    # Определяем целевой URL
+    if event_url and "ticketland.ru" in event_url:
+        target_url = event_url
+    else:
+        clean_title = title.replace("...", "").strip()
+        target_url = f"https://www.ticketland.ru/search/?q={quote(clean_title)}"
+    # Если есть шаблон от Advcake — оборачиваем
+    if TICKETLAND_AFFILIATE_TEMPLATE:
+        encoded_target = quote(target_url, safe="")
+        link = TICKETLAND_AFFILIATE_TEMPLATE.replace("{url}", encoded_target)
+        if sub1:
+            link = link.replace("{sub1}", quote(sub1, safe=""))
+        else:
+            link = link.replace("&sub1={sub1}", "").replace("{sub1}", "")
+        return link
+    # Без шаблона — просто ссылка на Ticketland (без комиссии, но рабочая)
+    return target_url
+
+@app.get("/api/v1/events/ticket-link")
+async def ticket_link_redirect(
+    title: str = "",
+    url: str = "",
+    request: Request = None
+):
+    """
+    Генерирует реф-ссылку на Ticketland + логирует клик.
+    Frontend вызывает этот эндпоинт, получает URL и открывает его.
+    """
+    # Логируем клик в БД для аналитики
+    try:
+        user_id = None
+        if request:
+            auth = request.headers.get("Authorization", "")
+            if auth.startswith("Bearer "):
+                import jwt as _jwt
+                try:
+                    payload = _jwt.decode(auth[7:], SECRET_KEY, algorithms=["HS256"])
+                    user_id = payload.get("user_id")
+                except:
+                    pass
+        async with db_pool.acquire() as conn:
+            await conn.execute("""
+                INSERT INTO notifications (user_id, type, title, body, is_read)
+                VALUES ($1, 'ticket_click', $2, $3, true)
+            """, user_id, f"Переход: {title[:80]}", url[:200] or title[:200])
+    except Exception as e:
+        print(f"[ticket_link] log error (not critical): {e}")
+
+    affiliate_active = bool(TICKETLAND_AFFILIATE_TEMPLATE)
+    final_url = build_ticketland_url(title, url)
+    print(f"[ticket_link] title='{title[:50]}' affiliate={affiliate_active} → {final_url[:80]}")
+    return {"url": final_url, "affiliate_active": affiliate_active}
 
 # ═══════════════════════════════════════════════════════════════
 # KudaGo: умный поиск мероприятий (бесплатный API, без ключа)
