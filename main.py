@@ -1290,6 +1290,72 @@ async def analyze_text(req: AnalyzeRequest):
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 _news_cache = {"data": [], "at": 0}
 
+# ═══════════════════════════════════════════════════════════════
+# Tavily helper-функции: Extract (чтение страниц) + улучшенный Search
+# ═══════════════════════════════════════════════════════════════
+
+def tavily_extract(urls, max_chars: int = 6000) -> str:
+    """
+    Читает реальное содержимое страниц через Tavily Extract API.
+    Возвращает чистый текст (без HTML-мусора). urls — строка или список.
+    """
+    if not TAVILY_API_KEY:
+        return ""
+    if isinstance(urls, str):
+        urls = [urls]
+    try:
+        r = requests.post(
+            "https://api.tavily.com/extract",
+            json={"api_key": TAVILY_API_KEY, "urls": urls[:5],
+                  "include_raw_content": False},
+            timeout=20
+        )
+        if r.status_code != 200:
+            print(f"[tavily_extract] status={r.status_code}")
+            return ""
+        data = r.json()
+        chunks = []
+        for res in data.get("results", []):
+            content = (res.get("raw_content") or res.get("content") or "").strip()
+            if content:
+                chunks.append(content)
+        return "\n\n".join(chunks)[:max_chars]
+    except Exception as e:
+        print(f"[tavily_extract] error: {e}")
+        return ""
+
+def tavily_search_adv(query: str, topic: str = "general", time_range: str = None,
+                      max_results: int = 5, include_answer: bool = False,
+                      include_domains: list = None) -> dict:
+    """
+    Улучшенный поиск: topic (general/news), time_range (day/week/month),
+    фильтр доменов. Возвращает полный JSON-ответ Tavily.
+    """
+    if not TAVILY_API_KEY:
+        return {}
+    payload = {
+        "api_key": TAVILY_API_KEY,
+        "query": query,
+        "search_depth": "basic",
+        "max_results": max_results,
+        "include_answer": include_answer,
+        "country": "russia",
+        "topic": topic,
+    }
+    if time_range:
+        payload["time_range"] = time_range
+    if include_domains:
+        payload["include_domains"] = include_domains
+    try:
+        r = requests.post("https://api.tavily.com/search", json=payload, timeout=15)
+        if r.status_code == 200:
+            return r.json()
+        print(f"[tavily_search_adv] status={r.status_code}")
+        return {}
+    except Exception as e:
+        print(f"[tavily_search_adv] error: {e}")
+        return {}
+
 async def simplify_news_ai(title: str, body: str) -> dict:
     """AI переводит на русский и упрощает новость для людей 40+"""
     prompt = (
@@ -2222,12 +2288,19 @@ async def antiscam_extract(req: AntiscamExtractRequest):
             facts = call_gemini_text(f"Из этой транскрипции извлеки факты для анализа на мошенничество:\n{transcript}\n\n{EXTRACT_PROMPT}")
 
         elif req.url:
-            try:
-                resp = requests.get(req.url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-                html = resp.text[:5000]
-                facts = call_gemini_text(f"Из этого HTML извлеки факты для анализа на мошенничество:\n{html}\n\n{EXTRACT_PROMPT}")
-            except:
-                facts = f"URL: {req.url} — не удалось загрузить страницу"
+            page_text = tavily_extract(req.url)
+            if page_text:
+                facts = call_gemini_text(
+                    f"Из содержимого этой веб-страницы извлеки факты для анализа на мошенничество:\n{page_text}\n\n{EXTRACT_PROMPT}"
+                )
+            else:
+                # Fallback — прямая загрузка если Tavily недоступен
+                try:
+                    resp = requests.get(req.url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                    html = resp.text[:5000]
+                    facts = call_gemini_text(f"Из этого HTML извлеки факты для анализа на мошенничество:\n{html}\n\n{EXTRACT_PROMPT}")
+                except:
+                    facts = f"URL: {req.url} — не удалось загрузить страницу. Сама ссылка выглядит так: {req.url}"
 
         elif req.text:
             facts = req.text
