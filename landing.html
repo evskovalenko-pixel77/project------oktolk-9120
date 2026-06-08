@@ -2,6 +2,19 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<script>
+/* Вернувшийся пользователь (уже регистрировался/входил) попадает сразу в приложение,
+   минуя лендинг. Новый посетитель видит лендинг. ?stay=1 — остаться на лендинге. */
+(function(){
+  try {
+    var params = new URLSearchParams(location.search);
+    if (params.get('stay') === '1') return;
+    if (localStorage.getItem('oktolk_token')) {
+      location.replace('/app');
+    }
+  } catch(e){}
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
 <!-- ═══ SEO ═══ -->
