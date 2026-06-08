@@ -358,9 +358,14 @@ def call_ai(messages, model="deepseek-chat"):
             data = {"model": "deepseek-chat", "messages": messages, "max_tokens": 800, "temperature": 0.7}
             response = requests.post("https://api.deepseek.com/v1/chat/completions", headers=headers, json=data, timeout=30)
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"]
-        except Exception:
-            pass
+                j = response.json()
+                u = j.get("usage", {})
+                print(f"[AI] DeepSeek ok | in={u.get('prompt_tokens','?')} out={u.get('completion_tokens','?')} tokens")
+                return j["choices"][0]["message"]["content"]
+            else:
+                print(f"[AI] DeepSeek HTTP {response.status_code} → fallback AItunnel")
+        except Exception as e:
+            print(f"[AI] DeepSeek error: {e} → fallback AItunnel")
     # Fallback: AItunnel
     if AITUNNEL_API_KEY:
         try:
@@ -368,9 +373,12 @@ def call_ai(messages, model="deepseek-chat"):
             data = {"model": "deepseek-v4-flash", "messages": messages, "max_tokens": 800, "temperature": 0.7}
             response = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=30)
             if response.status_code == 200:
+                print(f"[AI] AItunnel fallback ok (DeepSeek недоступен — тратится баланс AItunnel)")
                 return response.json()["choices"][0]["message"]["content"]
-        except Exception:
-            pass
+            else:
+                print(f"[AI] AItunnel HTTP {response.status_code}")
+        except Exception as e:
+            print(f"[AI] AItunnel error: {e}")
     raise Exception("AI недоступен: нет рабочих API ключей")
 
 def _ds_headers():
@@ -392,11 +400,17 @@ def _ds_post(messages, system=None, max_tokens=800):
                 timeout=30
             )
             if r.status_code == 200:
-                return r.json()["choices"][0]["message"]["content"].strip()
-        except Exception:
-            pass
+                j = r.json()
+                u = j.get("usage", {})
+                print(f"[AI/ds_post] DeepSeek ok | in={u.get('prompt_tokens','?')} out={u.get('completion_tokens','?')} tokens")
+                return j["choices"][0]["message"]["content"].strip()
+            else:
+                print(f"[AI/ds_post] DeepSeek HTTP {r.status_code} → fallback AItunnel")
+        except Exception as e:
+            print(f"[AI/ds_post] DeepSeek error: {e} → fallback AItunnel")
     # Fallback AItunnel
     if AITUNNEL_API_KEY:
+        print("[AI/ds_post] AItunnel fallback (DeepSeek недоступен)")
         r = requests.post(
             f"{AITUNNEL_BASE_URL}chat/completions",
             headers={"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"},
