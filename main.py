@@ -215,6 +215,7 @@ async def init_db():
             CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, created_at DESC);
             ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens_used INTEGER DEFAULT 0;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens_limit INTEGER DEFAULT 50000;
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS news_topics TEXT;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS alcohol INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking_years INTEGER;
@@ -1384,20 +1385,63 @@ async def simplify_news_ai(title: str, body: str) -> dict:
     except Exception:
         return {"title": title[:120], "body": body[:300]}
 
-async def fetch_tavily_news() -> list:
-    """Получить новости через Tavily с официальных источников + AI упрощение"""
-    import time
+async def topics_to_queries(topics_text: str) -> list:
+    """AI превращает свободный текст тем пользователя в поисковые запросы.
+    Возвращает список (query, cat, tag)."""
+    prompt = (
+        "Пользователь описал какие новости хочет получать. Преврати это в 3-5 поисковых запросов "
+        "для новостного поиска на русском языке.\n"
+        f"ЗАПРОС ПОЛЬЗОВАТЕЛЯ: {topics_text}\n\n"
+        "Для каждого запроса определи категорию:\n"
+        "- danger (опасности, мошенники, угрозы)\n"
+        "- success (выплаты, льготы, хорошие новости)\n"
+        "- warn (изменения, важные правила)\n"
+        "- info (всё остальное)\n\n"
+        "Ответь ТОЛЬКО валидным JSON-массивом без markdown:\n"
+        '[{"query":"поисковый запрос", "cat":"info", "tag":"Тема"}]'
+    )
+    try:
+        import asyncio, json as _json, re as _re
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, lambda: call_ai([{"role": "user", "content": prompt}]))
+        m = _re.search(r'\[.*\]', result.strip(), _re.DOTALL)
+        if not m:
+            return []
+        arr = _json.loads(m.group(0))
+        out = []
+        for it in arr[:5]:
+            q = str(it.get("query", "")).strip()
+            if q:
+                out.append((q, it.get("cat", "info"), str(it.get("tag", "Новость"))[:20]))
+        return out
+    except Exception as e:
+        print(f"[topics_to_queries] {e}")
+        return []
+
+async def fetch_tavily_news(topics_text: str = None) -> list:
+    """Получить новости через Tavily + AI упрощение.
+    topics_text — персональные темы пользователя (если заданы)."""
+    import asyncio
     now = time.time()
-    if _news_cache["data"] and now - _news_cache["at"] < 3600:  # кеш 1 час
+    personalized = bool(topics_text and topics_text.strip())
+
+    # Кеш только для дефолтных новостей (персональные всегда свежие)
+    if not personalized and _news_cache["data"] and now - _news_cache["at"] < 3600:
         return _news_cache["data"]
-    # Запросы с упором на официальные русские источники
-    queries = [
-        ("телефонные мошенники банки предупреждение МВД", "danger", "Опасно"),
-        ("пенсии индексация выплаты пенсионерам СФР", "success", "Льготы"),
-        ("новые правила ЖКХ коммунальные услуги", "warn", "Важно"),
-        ("льготные лекарства бесплатные препараты Минздрав", "success", "Льготы"),
-        ("мошенничество госуслуги фишинг безопасность", "danger", "Опасно"),
-    ]
+
+    if personalized:
+        queries = await topics_to_queries(topics_text)
+        if not queries:
+            queries = [(topics_text.strip(), "info", "Новость")]
+    else:
+        # Дефолтные запросы с упором на официальные русские источники
+        queries = [
+            ("телефонные мошенники банки предупреждение МВД", "danger", "Опасно"),
+            ("пенсии индексация выплаты пенсионерам СФР", "success", "Льготы"),
+            ("новые правила ЖКХ коммунальные услуги", "warn", "Важно"),
+            ("льготные лекарства бесплатные препараты Минздрав", "success", "Льготы"),
+            ("мошенничество госуслуги фишинг безопасность", "danger", "Опасно"),
+        ]
 
     def _fetch_tavily_sync(q):
         """Синхронный запрос к Tavily (requests). Вызывается через asyncio.to_thread."""
@@ -1407,7 +1451,8 @@ async def fetch_tavily_news() -> list:
             "search_depth": "basic",
             "max_results": 2,
             "include_answer": True,
-            "days": 30,
+            "topic": "news",        # специализированный новостной поиск
+            "time_range": "month",  # свежие за месяц
             "country": "russia"
         }
         try:
@@ -1447,8 +1492,8 @@ async def fetch_tavily_news() -> list:
             "source": r["source"], "url": r["url"], "age": r["age"]
         })
 
-    # Fallback
-    if not results:
+    # Fallback (только для дефолтных — у персональных свой пустой результат)
+    if not results and not personalized:
         results = [
             {"id": 1, "cat": "danger", "tag": "Опасно", "title": "Мошенники звонят от имени банков", "body": "Участились случаи звонков мошенников, представляющихся сотрудниками банков. Никогда не сообщайте код из СМС.", "source": "МВД", "url": "https://mvd.ru", "age": "сегодня"},
             {"id": 2, "cat": "success", "tag": "Льготы", "title": "Перерасчёт пенсий с 1 июня 2026", "body": "Пенсионный фонд проведёт автоматический перерасчёт пенсий неработающим пенсионерам. Заявление не требуется.", "source": "СФР", "url": "https://sfr.gov.ru", "age": "сегодня"},
@@ -1456,6 +1501,10 @@ async def fetch_tavily_news() -> list:
             {"id": 4, "cat": "success", "tag": "Льготы", "title": "Бесплатные лекарства расширили список", "body": "В перечень бесплатных препаратов для льготников включены 24 новых лекарства от давления и диабета.", "source": "Минздрав", "url": "https://minzdrav.gov.ru", "age": "вчера"},
             {"id": 5, "cat": "danger", "tag": "Опасно", "title": "Фальшивые госуслуги в Telegram", "body": "Появились боты, имитирующие портал Госуслуг. Запрашивают паспортные данные и СНИЛС.", "source": "Госуслуги", "url": "https://gosuslugi.ru", "age": "2 дн назад"},
         ]
+
+    # Кеш и рассылка уведомлений — только для дефолтной ленты
+    if personalized:
+        return results
 
     _news_cache["data"] = results
     _news_cache["at"] = now
@@ -1480,9 +1529,48 @@ async def fetch_tavily_news() -> list:
     return results
 
 @app.get("/api/v1/news")
-async def get_news_v1():
-    """Новости через Tavily API с AI-упрощением, кеш 1 час"""
-    return await fetch_tavily_news()
+async def get_news_v1(authorization: Optional[str] = Header(None)):
+    """Новости через Tavily API с AI-упрощением.
+    Если у пользователя заданы персональные темы — лента под него, иначе общая (кеш 1 час)."""
+    topics = None
+    # Пытаемся определить пользователя (опционально — без токена отдаём общую ленту)
+    if authorization and authorization.startswith("Bearer ") and db_pool:
+        try:
+            token = authorization.split(" ", 1)[1]
+            async with db_pool.acquire() as conn:
+                session = await conn.fetchrow(
+                    "SELECT user_id FROM sessions WHERE token=$1 AND expires_at > NOW()", token
+                )
+                if session:
+                    row = await conn.fetchrow("SELECT news_topics FROM users WHERE id=$1", session["user_id"])
+                    if row and row["news_topics"]:
+                        topics = row["news_topics"]
+        except Exception:
+            pass
+    return await fetch_tavily_news(topics)
+
+class NewsTopicsRequest(BaseModel):
+    topics: str
+
+@app.get("/api/v1/news/topics")
+async def get_news_topics(user=Depends(get_current_user)):
+    """Получить сохранённые темы новостей пользователя"""
+    if not db_pool:
+        return {"topics": ""}
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT news_topics FROM users WHERE id=$1", user["id"])
+    return {"topics": (row["news_topics"] if row and row["news_topics"] else "")}
+
+@app.post("/api/v1/news/topics")
+async def set_news_topics(req: NewsTopicsRequest, user=Depends(get_current_user)):
+    """Сохранить персональные темы новостей. Пустая строка = вернуться к общей ленте."""
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    topics = (req.topics or "").strip()[:500]
+    async with db_pool.acquire() as conn:
+        await conn.execute("UPDATE users SET news_topics=$1 WHERE id=$2",
+                           topics if topics else None, user["id"])
+    return {"status": "ok", "topics": topics}
 
 # ═══════════════════════════════════════════════════════════════
 # Ticketland: реферальные ссылки через Advcake
