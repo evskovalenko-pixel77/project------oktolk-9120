@@ -1457,15 +1457,8 @@ async def fetch_tavily_news(topics_text: str = None) -> list:
             ("мошенничество госуслуги фишинг безопасность", "danger", "Опасно"),
         ]
 
-    # Российские новостные и официальные источники (приоритет)
-    RU_NEWS_DOMAINS = [
-        "rbc.ru", "ria.ru", "tass.ru", "kommersant.ru", "iz.ru",
-        "mvd.ru", "sfr.gov.ru", "minzdrav.gov.ru", "gosuslugi.ru",
-        "cbr.ru", "minfin.gov.ru", "mos.ru", "rg.ru", "interfax.ru"
-    ]
-
     def _fetch_tavily_sync(q, ru_only: bool = True):
-        """Синхронный запрос к Tavily (requests). Вызывается через asyncio.to_thread."""
+        """Синхронный запрос к Tavily. ru_only=True фильтрует по стране."""
         payload = {
             "api_key": TAVILY_API_KEY,
             "query": q,
@@ -1473,24 +1466,22 @@ async def fetch_tavily_news(topics_text: str = None) -> list:
             "max_results": 2,
             "include_answer": True,
             "topic": "news",
-            "time_range": "week",   # за неделю — свежее чем месяц
-            "country": "ru"
+            "time_range": "week",
+            "country": "ru" if ru_only else None,
         }
-        if ru_only:
-            payload["include_domains"] = RU_NEWS_DOMAINS
+        if not ru_only:
+            payload.pop("country", None)
         try:
             resp = requests.post("https://api.tavily.com/search", json=payload, timeout=10)
             if resp.status_code != 200:
+                print(f"[tavily_news] HTTP {resp.status_code} для запроса: {q}")
                 return None
             data = resp.json()
-            # Если с доменами нет результатов — пробуем без ограничений доменов
-            if ru_only and not data.get("results"):
-                payload.pop("include_domains")
-                resp2 = requests.post("https://api.tavily.com/search", json=payload, timeout=10)
-                if resp2.status_code == 200:
-                    return resp2.json()
+            results = data.get("results", [])
+            print(f"[tavily_news] '{q[:40]}' → {len(results)} результатов")
             return data
-        except Exception:
+        except Exception as e:
+            print(f"[tavily_news] error: {e}")
             return None
 
     raw = []
