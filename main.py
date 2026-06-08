@@ -1691,6 +1691,28 @@ def _is_events_query(q: str) -> bool:
     ql = q.lower()
     return any(kw in ql for kw in _EVENTS_KW)
 
+def _is_info_query(q: str) -> bool:
+    """Информационный вопрос (как/что/где/сколько/документы/правила),
+    а не поиск товара. Такие запросы получают прямой AI-ответ + источники."""
+    ql = q.lower().strip()
+    if ql.endswith("?"):
+        return True
+    info_starts = (
+        "как ", "что ", "где ", "когда ", "почему ", "зачем ", "сколько ",
+        "какой ", "какая ", "какие ", "какое ", "можно ли", "нужно ли",
+        "куда ", "кто ", "чем ", "за что", "из-за чего", "стоит ли",
+        "положен", "положена", "положено", "имею ли", "обязан",
+    )
+    if ql.startswith(info_starts):
+        return True
+    info_words = (
+        "как оформить", "как получить", "как сделать", "как написать",
+        "как подать", "как вернуть", "что делать", "какие документы",
+        "документы для", "документы на", "правила", "инструкция",
+        "пошагово", "объясни", "расскажи про", "что такое",
+    )
+    return any(w in ql for w in info_words)
+
 def _parse_kudago_params(query: str) -> dict:
     q = query.lower()
     # Город
@@ -1885,6 +1907,8 @@ async def search_agent(request: Request):
     # KudaGo имеет приоритет — проверяем первым
     if _is_events_query(query):
         cat = "events"
+    elif _is_info_query(query):
+        cat = "info"
     elif any(w in q_lower for w in ["кино", "музе", "ресторан", "афиша", "билет"]):
         cat = "leisure"
     elif any(w in q_lower for w in ["мастер", "сантехник", "электрик", "ремонт", "клинер", "грузчик", "курьер", "услуг", "няня", "репетитор"]):
@@ -1895,6 +1919,45 @@ async def search_agent(request: Request):
     print(f"[search] category={cat}")
 
     raw_results = []
+
+    # ── 3i. INFO — информационный вопрос: прямой AI-ответ + источники ──
+    if cat == "info":
+        data = tavily_search_adv(query, topic="general", max_results=5, include_answer=True)
+        answer = (data.get("answer") or "").strip()
+        items = data.get("results", []) or []
+        # Если есть топ-источник — обогащаем ответ полным текстом через Extract
+        if answer and items:
+            top_url = items[0].get("url", "")
+            if top_url:
+                deep = tavily_extract(top_url, max_chars=3000)
+                if deep:
+                    try:
+                        enrich = call_ai([{"role": "user", "content": (
+                            "Ответь на вопрос простым русским языком для пожилого человека, "
+                            "коротко и по делу (3-5 предложений), на основе ответа и источника.\n\n"
+                            f"ВОПРОС: {query}\n\nКраткий ответ: {answer}\n\n"
+                            f"Полный текст источника:\n{deep[:2500]}\n\n"
+                            "Дай понятный практичный ответ без воды и без markdown."
+                        )}])
+                        if enrich and len(enrich.strip()) > 20:
+                            answer = enrich.strip()
+                    except Exception as e:
+                        print(f"[search info] enrich error: {e}")
+        if answer:
+            raw_results.append({
+                "title": "Ответ на ваш вопрос",
+                "description": answer[:900],
+                "is_answer": True,
+                "source": "OkTolk", "url": "", "cat": "info"
+            })
+        for it in items[:4]:
+            url = it.get("url", "")
+            domain = url.split("/")[2].replace("www.", "") if url.startswith("http") else "источник"
+            raw_results.append({
+                "title": (it.get("title") or "")[:120],
+                "description": (it.get("content") or "")[:200],
+                "source": domain, "url": url, "cat": "info"
+            })
 
     # ── 3a. KUDAGO — мероприятия и события ───────────────────────
     if cat == "events":
@@ -1987,7 +2050,7 @@ async def search_agent(request: Request):
 
     # ── 4. TAVILY — для досуга/услуг всегда, для товаров если WB пустой ──
     # events — не используем Tavily, только KudaGo
-    if cat != "events" and (len(raw_results) < 3 or cat in ["leisure", "services"]):
+    if cat not in ("events", "info") and (len(raw_results) < 3 or cat in ["leisure", "services"]):
         # Для товаров — естественный запрос с упоминанием маркетплейса
         if cat == "goods":
             tq = f"{query} купить цена ozon wildberries"

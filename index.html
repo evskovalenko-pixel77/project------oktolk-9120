@@ -10090,11 +10090,45 @@ function SearchResultCard({
   onSave,
   onRemove
 }) {
+  // Особая карточка — прямой ответ на информационный вопрос
+  if (item.is_answer) {
+    return React.createElement("div", {
+      style: {
+        background: 'linear-gradient(135deg, #3A2A6E, #6B53C9)',
+        borderRadius: 16,
+        padding: '16px 18px',
+        flexShrink: 0,
+        color: '#fff',
+        boxShadow: '0 4px 18px rgba(107,83,201,0.25)'
+      }
+    }, React.createElement("div", {
+      style: { display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }
+    }, React.createElement("div", {
+      style: {
+        width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+        background: 'rgba(255,255,255,0.18)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center'
+      }
+    }, React.createElement("svg", {
+      width: "15", height: "15", viewBox: "0 0 24 24", fill: "none",
+      stroke: "#fff", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round"
+    }, React.createElement("path", { d: "M9 18h6" }),
+       React.createElement("path", { d: "M10 22h4" }),
+       React.createElement("path", { d: "M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14" }))),
+       React.createElement("span", {
+      style: { fontSize: 12.5, fontWeight: 700, letterSpacing: '0.04em', opacity: 0.9 }
+    }, "ОТВЕТ OKTOLK")), React.createElement("div", {
+      style: { fontSize: 15.5, lineHeight: 1.55, fontWeight: 500, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }
+    }, (item.description || '').trim()), React.createElement("div", {
+      style: { fontSize: 11.5, opacity: 0.72, marginTop: 12 }
+    }, "Проверьте источники ниже"));
+  }
   const catColors = {
     goods: 'var(--primary)',
     services: 'var(--success)',
     leisure: '#8B5CF6',
-    events: '#E84393'
+    events: '#E84393',
+    info: '#6B53C9'
   };
   const clr = catColors[item.cat] || 'var(--primary)';
   const hasUrl = item.url && item.url.startsWith('http');
