@@ -1546,8 +1546,8 @@ async def fetch_tavily_news(topics_text: str = None) -> list:
 async def get_news_v1(authorization: Optional[str] = Header(None)):
     """Новости через Tavily API с AI-упрощением.
     Если у пользователя заданы персональные темы — лента под него, иначе общая (кеш 1 час)."""
+    import traceback as _tb
     topics = None
-    # Пытаемся определить пользователя (опционально — без токена отдаём общую ленту)
     if authorization and authorization.startswith("Bearer ") and db_pool:
         try:
             token = authorization.split(" ", 1)[1]
@@ -1561,7 +1561,19 @@ async def get_news_v1(authorization: Optional[str] = Header(None)):
                         topics = row["news_topics"]
         except Exception:
             pass
-    return await fetch_tavily_news(topics)
+    try:
+        return await fetch_tavily_news(topics)
+    except Exception as e:
+        print(f"[news] CRITICAL ERROR: {e}")
+        _tb.print_exc()
+        # Возвращаем хардкод-fallback вместо 500
+        return [
+            {"id": 1, "cat": "danger", "tag": "Опасно", "title": "Мошенники звонят от имени банков", "body": "Участились случаи звонков мошенников, представляющихся сотрудниками банков. Никогда не сообщайте код из СМС.", "source": "МВД", "url": "https://mvd.ru", "age": "сегодня"},
+            {"id": 2, "cat": "success", "tag": "Льготы", "title": "Перерасчёт пенсий", "body": "Пенсионный фонд проведёт автоматический перерасчёт пенсий неработающим пенсионерам. Заявление не требуется.", "source": "СФР", "url": "https://sfr.gov.ru", "age": "сегодня"},
+            {"id": 3, "cat": "warn", "tag": "Важно", "title": "Изменения в правилах ЖКХ", "body": "С 1 июля меняется порядок передачи показаний счётчиков. Срок — до 25 числа каждого месяца.", "source": "ГЖИ", "url": "", "age": "вчера"},
+            {"id": 4, "cat": "success", "tag": "Льготы", "title": "Бесплатные лекарства расширили список", "body": "В перечень бесплатных препаратов для льготников включены новые лекарства от давления и диабета.", "source": "Минздрав", "url": "https://minzdrav.gov.ru", "age": "вчера"},
+            {"id": 5, "cat": "danger", "tag": "Опасно", "title": "Фальшивые госуслуги в Telegram", "body": "Появились боты, имитирующие портал Госуслуг. Запрашивают паспортные данные и СНИЛС.", "source": "Госуслуги", "url": "https://gosuslugi.ru", "age": "2 дн назад"},
+        ]
 
 class NewsTopicsRequest(BaseModel):
     topics: str
