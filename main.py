@@ -12,7 +12,15 @@ import asyncpg
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'auth'))
 from src.auth.main import app
 
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://oktolk.ru",
+        "https://www.oktolk.ru",
+    ],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 # ── Env ──────────────────────────────────────────────────────────
 AITUNNEL_API_KEY  = os.getenv("AITUNNEL_API_KEY", "")
@@ -397,6 +405,41 @@ def _ds_post(messages, system=None, max_tokens=800):
         return r.json()["choices"][0]["message"]["content"].strip()
     raise Exception("AI недоступен")
 
+# ── Лимиты токенов ───────────────────────────────────────────────
+async def check_token_limit(user_id) -> bool:
+    """True если пользователь в пределах лимита. При ошибке/отсутствии user_id — не блокируем."""
+    if not user_id or not db_pool:
+        return True
+    try:
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT tokens_used, tokens_limit FROM users WHERE id=$1", user_id
+            )
+        if not row:
+            return True
+        used = row["tokens_used"] or 0
+        limit = row["tokens_limit"] or 50000
+        return used < limit
+    except Exception as e:
+        print(f"[tokens] check error: {e}")
+        return True
+
+async def add_tokens(user_id, prompt_text: str, reply_text: str):
+    """Приблизительный инкремент (1 токен ≈ 2 символа кириллицы, с запасом)."""
+    if not user_id or not db_pool:
+        return
+    try:
+        est = (len(prompt_text or "") + len(reply_text or "")) // 2
+        if est <= 0:
+            return
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE users SET tokens_used = COALESCE(tokens_used,0) + $1 WHERE id=$2",
+                est, user_id
+            )
+    except Exception as e:
+        print(f"[tokens] add error: {e}")
+
 # ── API v1 ───────────────────────────────────────────────────────
 
 # Auth
@@ -594,6 +637,13 @@ async def chat_v1(req: ChatRequest, request: Request):
         except Exception:
             pass
 
+        # Проверка лимита токенов
+        if user_id and not await check_token_limit(user_id):
+            raise HTTPException(
+                status_code=429,
+                detail="Достигнут лимит на вашем тарифе. Обновите подписку для продолжения."
+            )
+
         # Строим системный промпт с профилем
         base_prompt = req.system or SYSTEM_PROMPTS.get(req.mode or "", SYSTEM_PROMPT)
         profile_ctx = await build_profile_context(user_id) if user_id else ""
@@ -604,7 +654,11 @@ async def chat_v1(req: ChatRequest, request: Request):
             messages.append(h)
         messages.append({"role": "user", "content": req.message})
         reply = call_ai(messages)
+        # Учёт израсходованных токенов
+        await add_tokens(user_id, sys_prompt + req.message, reply)
         return {"reply": reply}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI недоступен: {str(e)}")
 
@@ -1233,7 +1287,7 @@ async def chat(req: ChatRequest):
 async def analyze_text(req: AnalyzeRequest):
     return await analyze_v1(req)
 
-TAVILY_API_KEY = "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"
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 _news_cache = {"data": [], "at": 0}
 
 async def simplify_news_ai(title: str, body: str) -> dict:
@@ -1358,10 +1412,6 @@ async def fetch_tavily_news() -> list:
             print(f"[news notif] {e}")
 
     return results
-
-@app.get("/news")
-async def get_news():
-    return await fetch_tavily_news()
 
 @app.get("/api/v1/news")
 async def get_news_v1():
