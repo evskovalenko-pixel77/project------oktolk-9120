@@ -1466,7 +1466,7 @@ async def fetch_tavily_news(topics_text: str = None) -> list:
             "max_results": 2,
             "include_answer": True,
             "topic": "news",
-            "time_range": "week",
+            "time_range": "month",
             "country": "ru" if ru_only else None,
         }
         if not ru_only:
