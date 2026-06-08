@@ -1354,7 +1354,7 @@ def tavily_search_adv(query: str, topic: str = "general", time_range: str = None
         "search_depth": "basic",
         "max_results": max_results,
         "include_answer": include_answer,
-        "country": "russia",
+        "country": "ru",
         "topic": topic,
     }
     if time_range:
@@ -1457,7 +1457,14 @@ async def fetch_tavily_news(topics_text: str = None) -> list:
             ("мошенничество госуслуги фишинг безопасность", "danger", "Опасно"),
         ]
 
-    def _fetch_tavily_sync(q):
+    # Российские новостные и официальные источники (приоритет)
+    RU_NEWS_DOMAINS = [
+        "rbc.ru", "ria.ru", "tass.ru", "kommersant.ru", "iz.ru",
+        "mvd.ru", "sfr.gov.ru", "minzdrav.gov.ru", "gosuslugi.ru",
+        "cbr.ru", "minfin.gov.ru", "mos.ru", "rg.ru", "interfax.ru"
+    ]
+
+    def _fetch_tavily_sync(q, ru_only: bool = True):
         """Синхронный запрос к Tavily (requests). Вызывается через asyncio.to_thread."""
         payload = {
             "api_key": TAVILY_API_KEY,
@@ -1465,22 +1472,32 @@ async def fetch_tavily_news(topics_text: str = None) -> list:
             "search_depth": "basic",
             "max_results": 2,
             "include_answer": True,
-            "topic": "news",        # специализированный новостной поиск
-            "time_range": "month",  # свежие за месяц
-            "country": "russia"
+            "topic": "news",
+            "time_range": "week",   # за неделю — свежее чем месяц
+            "country": "ru"
         }
+        if ru_only:
+            payload["include_domains"] = RU_NEWS_DOMAINS
         try:
             resp = requests.post("https://api.tavily.com/search", json=payload, timeout=10)
             if resp.status_code != 200:
                 return None
-            return resp.json()
+            data = resp.json()
+            # Если с доменами нет результатов — пробуем без ограничений доменов
+            if ru_only and not data.get("results"):
+                payload.pop("include_domains")
+                resp2 = requests.post("https://api.tavily.com/search", json=payload, timeout=10)
+                if resp2.status_code == 200:
+                    return resp2.json()
+            return data
         except Exception:
             return None
 
     raw = []
     try:
         for i, (q, cat, tag) in enumerate(queries):
-            data = await asyncio.to_thread(_fetch_tavily_sync, q)
+            # Дефолтные = только РФ источники; персональные = без ограничений (пользователь сам задал)
+            data = await asyncio.to_thread(_fetch_tavily_sync, q, not personalized)
             if not data:
                 continue
             items = data.get("results", [])
@@ -2095,7 +2112,7 @@ async def search_agent(request: Request):
                     "search_depth": "basic",
                     "max_results": 6,
                     "include_answer": False,
-                    "country": "russia",
+                    "country": "ru",
                 },
                 timeout=15
             )
