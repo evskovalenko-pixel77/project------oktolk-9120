@@ -9970,15 +9970,17 @@ function SearchResultCard({
   const catColors = {
     goods: 'var(--primary)',
     services: 'var(--success)',
-    leisure: '#8B5CF6'
+    leisure: '#8B5CF6',
+    events: '#E84393'
   };
   const clr = catColors[item.cat] || 'var(--primary)';
   const hasUrl = item.url && item.url.startsWith('http');
   const safeUrl = hasUrl ? item.url : '#';
   const safeTitle = (item.title || '').trim() || 'Без названия';
   const safeSource = item.source || '';
+  const isEvent = item.cat === 'events';
   let price = item.price;
-  if (!price && item.description) {
+  if (!price && !isEvent && item.description) {
     const m = item.description.match(/(\d[\d\s]{1,6}\s*[₽Р])/);
     if (m) price = m[1].trim();
   }
@@ -10058,7 +10060,16 @@ function SearchResultCard({
     y1: "14",
     x2: "21",
     y2: "3"
-  }))), React.createElement("div", {
+  }))), isEvent && React.createElement("div", {
+    style: {marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3}
+  },
+    item.date && React.createElement("div", {
+      style: {fontSize: 13, color: clr, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4}
+    }, "📅 ", item.date),
+    item.place && React.createElement("div", {
+      style: {fontSize: 13, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4}
+    }, "📍 ", item.place + (item.address ? ", " + item.address : ""))
+  ), React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -12055,7 +12066,7 @@ const FAQ_DATA = {
       a: 'Товары, услуги и информацию по любому запросу. Например: «лекарство от давления дешевле», «где сделать МРТ», «стоимость путёвки в санаторий». Поиск работает по всему интернету.'
     }, {
       q: 'Откуда берутся результаты поиска?',
-      a: 'Используется Tavily Search — профессиональный поисковый сервис для AI. Результаты берутся из актуальных интернет-источников и обрабатываются AI для удобного отображения.'
+      a: 'AI определяет тип запроса: если про мероприятия, концерты, выставки — ищет через KudaGo (база 3-5 тысяч событий в месяц); для товаров — Wildberries; для остального — Tavily Search. Результаты отображаются с датой, местом и ценой.'
     }, {
       q: 'Можно ли искать по фото или голосом?',
       a: 'Да. Нажмите «Голос» — скажите запрос, он появится в строке поиска. Нажмите «Фото» — сфотографируйте товар или документ, AI поймёт что ищете.'

@@ -1363,9 +1363,222 @@ async def get_news_v1():
     """Новости через Tavily API с AI-упрощением, кеш 1 час"""
     return await fetch_tavily_news()
 
+# ═══════════════════════════════════════════════════════════════
+# KudaGo: умный поиск мероприятий (бесплатный API, без ключа)
+# ═══════════════════════════════════════════════════════════════
+
+_KUDAGO_CITIES = {
+    "москва": "msk", "москве": "msk", "москву": "msk", "москвы": "msk",
+    "питер": "spb", "санкт-петербург": "spb", "петербург": "spb", "спб": "spb",
+    "казань": "kzn", "казани": "kzn",
+    "новосибирск": "nsk", "новосибирске": "nsk",
+    "екатеринбург": "ekb", "екате": "ekb", "екатеринбурге": "ekb",
+    "нижний новгород": "nny", "нижнем": "nny", "нижний": "nny",
+    "краснодар": "krd", "краснодаре": "krd",
+    "сочи": "sochi", "уфа": "ufa", "уфе": "ufa",
+    "ростов": "ras", "самара": "sam", "пермь": "per",
+    "омск": "omsk", "воронеж": "vrn", "красноярск": "krasnoyarsk",
+}
+
+_KUDAGO_CATS = {
+    "концерт": "concert", "концерты": "concert", "концерте": "concert",
+    "театр": "theater", "театре": "theater",
+    "спектакль": "theater", "спектакли": "theater",
+    "выставк": "exhibition",
+    "фестиваль": "festival", "фестивал": "festival",
+    "квест": "quest", "квесты": "quest",
+    "вечеринк": "party", "клуб": "party",
+    "шоу": "show",
+    "дети": "kids", "детей": "kids", "детское": "kids", "ребенок": "kids",
+    "спорт": "sport",
+    "мастер-класс": "master-class", "мастер класс": "master-class",
+    "экскурс": "tour",
+    "стендап": "stand_up", "stand-up": "stand_up",
+    "ярмарк": "yarmarki",
+    "перформанс": "show",
+}
+
+_EVENTS_KW = [
+    "куда сходить", "куда пойти", "мероприятия", "мероприятие", "мероприятий",
+    "афиша", "афише", "концерт", "выставк", "театр", "спектакль", "фестиваль",
+    "квест", "вечеринк", "шоу", "экскурс", "мастер-класс", "мастер класс",
+    "стендап", "ярмарк", "перформанс", "куда пойти", "что посетить",
+    "что посмотреть", "событий", "событие", "развлечен",
+]
+
+_MONTHS_RU = {
+    "January": "января", "February": "февраля", "March": "марта",
+    "April": "апреля", "May": "мая", "June": "июня",
+    "July": "июля", "August": "августа", "September": "сентября",
+    "October": "октября", "November": "ноября", "December": "декабря",
+}
+
+def _is_events_query(q: str) -> bool:
+    ql = q.lower()
+    return any(kw in ql for kw in _EVENTS_KW)
+
+def _parse_kudago_params(query: str) -> dict:
+    q = query.lower()
+    # Город
+    location = "msk"
+    for word, code in _KUDAGO_CITIES.items():
+        if word in q:
+            location = code
+            break
+    # Категории
+    cats = []
+    for kw, cat in _KUDAGO_CATS.items():
+        if kw in q and cat not in cats:
+            cats.append(cat)
+    # Бесплатно
+    is_free = "бесплатн" in q
+    # Теги — значимые слова для уточнения (место, тема, название)
+    stop = {"в", "на", "по", "и", "или", "с", "к", "из", "для", "куда",
+            "сходить", "пойти", "найди", "покажи", "хочу", "можно", "мне",
+            "нам", "нас", "что", "где", "когда", "как", "это", "есть",
+            "можно", "хочу", "хочется", "посетить", "посмотреть"}
+    tags = []
+    for w in q.split():
+        w_clean = w.strip(".,!?")
+        if (len(w_clean) > 3 and w_clean not in stop
+                and not any(city in w_clean for city in _KUDAGO_CITIES)
+                and not any(kw in w_clean for kw in ["концерт", "выставк", "театр",
+                            "фестив", "квест", "мероприят", "афиша", "вечеринк"])):
+            tags.append(w_clean)
+        if len(tags) >= 3:
+            break
+    return {"location": location, "categories": cats, "tags": tags, "is_free": is_free}
+
+def _kudago_fetch(parsed: dict) -> list:
+    import time
+    now = int(time.time())
+    base_params = {
+        "lang": "ru",
+        "location": parsed["location"],
+        "actual_since": now,
+        "page_size": 15,
+        "fields": "id,title,place,dates,site_url,price,is_free,description,slug,location",
+        "expand": "place,dates",
+        "text_format": "text",
+        "order_by": "-publication_date",
+    }
+    if parsed["categories"]:
+        base_params["categories"] = ",".join(parsed["categories"])
+    if parsed["is_free"]:
+        base_params["is_free"] = "true"
+
+    results = []
+    # Запрос 1: с тегами (максимально точный)
+    try:
+        p = dict(base_params)
+        if parsed["tags"]:
+            p["tags"] = ",".join(parsed["tags"])
+        r = requests.get("https://kudago.com/public-api/v1.4/events/", params=p, timeout=10)
+        if r.ok:
+            results = r.json().get("results", [])
+            print(f"[kudago] events_with_tags={len(results)}")
+    except Exception as e:
+        print(f"[kudago] events error: {e}")
+
+    # Запрос 2: без тегов если мало (шире)
+    if len(results) < 4 and parsed["tags"]:
+        try:
+            r2 = requests.get("https://kudago.com/public-api/v1.4/events/", params=base_params, timeout=10)
+            if r2.ok:
+                extra = r2.json().get("results", [])
+                seen = {e.get("id") for e in results}
+                for e in extra:
+                    if e.get("id") not in seen:
+                        results.append(e)
+                print(f"[kudago] events_wide={len(extra)}")
+        except Exception as e:
+            print(f"[kudago] events_wide error: {e}")
+
+    # Запрос 3: текстовый поиск если совсем мало
+    if len(results) < 3 and parsed["tags"]:
+        try:
+            sq = " ".join(parsed["tags"])
+            r3 = requests.get(
+                "https://kudago.com/public-api/v1.4/search/",
+                params={"q": sq, "type": "event", "location": parsed["location"],
+                        "expand": "dates", "page_size": 10, "lang": "ru"},
+                timeout=10
+            )
+            if r3.ok:
+                extra2 = r3.json().get("results", [])
+                seen = {e.get("id") for e in results}
+                for e in extra2:
+                    if e.get("id") not in seen:
+                        results.append(e)
+                print(f"[kudago] search_extra={len(extra2)}")
+        except Exception as e:
+            print(f"[kudago] search error: {e}")
+
+    return results[:15]
+
+def _kudago_format_date(start_ts) -> str:
+    try:
+        from datetime import datetime
+        dt = datetime.fromtimestamp(int(start_ts))
+        day = dt.strftime("%-d")
+        month = _MONTHS_RU.get(dt.strftime("%B"), dt.strftime("%B"))
+        year = dt.strftime("%Y")
+        time_str = dt.strftime("%H:%M")
+        return f"{day} {month} {year}, {time_str}"
+    except:
+        return ""
+
+def _kudago_format(e: dict) -> dict:
+    title = (e.get("title") or e.get("short_title") or "").strip()
+    # Дата
+    date_str = ""
+    for d in (e.get("dates") or []):
+        start = d.get("start")
+        if start:
+            date_str = _kudago_format_date(start)
+            break
+    # Место
+    place = e.get("place") or {}
+    place_name = place.get("title", "") if isinstance(place, dict) else ""
+    address = place.get("address", "") if isinstance(place, dict) else ""
+    # Цена
+    price_raw = (e.get("price") or "").strip()
+    if e.get("is_free"):
+        price = "Бесплатно"
+    elif price_raw:
+        price = price_raw[:80]
+    else:
+        price = None
+    # URL
+    slug = e.get("slug", "")
+    loc_info = e.get("location") or {}
+    loc_slug = loc_info.get("slug", "msk") if isinstance(loc_info, dict) else "msk"
+    url = e.get("site_url") or f"https://kudago.com/{loc_slug}/event/{slug}/"
+    # Описание
+    desc = (e.get("description") or "")[:200].strip()
+    parts = []
+    if date_str:
+        parts.append(f"📅 {date_str}")
+    if place_name:
+        addr_part = f", {address}" if address else ""
+        parts.append(f"📍 {place_name}{addr_part}")
+    if desc:
+        parts.append(desc)
+    return {
+        "title": title[:120],
+        "description": "\n".join(parts),
+        "price": price,
+        "date": date_str,
+        "place": place_name,
+        "address": address,
+        "source": "kudago.com",
+        "url": url,
+        "cat": "events",
+    }
+
 @app.post("/api/v1/search")
 async def search_agent(request: Request):
-    """Агент-поисковик: Wildberries + Tavily + AI (синхронный, надёжный)"""
+    """Агент-поисковик: KudaGo (мероприятия) + Wildberries + Tavily + AI (синхронный, надёжный)"""
     import json as _json, re as _re, asyncio as _asyncio
     data = await request.json()
     query = (data.get("query") or "").strip()
@@ -1395,7 +1608,10 @@ async def search_agent(request: Request):
 
     # ── 2. КЛАССИФИКАЦИЯ — быстро без AI ─────────────────────────
     q_lower = query.lower()
-    if any(w in q_lower for w in ["кино", "театр", "музе", "ресторан", "концерт", "выставк", "экскурс", "афиша", "билет", "шоу", "спектакль"]):
+    # KudaGo имеет приоритет — проверяем первым
+    if _is_events_query(query):
+        cat = "events"
+    elif any(w in q_lower for w in ["кино", "музе", "ресторан", "афиша", "билет"]):
         cat = "leisure"
     elif any(w in q_lower for w in ["мастер", "сантехник", "электрик", "ремонт", "клинер", "грузчик", "курьер", "услуг", "няня", "репетитор"]):
         cat = "services"
@@ -1405,6 +1621,17 @@ async def search_agent(request: Request):
     print(f"[search] category={cat}")
 
     raw_results = []
+
+    # ── 3a. KUDAGO — мероприятия и события ───────────────────────
+    if cat == "events":
+        parsed_kg = _parse_kudago_params(query)
+        print(f"[kudago] params={parsed_kg}")
+        kg_events = _kudago_fetch(parsed_kg)
+        print(f"[kudago] total={len(kg_events)}")
+        raw_results = [_kudago_format(e) for e in kg_events if (e.get("title") or "").strip()]
+        if not raw_results:
+            print("[kudago] empty — fallback to leisure/Tavily")
+            cat = "leisure"  # fallback если KudaGo ничего не нашёл
 
     # ── 3. WILDBERRIES (для товаров) ─────────────────────────────
     if cat == "goods":
@@ -1485,7 +1712,8 @@ async def search_agent(request: Request):
             raw_results = []
 
     # ── 4. TAVILY — для досуга/услуг всегда, для товаров если WB пустой ──
-    if len(raw_results) < 3 or cat in ["leisure", "services"]:
+    # events — не используем Tavily, только KudaGo
+    if cat != "events" and (len(raw_results) < 3 or cat in ["leisure", "services"]):
         # Для товаров — естественный запрос с упоминанием маркетплейса
         if cat == "goods":
             tq = f"{query} купить цена ozon wildberries"
