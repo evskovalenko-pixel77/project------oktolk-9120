@@ -3596,6 +3596,110 @@ class FinanceParseRequest(BaseModel):
     mime_type: str = "image/jpeg"
     user_id: Optional[int] = None  # берётся из токена
 
+class DocumentAnalyzeRequest(BaseModel):
+    file_base64: str
+    mime_type: str = "application/pdf"
+    file_name: str = ""
+    context: str = ""
+    user_question: str = ""
+
+
+@app.post("/api/v1/document/analyze")
+async def analyze_document(req: DocumentAnalyzeRequest, user=Depends(get_current_user)):
+    """Универсальный анализ документа (квитанция ЖКУ, договор кредита, медкарта).
+    Извлекает данные → пропускает через специализированного эксперта → понятный ответ."""
+    if not AITUNNEL_API_KEY:
+        raise HTTPException(status_code=503, detail="AI недоступен")
+    if not req.file_base64:
+        raise HTTPException(status_code=400, detail="Файл не передан")
+
+    context = req.context or "general"
+    extract_prompts = {
+        "utility": (
+            "Это квитанция за ЖКУ. Извлеки и аккуратно перепиши все ключевые данные:\n"
+            "— период; адрес; общая сумма к оплате;\n"
+            "— все статьи начислений отдельно с тарифом и суммой "
+            "(содержание, ХВС, ГВС, водоотведение, отопление, электроэнергия по тарифам, "
+            "газ, ОДН/КР на СОИ, капремонт, вывоз ТКО, домофон и др.);\n"
+            "— показания счётчиков если есть;\n"
+            "— долг/переплата за прошлые периоды;\n"
+            "— пени если есть.\n"
+            "Верни структурированный текст по-русски, БЕЗ markdown."
+        ),
+        "credit": (
+            "Это финансовый документ (кредитный договор, график платежей или справка). Извлеки:\n"
+            "— тип документа; банк/кредитор; ФИО заёмщика;\n"
+            "— сумма кредита; ставка; срок; ежемесячный платёж; полная стоимость кредита (ПСК);\n"
+            "— дата выдачи и дата окончания;\n"
+            "— страховка (название, сумма, обязательная или нет);\n"
+            "— скрытые комиссии или дополнительные платежи;\n"
+            "— штрафы за просрочку.\n"
+            "Верни структурированный текст по-русски, БЕЗ markdown."
+        ),
+        "pharmacy": (
+            "Это медицинский документ (рецепт, выписка, чек из аптеки или направление). Извлеки:\n"
+            "— тип документа;\n"
+            "— названия лекарств с дозировкой и количеством;\n"
+            "— цены если указаны;\n"
+            "— назначения врача;\n"
+            "— по рецепту ли (для налогового вычета).\n"
+            "НЕ интерпретируй диагнозы. Верни структурированный текст по-русски, БЕЗ markdown."
+        ),
+    }
+    extract_prompt = extract_prompts.get(context, (
+        "Это документ. Извлеки и структурированно перепиши все значимые данные: "
+        "тип документа, основные цифры, даты, суммы, стороны, условия. Без markdown."
+    ))
+
+    try:
+        is_pdf = (req.mime_type == "application/pdf"
+                  or (req.file_name or "").lower().endswith(".pdf"))
+        if is_pdf:
+            content = [
+                {"type": "text", "text": extract_prompt},
+                {"type": "file", "file": {"file_data": f"data:application/pdf;base64,{req.file_base64}"}},
+            ]
+        else:
+            content = [
+                {"type": "text", "text": extract_prompt},
+                {"type": "image_url", "image_url": {"url": f"data:{req.mime_type};base64,{req.file_base64}"}},
+            ]
+
+        def _call_extract():
+            headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+            data = {
+                "model": "gemini-2.5-flash-lite",
+                "messages": [{"role": "user", "content": content}],
+                "max_tokens": 1500,
+            }
+            r = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=60)
+            return r.json()["choices"][0]["message"]["content"]
+
+        extracted = await asyncio.to_thread(_call_extract)
+        if not extracted or len(extracted.strip()) < 30:
+            return {"status": "error", "message": "Не удалось прочитать документ. Попробуйте сделать фото почётче или прислать в другом формате."}
+
+        print(f"[document/analyze] context={context}, extracted={len(extracted)} символов")
+
+        expert_prompt = FINANCE_CATEGORY_PROMPTS.get(context, FINANCE_CHAT_PROMPT)
+        profile_ctx = await build_profile_context(user["id"]) if user else ""
+        user_question = req.user_question.strip() or "Разбери документ: что важного, есть ли подозрительные суммы или возможность оптимизировать."
+
+        messages = [
+            {"role": "system", "content": expert_prompt + profile_ctx},
+            {"role": "user", "content": f"Документ:\n{extracted}\n\nВопрос пользователя: {user_question}"},
+        ]
+        reply = await asyncio.to_thread(call_ai, messages)
+        await add_tokens(user["id"], extracted + user_question, reply)
+        await save_chat_message(user["id"], "finance", "user", f"[документ: {req.file_name or 'файл'}] {user_question}")
+        await save_chat_message(user["id"], "finance", "ai", reply)
+
+        return {"status": "ok", "extracted": extracted, "reply": reply}
+    except Exception as e:
+        print(f"[document/analyze] error: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка анализа документа: {str(e)}")
+
+
 @app.post("/api/v1/finance/parse")
 async def finance_parse(req: FinanceParseRequest, user=Depends(get_current_user)):
     """AI парсинг — поддерживает несколько расходов в одном сообщении"""
