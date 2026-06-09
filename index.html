@@ -13119,6 +13119,14 @@ function ChatOverlay({
           domain: data.domain,
           source: 'OkTolk AI'
         }]);
+      } else if (data.action === 'search_results') {
+        setMessages(m => [...m, {
+          role: 'ai',
+          type: 'search',
+          text: data.reply,
+          results: data.results || [],
+          source: 'OkTolk AI'
+        }]);
       } else {
         setMessages(m => [...m, {
           role: 'ai',
@@ -13169,6 +13177,14 @@ function ChatOverlay({
       type: 'cancelled',
       text: 'Отменено'
     } : x));
+  };
+  const [copiedUrl, setCopiedUrl] = React.useState('');
+  const copyLink = url => {
+    try {
+      navigator.clipboard.writeText(url);
+      setCopiedUrl(url);
+      setTimeout(() => setCopiedUrl(''), 1500);
+    } catch (e) {}
   };
   const askClaudeWithImage = async (base64, mimeType) => {
     setPending(true);
@@ -13271,7 +13287,22 @@ function ChatOverlay({
   }, "Записать"), React.createElement("button", {
     onClick: () => cancelRecord(i),
     style: { padding: '9px 16px', borderRadius: 10, border: '1px solid var(--border)', cursor: 'pointer', background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: 14, fontFamily: 'inherit' }
-  }, "Отмена")), m.role === 'ai' && m.source && React.createElement("div", {
+  }, "Отмена")), m.type === 'search' && m.results && React.createElement("div", {
+    style: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }
+  }, m.results.map((r, ri) => React.createElement("div", {
+    key: ri,
+    style: { border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px', background: 'var(--surface)' }
+  }, React.createElement("a", {
+    href: r.url, target: '_blank', rel: 'noopener noreferrer',
+    style: { fontWeight: 600, fontSize: 14, color: 'var(--primary)', textDecoration: 'none', display: 'block', marginBottom: 2 }
+  }, r.title), React.createElement("div", {
+    style: { fontSize: 12, color: 'var(--text-subtle)', marginBottom: 4 }
+  }, r.domain), r.snippet && React.createElement("div", {
+    style: { fontSize: 13, color: 'var(--text-muted)', marginBottom: 6, lineHeight: 1.4 }
+  }, r.snippet), React.createElement("button", {
+    onClick: () => copyLink(r.url),
+    style: { fontSize: 12, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: copiedUrl === r.url ? 'var(--success)' : 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit' }
+  }, copiedUrl === r.url ? '✓ Скопировано' : 'Сохранить ссылку')))), m.role === 'ai' && m.source && React.createElement("div", {
     className: "source"
   }, React.createElement(IconSparkles, {
     size: 11

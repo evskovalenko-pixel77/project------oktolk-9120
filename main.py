@@ -994,6 +994,37 @@ async def health_data_context(user_id, message: str) -> str:
         return ""
 
 
+async def search_links(query: str) -> list:
+    """Tavily-поиск → список результатов со ссылками для главного чата."""
+    if not TAVILY_API_KEY:
+        return []
+    try:
+        data = await asyncio.to_thread(tavily_search_adv, query, "general", None, 6, False)
+        items = data.get("results", []) or []
+        out = []
+        for it in items:
+            url = it.get("url", "")
+            if not url.startswith("http"):
+                continue
+            try:
+                dom = url.split("/")[2].replace("www.", "")
+            except Exception:
+                dom = "источник"
+            out.append({
+                "title": (it.get("title") or dom)[:120],
+                "url": url,
+                "domain": dom,
+                "snippet": (it.get("content") or "")[:160],
+            })
+            if len(out) >= 5:
+                break
+        print(f"[search_links] '{query[:40]}' → {len(out)} ссылок")
+        return out
+    except Exception as e:
+        print(f"[search_links] error: {e}")
+        return []
+
+
 @app.post("/api/v1/chat")
 async def chat_v1(req: ChatRequest, request: Request):
     try:
@@ -1079,6 +1110,17 @@ async def chat_v1(req: ChatRequest, request: Request):
                 await save_chat_message(user_id, domain, "ai", ans)
                 return {"reply": ans, "domain": domain}
             # Tavily не дал ответа — продолжаем обычным ответом
+
+        # Поиск товара/услуги/места → реальные ссылки прямо в чат
+        if domain == "search":
+            results = await search_links(req.message)
+            if results:
+                reply = "Вот что нашёл по вашему запросу:"
+                await add_tokens(user_id, req.message, reply)
+                await save_chat_message(user_id, domain, "user", req.message)
+                await save_chat_message(user_id, domain, "ai", f"{reply} ({len(results)} ссылок)")
+                return {"reply": reply, "action": "search_results", "results": results, "domain": domain}
+            # ничего не нашли — продолжаем обычным ответом
 
         # Строим системный промпт с профилем
         base_prompt = req.system or SYSTEM_PROMPTS.get(domain, SYSTEM_PROMPT)
