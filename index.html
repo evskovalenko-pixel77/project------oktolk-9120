@@ -4742,7 +4742,7 @@ function CategoryDetailScreen({
         method: "POST",
         body: JSON.stringify({
           message: prompt,
-          mode: "finance"
+          mode: "finance:" + catKey
         })
       });
       const data = await res.json();
@@ -4767,7 +4767,7 @@ function CategoryDetailScreen({
         method: "POST",
         body: JSON.stringify({
           message: ctx + "Вопрос: " + txt,
-          mode: "finance"
+          mode: "finance:" + catKey
         })
       });
       const data = await res.json();
