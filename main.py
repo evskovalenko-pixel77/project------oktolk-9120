@@ -724,6 +724,89 @@ async def classify_domain(message: str) -> str:
         return "general"
 
 
+# Ключевые слова намерения записать данные
+_RECORD_KW = ("запиши", "запомни", "добавь", "сохрани", "внеси", "занеси",
+              "зафиксируй", "записать", "отметь", "фиксируй")
+
+async def extract_record(message: str, domain: str) -> dict:
+    """Извлекает структуру записи из сообщения.
+    Возвращает {ok:True, record:{...}, label:"..."} или {ok:False}."""
+    if not AITUNNEL_API_KEY or domain not in ("health", "finance"):
+        return {"ok": False}
+
+    if domain == "health":
+        prompt = (
+            "Пользователь хочет записать показатель здоровья. Извлеки данные.\n"
+            "Типы: pressure (давление, value_1=верхнее value_2=нижнее), "
+            "pulse (пульс, value_1), sugar (сахар ммоль/л, value_1), weight (вес кг, value_1).\n"
+            "Верни ТОЛЬКО JSON: {\"type\":\"pressure|pulse|sugar|weight\",\"value_1\":число,\"value_2\":число или null}\n"
+            "Если это не показатель здоровья — верни {\"type\":null}.\n"
+            f"Сообщение: {message}"
+        )
+    else:  # finance
+        prompt = (
+            "Пользователь хочет записать расход. Извлеки данные.\n"
+            "Категории: shop, pharmacy, utility, credit, transport, leisure, other.\n"
+            "Верни ТОЛЬКО JSON: {\"category\":\"код\",\"amount\":число,\"comment\":\"1-2 слова\"}\n"
+            "Если суммы нет — верни {\"amount\":null}.\n"
+            f"Сообщение: {message}"
+        )
+
+    def _call():
+        headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+        data = {"model": "gemini-2.5-flash-lite",
+                "messages": [{"role": "user", "content": prompt}], "max_tokens": 80}
+        r = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=12)
+        return r.json()["choices"][0]["message"]["content"]
+
+    try:
+        raw = await asyncio.to_thread(_call)
+        m = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not m:
+            return {"ok": False}
+        d = json.loads(m.group())
+
+        if domain == "health":
+            t = d.get("type")
+            v1 = d.get("value_1")
+            if not t or v1 is None:
+                return {"ok": False}
+            v2 = d.get("value_2")
+            try:
+                v1 = float(v1)
+                v2 = float(v2) if v2 is not None else None
+            except (ValueError, TypeError):
+                return {"ok": False}
+            labels = {
+                "pressure": f"давление {int(v1)}/{int(v2)}" if v2 else f"давление {int(v1)}",
+                "pulse": f"пульс {int(v1)}",
+                "sugar": f"сахар {v1}",
+                "weight": f"вес {v1} кг",
+            }
+            label = labels.get(t, f"{t} {v1}")
+            print(f"[extract_record] health → {label}")
+            return {"ok": True, "record": {"type": t, "value_1": v1, "value_2": v2}, "label": label}
+
+        else:  # finance
+            amt = d.get("amount")
+            if amt is None:
+                return {"ok": False}
+            try:
+                amt = float(amt)
+            except (ValueError, TypeError):
+                return {"ok": False}
+            cat = d.get("category", "other") or "other"
+            cm = d.get("comment", "") or ""
+            cat_ru = {"shop": "покупки", "pharmacy": "аптека", "utility": "ЖКУ",
+                      "credit": "кредит", "transport": "транспорт", "leisure": "досуг", "other": "прочее"}
+            label = f"расход {int(amt)} ₽" + (f" — {cm}" if cm else "") + f" ({cat_ru.get(cat, cat)})"
+            print(f"[extract_record] finance → {label}")
+            return {"ok": True, "record": {"category": cat, "amount": amt, "comment": cm}, "label": label}
+    except Exception as e:
+        print(f"[extract_record] error: {e}")
+        return {"ok": False}
+
+
 @app.post("/api/v1/chat")
 async def chat_v1(req: ChatRequest, request: Request):
     try:
@@ -753,6 +836,20 @@ async def chat_v1(req: ChatRequest, request: Request):
         domain = req.mode
         if not domain:
             domain = await classify_domain(req.message)
+
+        # Этап 2: запись данных через чат (с подтверждением на фронте)
+        ql = (req.message or "").lower()
+        if domain in ("health", "finance") and any(kw in ql for kw in _RECORD_KW):
+            ext = await extract_record(req.message, domain)
+            if ext.get("ok"):
+                await add_tokens(user_id, req.message, ext["label"])
+                return {
+                    "reply": f"Записать {ext['label']}?",
+                    "action": "confirm_record",
+                    "domain": domain,
+                    "record": ext["record"],
+                }
+            # не распозналось как запись — продолжаем обычным ответом
 
         # Строим системный промпт с профилем
         base_prompt = req.system or SYSTEM_PROMPTS.get(domain, SYSTEM_PROMPT)

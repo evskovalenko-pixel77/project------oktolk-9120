@@ -13069,11 +13069,8 @@ function ChatOverlay({
   const askClaude = async text => {
     setPending(true);
     try {
-      const res = await fetch('/chat', {
+      const res = await apiFetch('/api/v1/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           message: text,
           history: [],
@@ -13081,11 +13078,22 @@ function ChatOverlay({
         })
       });
       const data = await res.json();
-      setMessages(m => [...m, {
-        role: 'ai',
-        text: data.reply,
-        source: 'OkTolk AI'
-      }]);
+      if (data.action === 'confirm_record') {
+        setMessages(m => [...m, {
+          role: 'ai',
+          type: 'confirm',
+          text: data.reply,
+          record: data.record,
+          domain: data.domain,
+          source: 'OkTolk AI'
+        }]);
+      } else {
+        setMessages(m => [...m, {
+          role: 'ai',
+          text: data.reply,
+          source: 'OkTolk AI'
+        }]);
+      }
     } catch (e) {
       setMessages(m => [...m, {
         role: 'ai',
@@ -13095,6 +13103,36 @@ function ChatOverlay({
     } finally {
       setPending(false);
     }
+  };
+  const confirmRecord = async (idx, record, domain) => {
+    const endpoint = domain === 'health' ? '/api/v1/health/records' : '/api/v1/finance/records';
+    try {
+      const res = await apiFetch(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(record)
+      });
+      const ok = res.ok;
+      setMessages(m => m.map((x, i) => i === idx ? {
+        ...x,
+        type: ok ? 'confirmed' : 'confirm_error',
+        text: ok ? '✓ Записано' : 'Не удалось записать, попробуйте через раздел'
+      } : x));
+      if (ok && domain === 'health') { try { window.dispatchEvent(new Event('oktolk-health-updated')); } catch (e) {} }
+      if (ok && domain === 'finance') { try { window.dispatchEvent(new Event('oktolk-finance-updated')); } catch (e) {} }
+    } catch (e) {
+      setMessages(m => m.map((x, i) => i === idx ? {
+        ...x,
+        type: 'confirm_error',
+        text: 'Ошибка записи'
+      } : x));
+    }
+  };
+  const cancelRecord = idx => {
+    setMessages(m => m.map((x, i) => i === idx ? {
+      ...x,
+      type: 'cancelled',
+      text: 'Отменено'
+    } : x));
   };
   const askClaudeWithImage = async (base64, mimeType) => {
     setPending(true);
@@ -13189,7 +13227,15 @@ function ChatOverlay({
   }, "\u0417\u0430\u0434\u0430\u0439\u0442\u0435 \u043B\u044E\u0431\u043E\u0439 \u0432\u043E\u043F\u0440\u043E\u0441 \u2014 \u043E\u0442\u0432\u0435\u0447\u0443 \u043F\u0440\u043E\u0441\u0442\u044B\u043C \u044F\u0437\u044B\u043A\u043E\u043C."), messages.map((m, i) => React.createElement("div", {
     key: i,
     className: 'msg ' + m.role
-  }, m.text, m.role === 'ai' && m.source && React.createElement("div", {
+  }, m.text, m.type === 'confirm' && React.createElement("div", {
+    style: { display: 'flex', gap: 8, marginTop: 10 }
+  }, React.createElement("button", {
+    onClick: () => confirmRecord(i, m.record, m.domain),
+    style: { flex: 1, padding: '9px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: '#fff', fontWeight: 600, fontSize: 14, fontFamily: 'inherit' }
+  }, "Записать"), React.createElement("button", {
+    onClick: () => cancelRecord(i),
+    style: { padding: '9px 16px', borderRadius: 10, border: '1px solid var(--border)', cursor: 'pointer', background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: 14, fontFamily: 'inherit' }
+  }, "Отмена")), m.role === 'ai' && m.source && React.createElement("div", {
     className: "source"
   }, React.createElement(IconSparkles, {
     size: 11
