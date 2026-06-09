@@ -13075,6 +13075,25 @@ function ChatOverlay({
       askClaude(initialMsg);
     }
   }, []);
+  React.useEffect(() => {
+    if (initialMsg) return;
+    const token = localStorage.getItem('oktolk_token');
+    if (!token || token === 'local_demo') return;
+    (async () => {
+      try {
+        const res = await apiFetch('/api/v1/chat/history?limit=50');
+        const data = await res.json();
+        if (data.messages && data.messages.length) {
+          setMessages(data.messages.map(m => ({
+            role: m.role,
+            text: m.text,
+            type: m.action === 'confirm_record' ? 'confirmed' : undefined,
+            source: m.role === 'ai' ? 'OkTolk AI' : undefined
+          })));
+        }
+      } catch (e) {}
+    })();
+  }, []);
   const askClaude = async text => {
     setPending(true);
     try {
@@ -13092,7 +13111,7 @@ function ChatOverlay({
           role: 'ai',
           type: 'confirm',
           text: data.reply,
-          record: data.record,
+          records: data.records || (data.record ? [data.record] : []),
           domain: data.domain,
           source: 'OkTolk AI'
         }]);
@@ -13113,18 +13132,22 @@ function ChatOverlay({
       setPending(false);
     }
   };
-  const confirmRecord = async (idx, record, domain) => {
+  const confirmRecord = async (idx, records, domain) => {
     const endpoint = domain === 'health' ? '/api/v1/health/records' : '/api/v1/finance/records';
     try {
-      const res = await apiFetch(endpoint, {
-        method: 'POST',
-        body: JSON.stringify(record)
-      });
-      const ok = res.ok;
+      let okCount = 0;
+      for (const rec of (records || [])) {
+        const res = await apiFetch(endpoint, {
+          method: 'POST',
+          body: JSON.stringify(rec)
+        });
+        if (res.ok) okCount++;
+      }
+      const ok = okCount > 0;
       setMessages(m => m.map((x, i) => i === idx ? {
         ...x,
         type: ok ? 'confirmed' : 'confirm_error',
-        text: ok ? '✓ Записано' : 'Не удалось записать, попробуйте через раздел'
+        text: ok ? ('✓ Записано' + (okCount > 1 ? ' (' + okCount + ')' : '')) : 'Не удалось записать, попробуйте через раздел'
       } : x));
       if (ok && domain === 'health') { try { window.dispatchEvent(new Event('oktolk-health-updated')); } catch (e) {} }
       if (ok && domain === 'finance') { try { window.dispatchEvent(new Event('oktolk-finance-updated')); } catch (e) {} }
@@ -13239,7 +13262,7 @@ function ChatOverlay({
   }, m.text, m.type === 'confirm' && React.createElement("div", {
     style: { display: 'flex', gap: 8, marginTop: 10 }
   }, React.createElement("button", {
-    onClick: () => confirmRecord(i, m.record, m.domain),
+    onClick: () => confirmRecord(i, m.records, m.domain),
     style: { flex: 1, padding: '9px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--primary)', color: '#fff', fontWeight: 600, fontSize: 14, fontFamily: 'inherit' }
   }, "Записать"), React.createElement("button", {
     onClick: () => cancelRecord(i),

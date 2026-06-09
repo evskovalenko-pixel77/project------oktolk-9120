@@ -755,82 +755,138 @@ _RECORD_KW = ("запиши", "запомни", "добавь", "сохрани"
               "зафиксируй", "записать", "отметь", "фиксируй")
 
 async def extract_record(message: str, domain: str) -> dict:
-    """Извлекает структуру записи из сообщения.
-    Возвращает {ok:True, record:{...}, label:"..."} или {ok:False}."""
+    """Извлекает запись(и) из сообщения.
+    Возвращает {ok:True, records:[...], label:"..."} или {ok:False}."""
     if not AITUNNEL_API_KEY or domain not in ("health", "finance"):
         return {"ok": False}
 
     if domain == "health":
         prompt = (
-            "Пользователь хочет записать показатель здоровья. Извлеки данные.\n"
+            "Пользователь хочет записать показатель(и) здоровья. Извлеки данные.\n"
             "Типы: pressure (давление, value_1=верхнее value_2=нижнее), "
             "pulse (пульс, value_1), sugar (сахар ммоль/л, value_1), weight (вес кг, value_1).\n"
-            "Верни ТОЛЬКО JSON: {\"type\":\"pressure|pulse|sugar|weight\",\"value_1\":число,\"value_2\":число или null}\n"
-            "Если это не показатель здоровья — верни {\"type\":null}.\n"
+            "Если несколько показателей — верни массив.\n"
+            "Верни ТОЛЬКО JSON-массив: [{\"type\":\"pressure|pulse|sugar|weight\",\"value_1\":число,\"value_2\":число или null}]\n"
+            "Если это не показатель здоровья — верни [].\n"
             f"Сообщение: {message}"
         )
     else:  # finance
         prompt = (
-            "Пользователь хочет записать расход. Извлеки данные.\n"
-            "Категории: shop, pharmacy, utility, credit, transport, leisure, other.\n"
-            "Верни ТОЛЬКО JSON: {\"category\":\"код\",\"amount\":число,\"comment\":\"1-2 слова\"}\n"
-            "Если суммы нет — верни {\"amount\":null}.\n"
+            "Пользователь хочет записать расход(ы). Извлеки ВСЕ расходы из сообщения.\n"
+            "Категории (category):\n"
+            "shop — магазины, продукты, одежда, техника, бытовое\n"
+            "pharmacy — аптека, лекарства, врачи, анализы\n"
+            "utility — ЖКУ, коммуналка, свет, вода, интернет\n"
+            "credit — кредиты, займы, рассрочка\n"
+            "transport — такси, автобус, метро, бензин, парковка, И БИЛЕТЫ на самолёт/поезд/автобус, авиабилеты, ж/д\n"
+            "leisure — кафе, рестораны, кино, развлечения, подписки, спорт\n"
+            "other — всё прочее\n"
+            "ВАЖНО: если в сообщении несколько расходов — верни МАССИВ из нескольких объектов, каждый отдельно.\n"
+            "Верни ТОЛЬКО JSON-массив: [{\"category\":\"код\",\"amount\":число,\"comment\":\"1-2 слова\"}]\n"
+            "Если суммы нет — верни [].\n"
             f"Сообщение: {message}"
         )
 
     def _call():
         headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
         data = {"model": "gemini-2.5-flash-lite",
-                "messages": [{"role": "user", "content": prompt}], "max_tokens": 80}
-        r = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=12)
+                "messages": [{"role": "user", "content": prompt}], "max_tokens": 300}
+        r = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=15)
         return r.json()["choices"][0]["message"]["content"]
 
     try:
         raw = await asyncio.to_thread(_call)
-        m = re.search(r'\{.*\}', raw, re.DOTALL)
+        m = re.search(r'\[.*\]|\{.*\}', raw, re.DOTALL)
         if not m:
             return {"ok": False}
-        d = json.loads(m.group())
+        arr = json.loads(m.group())
+        if isinstance(arr, dict):
+            arr = [arr]
+        if not arr:
+            return {"ok": False}
 
         if domain == "health":
-            t = d.get("type")
-            v1 = d.get("value_1")
-            if not t or v1 is None:
+            records, parts = [], []
+            for d in arr:
+                t = d.get("type")
+                v1 = d.get("value_1")
+                if not t or v1 is None:
+                    continue
+                try:
+                    v1 = float(v1)
+                    v2 = float(d["value_2"]) if d.get("value_2") is not None else None
+                except (ValueError, TypeError):
+                    continue
+                records.append({"type": t, "value_1": v1, "value_2": v2})
+                lbl = {
+                    "pressure": f"давление {int(v1)}/{int(v2)}" if v2 else f"давление {int(v1)}",
+                    "pulse": f"пульс {int(v1)}", "sugar": f"сахар {v1}", "weight": f"вес {v1} кг",
+                }.get(t, f"{t} {v1}")
+                parts.append(lbl)
+            if not records:
                 return {"ok": False}
-            v2 = d.get("value_2")
-            try:
-                v1 = float(v1)
-                v2 = float(v2) if v2 is not None else None
-            except (ValueError, TypeError):
-                return {"ok": False}
-            labels = {
-                "pressure": f"давление {int(v1)}/{int(v2)}" if v2 else f"давление {int(v1)}",
-                "pulse": f"пульс {int(v1)}",
-                "sugar": f"сахар {v1}",
-                "weight": f"вес {v1} кг",
-            }
-            label = labels.get(t, f"{t} {v1}")
-            print(f"[extract_record] health → {label}")
-            return {"ok": True, "record": {"type": t, "value_1": v1, "value_2": v2}, "label": label}
+            print(f"[extract_record] health → {'; '.join(parts)}")
+            return {"ok": True, "records": records, "label": "; ".join(parts)}
 
         else:  # finance
-            amt = d.get("amount")
-            if amt is None:
-                return {"ok": False}
-            try:
-                amt = float(amt)
-            except (ValueError, TypeError):
-                return {"ok": False}
-            cat = d.get("category", "other") or "other"
-            cm = d.get("comment", "") or ""
             cat_ru = {"shop": "покупки", "pharmacy": "аптека", "utility": "ЖКУ",
                       "credit": "кредит", "transport": "транспорт", "leisure": "досуг", "other": "прочее"}
-            label = f"расход {int(amt)} ₽" + (f" — {cm}" if cm else "") + f" ({cat_ru.get(cat, cat)})"
-            print(f"[extract_record] finance → {label}")
-            return {"ok": True, "record": {"category": cat, "amount": amt, "comment": cm}, "label": label}
+            records, parts = [], []
+            for it in arr:
+                amt = it.get("amount")
+                if amt is None:
+                    continue
+                try:
+                    amt = float(amt)
+                except (ValueError, TypeError):
+                    continue
+                cat = it.get("category", "other") or "other"
+                cm = it.get("comment", "") or ""
+                records.append({"category": cat, "amount": amt, "comment": cm})
+                parts.append(f"{int(amt)} ₽ {cat_ru.get(cat, cat)}" + (f" ({cm})" if cm else ""))
+            if not records:
+                return {"ok": False}
+            print(f"[extract_record] finance → {'; '.join(parts)}")
+            return {"ok": True, "records": records, "label": "; ".join(parts)}
     except Exception as e:
         print(f"[extract_record] error: {e}")
         return {"ok": False}
+
+
+async def research_answer(query: str) -> str:
+    """Tavily research → понятный ответ простым языком. Для info-вопросов (законы, правила, как оформить)."""
+    if not TAVILY_API_KEY:
+        return ""
+    try:
+        data = await asyncio.to_thread(tavily_search_adv, query, "general", None, 5, True)
+        answer = (data.get("answer") or "").strip()
+        items = data.get("results", []) or []
+        if answer and items:
+            top_url = items[0].get("url", "")
+            if top_url:
+                deep = await asyncio.to_thread(tavily_extract, top_url, 3000)
+                if deep:
+                    try:
+                        enrich = await asyncio.to_thread(call_ai, [{"role": "user", "content": (
+                            "Ответь на вопрос простым русским языком, коротко и по делу (3-6 предложений), "
+                            "на основе краткого ответа и текста источника. Без markdown-разметки.\n\n"
+                            f"ВОПРОС: {query}\n\nКраткий ответ: {answer}\n\n"
+                            f"Текст источника:\n{deep[:2500]}"
+                        )}])
+                        if enrich and len(enrich.strip()) > 20:
+                            answer = enrich.strip()
+                    except Exception as e:
+                        print(f"[research] enrich error: {e}")
+        if answer and items:
+            src = items[0].get("url", "")
+            dom = src.split("/")[2].replace("www.", "") if src.startswith("http") else ""
+            if dom:
+                answer += f"\n\nИсточник: {dom}"
+        print(f"[research] '{query[:40]}' → {'ответ ' + str(len(answer)) + ' симв.' if answer else 'пусто'}")
+        return answer or ""
+    except Exception as e:
+        print(f"[research] error: {e}")
+        return ""
 
 
 @app.post("/api/v1/chat")
@@ -869,17 +925,26 @@ async def chat_v1(req: ChatRequest, request: Request):
             ext = await extract_record(req.message, domain)
             if ext.get("ok"):
                 await add_tokens(user_id, req.message, ext["label"])
-                confirm_text = f"Записать {ext['label']}?"
-                # Этап 3: единая история — дублируется в раздел
+                confirm_text = f"Записать: {ext['label']}?"
                 await save_chat_message(user_id, domain, "user", req.message)
                 await save_chat_message(user_id, domain, "ai", confirm_text, action="confirm_record")
                 return {
                     "reply": confirm_text,
                     "action": "confirm_record",
                     "domain": domain,
-                    "record": ext["record"],
+                    "records": ext["records"],
                 }
             # не распозналось как запись — продолжаем обычным ответом
+
+        # Этап 3 (доработка): info-вопрос про новости/поиск → Tavily research
+        if domain in ("news", "search") and _is_info_query(req.message):
+            ans = await research_answer(req.message)
+            if ans:
+                await add_tokens(user_id, req.message, ans)
+                await save_chat_message(user_id, domain, "user", req.message)
+                await save_chat_message(user_id, domain, "ai", ans)
+                return {"reply": ans, "domain": domain}
+            # Tavily не дал ответа — продолжаем обычным ответом
 
         # Строим системный промпт с профилем
         base_prompt = req.system or SYSTEM_PROMPTS.get(domain, SYSTEM_PROMPT)
