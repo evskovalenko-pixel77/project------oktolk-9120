@@ -754,6 +754,12 @@ async def classify_domain(message: str) -> str:
 _RECORD_KW = ("запиши", "запомни", "добавь", "сохрани", "внеси", "занеси",
               "зафиксируй", "записать", "отметь", "фиксируй")
 
+# Ключевые слова info/research-запроса → подключаем Tavily
+_RESEARCH_KW = ("закон", "льгот", "пособи", "выплат", "субсиди", "пенси",
+                "как оформить", "как получить", "как подать", "документ",
+                "новост", "что нового", "актуальн", "изменени", "правила",
+                "положено ли", "имею право", "сколько стоит", "когда вступ")
+
 async def extract_record(message: str, domain: str) -> dict:
     """Извлекает запись(и) из сообщения.
     Возвращает {ok:True, records:[...], label:"..."} или {ok:False}."""
@@ -936,8 +942,9 @@ async def chat_v1(req: ChatRequest, request: Request):
                 }
             # не распозналось как запись — продолжаем обычным ответом
 
-        # Этап 3 (доработка): info-вопрос про новости/поиск → Tavily research
-        if domain in ("news", "search") and _is_info_query(req.message):
+        # info-вопрос про законы/льготы/новости/как оформить → Tavily research
+        is_research = _is_info_query(req.message) or any(k in ql for k in _RESEARCH_KW)
+        if domain not in ("health", "finance", "scam") and is_research:
             ans = await research_answer(req.message)
             if ans:
                 await add_tokens(user_id, req.message, ans)
