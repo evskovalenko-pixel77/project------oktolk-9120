@@ -219,6 +219,9 @@ async def init_db():
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS alcohol INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking_years INTEGER;
+            ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS marital_status TEXT;
+            ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS children TEXT;
+            ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS family_notes TEXT;
             ALTER TABLE loans ADD COLUMN IF NOT EXISTS monthly_payment REAL;
             ALTER TABLE finance_records ADD COLUMN IF NOT EXISTS subcategory VARCHAR(50);
             ALTER TABLE finance_records ADD COLUMN IF NOT EXISTS item_name TEXT;
@@ -602,6 +605,26 @@ async def build_profile_context(user_id: int) -> str:
             if p.get("income"):
                 income = int(p['income'])
                 parts.append(f"Ежемесячный доход: {income} руб.")
+            # Семья
+            if p.get("marital_status"):
+                ms_map = {"single": "не женат/не замужем", "married": "в браке",
+                          "divorced": "в разводе", "widowed": "вдовец/вдова",
+                          "partner": "есть партнёр"}
+                parts.append(f"Семейное положение: {ms_map.get(p['marital_status'], p['marital_status'])}")
+            if p.get("children"):
+                try:
+                    kids = json.loads(p["children"]) if isinstance(p["children"], str) else p["children"]
+                    if kids:
+                        descs = []
+                        for k in kids:
+                            g = {"м": "мальчик", "ж": "девочка"}.get(k.get("gender", ""), "ребёнок")
+                            age = k.get("age")
+                            descs.append(f"{g} {age} лет" if age is not None else g)
+                        parts.append(f"Дети ({len(kids)}): " + ", ".join(descs))
+                except Exception:
+                    pass
+            if p.get("family_notes"):
+                parts.append(f"О семье: {p['family_notes']}")
 
         # Кредиты — грузятся всегда, независимо от профиля
         if credits:
@@ -763,6 +786,9 @@ class ProfileRequest(BaseModel):
     heredity: Optional[str] = None
     chronic: Optional[str] = None
     income: Optional[float] = None
+    marital_status: Optional[str] = None
+    children: Optional[list] = None
+    family_notes: Optional[str] = None
 
 @app.get("/api/v1/profile")
 async def get_profile(user=Depends(get_current_user)):
@@ -774,6 +800,12 @@ async def get_profile(user=Depends(get_current_user)):
         # Берём city/timezone из таблицы users
         u = await conn.fetchrow("SELECT city, timezone, name FROM users WHERE id=$1", user["id"])
         result = dict(row) if row else {}
+        # children хранится как JSON-строка → отдаём массивом
+        if result.get("children"):
+            try:
+                result["children"] = json.loads(result["children"]) if isinstance(result["children"], str) else result["children"]
+            except Exception:
+                result["children"] = []
         if u:
             result["city"] = u["city"] or "Москва"
             result["timezone"] = u["timezone"] or "Europe/Moscow"
@@ -791,8 +823,9 @@ async def save_profile(req: ProfileRequest, user=Depends(get_current_user)):
             INSERT INTO user_profile
                 (user_id, gender, age, height, weight, profession, hobbies,
                  work_pressure_1, work_pressure_2, work_pulse, base_sugar,
-                 habits, activity, alcohol, smoking, smoking_years, heredity, chronic, income, updated_at)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW())
+                 habits, activity, alcohol, smoking, smoking_years, heredity, chronic, income,
+                 marital_status, children, family_notes, updated_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,NOW())
             ON CONFLICT (user_id) DO UPDATE SET
                 gender=COALESCE($2, user_profile.gender),
                 age=COALESCE($3, user_profile.age),
@@ -812,11 +845,17 @@ async def save_profile(req: ProfileRequest, user=Depends(get_current_user)):
                 heredity=COALESCE($17, user_profile.heredity),
                 chronic=COALESCE($18, user_profile.chronic),
                 income=COALESCE($19, user_profile.income),
+                marital_status=COALESCE($20, user_profile.marital_status),
+                children=COALESCE($21, user_profile.children),
+                family_notes=COALESCE($22, user_profile.family_notes),
                 updated_at=NOW()
         """, uid, req.gender, req.age, req.height, req.weight, req.profession,
             req.hobbies, req.work_pressure_1, req.work_pressure_2, req.work_pulse,
             req.base_sugar, req.habits, req.activity, req.alcohol, req.smoking,
-            req.smoking_years, req.heredity, req.chronic, req.income)
+            req.smoking_years, req.heredity, req.chronic, req.income,
+            req.marital_status,
+            json.dumps(req.children, ensure_ascii=False) if req.children is not None else None,
+            req.family_notes)
         # Сохраняем city/timezone в таблицу users
         if req.city is not None or req.timezone is not None:
             await conn.execute("""

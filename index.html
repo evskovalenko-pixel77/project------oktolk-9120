@@ -10409,6 +10409,10 @@ function ProfileSettingsSheet({
     }));
     setSaved(false);
   };
+  const kids = Array.isArray(p.children) ? p.children : [];
+  const addChild = () => upd('children', [...kids, { age: null, gender: 'м' }]);
+  const updChild = (i, key, val) => upd('children', kids.map((c, idx) => idx === i ? { ...c, [key]: val } : c));
+  const delChild = (i) => upd('children', kids.filter((_, idx) => idx !== i));
   const save = async () => {
     try {
       const saveData = {
@@ -10428,6 +10432,9 @@ function ProfileSettingsSheet({
   const tabs = [{
     id: 'personal',
     label: 'Личное'
+  }, {
+    id: 'family',
+    label: 'Семья'
   }, {
     id: 'health',
     label: 'Здоровье'
@@ -10569,7 +10576,41 @@ function ProfileSettingsSheet({
     label: "\u0425\u043E\u0431\u0431\u0438 \u0438 \u0443\u0432\u043B\u0435\u0447\u0435\u043D\u0438\u044F",
     k: "hobbies",
     placeholder: "\u0427\u0435\u043C \u0443\u0432\u043B\u0435\u043A\u0430\u0435\u0442\u0435\u0441\u044C, \u0447\u0442\u043E \u043B\u044E\u0431\u0438\u0442\u0435"
-  })), !loading && tab === 'health' && React.createElement(React.Fragment, null, React.createElement("div", {
+  })), !loading && tab === 'family' && React.createElement(React.Fragment, null,
+    React.createElement(PChoice, {
+      p: p, upd: upd, label: "Семейное положение", k: "marital_status",
+      options: [{ v: 'single', l: 'Один' }, { v: 'married', l: 'В браке' }, { v: 'partner', l: 'Партнёр' }, { v: 'divorced', l: 'В разводе' }, { v: 'widowed', l: 'Вдовец' }]
+    }),
+    React.createElement("div", { style: { marginTop: 18, marginBottom: 6, fontSize: 14, fontWeight: 600, color: 'var(--text)' } }, "Дети"),
+    React.createElement("div", { style: { fontSize: 12.5, color: 'var(--text-subtle)', marginBottom: 12, lineHeight: 1.4 } }, "Возраст и пол ребёнка помогают точнее подбирать товары, мероприятия и советы"),
+    kids.map((c, i) => React.createElement("div", { key: i, style: { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 } },
+      React.createElement("input", {
+        type: 'number', value: c.age ?? '', placeholder: 'возраст', inputMode: 'numeric',
+        onChange: e => updChild(i, 'age', e.target.value ? parseInt(e.target.value) : null),
+        style: { flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text)', fontSize: 15, fontFamily: 'inherit' }
+      }),
+      React.createElement("button", {
+        onClick: () => updChild(i, 'gender', 'м'),
+        style: { padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14, background: c.gender === 'м' ? 'var(--primary)' : 'var(--surface-2)', color: c.gender === 'м' ? '#fff' : 'var(--text-muted)' }
+      }, "Мальчик"),
+      React.createElement("button", {
+        onClick: () => updChild(i, 'gender', 'ж'),
+        style: { padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14, background: c.gender === 'ж' ? 'var(--primary)' : 'var(--surface-2)', color: c.gender === 'ж' ? '#fff' : 'var(--text-muted)' }
+      }, "Девочка"),
+      React.createElement("button", {
+        onClick: () => delChild(i),
+        style: { width: 38, height: 38, flexShrink: 0, borderRadius: 10, border: 'none', cursor: 'pointer', background: 'var(--surface-2)', color: 'var(--text-subtle)', fontSize: 16 }
+      }, "\u2715")
+    )),
+    React.createElement("button", {
+      onClick: addChild,
+      style: { width: '100%', padding: '11px', borderRadius: 11, border: '1px dashed var(--border)', cursor: 'pointer', background: 'transparent', color: 'var(--primary)', fontSize: 14, fontWeight: 600, marginTop: kids.length ? 4 : 0, marginBottom: 16, fontFamily: 'inherit' }
+    }, "+ Добавить ребёнка"),
+    React.createElement(PArea, {
+      p: p, upd: upd, label: "О семье (необязательно)", k: "family_notes",
+      placeholder: "Что важно знать о вашей семье"
+    })
+  ), !loading && tab === 'health' && React.createElement(React.Fragment, null, React.createElement("div", {
     style: {
       display: 'flex',
       gap: 10
