@@ -3062,6 +3062,58 @@ async function apiFetch(path, options = {}) {
   return res;
 }
 window.apiFetch = apiFetch;
+
+// Единый анализатор документов для всех разделов
+// accept форматов: PDF, JPEG/JPG/PNG, TXT, Word (docx), Excel (xlsx)
+const DOC_ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.txt,.doc,.docx,.xls,.xlsx,image/*';
+async function pickAndAnalyzeDoc({ context = 'general', onUser, onPending, onResult, onError, photoOnly = false }) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = photoOnly ? 'image/*' : DOC_ACCEPT;
+  if (photoOnly) inp.capture = 'environment';
+  inp.onchange = async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    console.log('[doc] файл:', f.name, f.type, f.size);
+    if (onUser) onUser(f.name);
+    if (onPending) onPending(true);
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onloadend = () => res(r.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(f);
+      });
+      let mime = f.type;
+      if (!mime) {
+        const ext = f.name.toLowerCase().split('.').pop();
+        mime = { pdf: 'application/pdf', txt: 'text/plain',
+                 docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                 xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                 jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png' }[ext] || 'application/octet-stream';
+      }
+      console.log('[doc] отправка analyze, context:', context, 'mime:', mime);
+      const res = await apiFetch('/api/v1/document/analyze', {
+        method: 'POST',
+        body: JSON.stringify({ file_base64: base64, mime_type: mime, file_name: f.name, context: context, user_question: '' })
+      });
+      console.log('[doc] HTTP', res.status);
+      const data = await res.json();
+      console.log('[doc] ответ:', data.status);
+      if (data.status === 'ok' && data.reply) {
+        if (onResult) onResult(data.reply);
+      } else {
+        if (onError) onError(data.message || 'Не удалось разобрать документ. Попробуйте более чёткое фото или другой формат.');
+      }
+    } catch (err) {
+      console.error('[doc] ошибка:', err);
+      if (onError) onError('Ошибка анализа документа. Попробуйте позже.');
+    }
+    if (onPending) onPending(false);
+  };
+  inp.click();
+}
+window.pickAndAnalyzeDoc = pickAndAnalyzeDoc;
 function TopBar({
   onProfile,
   onNotif,
@@ -4391,6 +4443,7 @@ function WeatherWidget() {
 }
 function HomeScreen({
   onAsk,
+  onDoc,
   onMode,
   name = 'Евгений',
   voiceText,
@@ -4542,16 +4595,7 @@ function HomeScreen({
     className: "modes"
   }, React.createElement("button", {
     className: "mode",
-    onClick: () => {
-      const i = document.createElement('input');
-      i.type = 'file';
-      i.accept = '.pdf,.doc,.docx,.txt,image/*';
-      i.onchange = e => {
-        const f = e.target.files[0];
-        if (f) onAsk('Помогите разобрать документ: ' + f.name);
-      };
-      i.click();
-    }
+    onClick: () => { if (onDoc) onDoc(); }
   }, React.createElement("span", {
     className: "mode-icon"
   }, React.createElement(IconDoc, {
@@ -4832,55 +4876,13 @@ function CategoryDetailScreen({
     };
     inp.click();
   };
-  const handleDoc = () => {
-    console.log("[handleDoc] кнопка нажата");
-    const inp = document.createElement("input");
-    inp.type = "file";
-    inp.accept = ".pdf,.jpg,.jpeg,.png,.webp,image/*";
-    inp.onchange = async e => {
-      const f = e.target.files[0];
-      if (!f) {
-        console.log("[handleDoc] файл не выбран");
-        return;
-      }
-      console.log("[handleDoc] файл:", f.name, "тип:", f.type, "размер:", f.size);
-      const base64 = await new Promise(res => {
-        const r = new FileReader();
-        r.onloadend = () => res(r.result.split(",")[1]);
-        r.readAsDataURL(f);
-      });
-      console.log("[handleDoc] base64 готов, длина:", base64.length);
-      setChatMsgs(m => [...m, { role: "user", text: "📎 " + f.name + " — прошу разобрать" }]);
-      setPending(true);
-      try {
-        const mime = f.type || (f.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
-        console.log("[handleDoc] отправка на /api/v1/document/analyze, context:", catKey, "mime:", mime);
-        const res = await apiFetch("/api/v1/document/analyze", {
-          method: "POST",
-          body: JSON.stringify({
-            file_base64: base64,
-            mime_type: mime,
-            file_name: f.name,
-            context: catKey,
-            user_question: ""
-          })
-        });
-        console.log("[handleDoc] HTTP статус:", res.status);
-        const data = await res.json();
-        console.log("[handleDoc] ответ:", data.status, "длина ответа:", (data.reply || "").length);
-        if (data.status === "ok" && data.reply) {
-          setChatMsgs(m => [...m, { role: "ai", text: data.reply }]);
-        } else {
-          setChatMsgs(m => [...m, { role: "ai", text: data.message || "Не удалось разобрать документ. Попробуйте более чёткое фото или другой формат." }]);
-        }
-      } catch (err) {
-        console.error("[handleDoc] ошибка:", err);
-        setChatMsgs(m => [...m, { role: "ai", text: "Ошибка анализа документа. Попробуйте позже." }]);
-      }
-      setPending(false);
-    };
-    inp.click();
-  };
+  const handleDoc = () => pickAndAnalyzeDoc({
+    context: catKey,
+    onUser: name => setChatMsgs(m => [...m, { role: "user", text: "📎 " + name + " — прошу разобрать" }]),
+    onPending: setPending,
+    onResult: reply => setChatMsgs(m => [...m, { role: "ai", text: reply }]),
+    onError: msg => setChatMsgs(m => [...m, { role: "ai", text: msg }])
+  });
   const onTouchStart = e => {
     startX.current = e.touches[0].clientX;
     startY.current = e.touches[0].clientY;
@@ -6099,6 +6101,7 @@ function VoiceButton({
 }
 function FinanceScreen({
   onAsk,
+  onDoc,
   onMode
 }) {
   const [input, setInput] = React.useState('');
@@ -6370,16 +6373,7 @@ function FinanceScreen({
     className: "modes"
   }, React.createElement("button", {
     className: "mode",
-    onClick: () => {
-      const i = document.createElement('input');
-      i.type = 'file';
-      i.accept = '.pdf,.doc,.docx,.txt,image/*';
-      i.onchange = e => {
-        const f = e.target.files[0];
-        if (f && onAsk) onAsk('Помогите разобрать документ: ' + f.name);
-      };
-      i.click();
-    }
+    onClick: () => { if (onDoc) onDoc(); }
   }, React.createElement("span", {
     className: "mode-icon"
   }, React.createElement(IconDoc, {
@@ -7477,16 +7471,7 @@ function HealthDetailScreen({
     className: "modes"
   }, React.createElement("button", {
     className: "mode",
-    onClick: () => {
-      const i = document.createElement('input');
-      i.type = 'file';
-      i.accept = '.pdf,.doc,.docx,.txt,image/*';
-      i.onchange = e => {
-        const f = e.target.files[0];
-        if (f) sendPhotoHealth(f);
-      };
-      i.click();
-    }
+    onClick: () => { if (onDoc) onDoc(); }
   }, React.createElement("span", {
     className: "mode-icon"
   }, React.createElement(IconDoc, {
@@ -7521,6 +7506,7 @@ function HealthDetailScreen({
 }
 function HealthScreen({
   onAsk,
+  onDoc,
   onMode
 }) {
   const [input, setInput] = React.useState('');
@@ -7881,16 +7867,7 @@ function HealthScreen({
     className: "modes"
   }, React.createElement("button", {
     className: "mode",
-    onClick: () => {
-      const i = document.createElement('input');
-      i.type = 'file';
-      i.accept = '.pdf,.doc,.docx,.txt,image/*';
-      i.onchange = e => {
-        const f = e.target.files[0];
-        if (f && onAsk) onAsk('Помогите разобрать медицинский документ: ' + f.name);
-      };
-      i.click();
-    }
+    onClick: () => { if (onDoc) onDoc(); }
   }, React.createElement("span", {
     className: "mode-icon"
   }, React.createElement(IconDoc, {
@@ -13176,13 +13153,14 @@ function RichText({ text }) {
 }
 function ChatOverlay({
   initialMsg,
+  initialMessages,
   onClose,
   mode
 }) {
-  const [messages, setMessages] = React.useState(() => initialMsg ? [{
+  const [messages, setMessages] = React.useState(() => initialMessages && initialMessages.length ? initialMessages : (initialMsg ? [{
     role: 'user',
     text: initialMsg
-  }] : []);
+  }] : []));
   const [pending, setPending] = React.useState(false);
   const [input, setInput] = React.useState('');
   const [voiceActive, setVoiceActive] = React.useState(false);
@@ -13196,7 +13174,7 @@ function ChatOverlay({
     }
   }, []);
   React.useEffect(() => {
-    if (initialMsg) return;
+    if (initialMsg || (initialMessages && initialMessages.length)) return;
     const token = localStorage.getItem('oktolk_token');
     if (!token || token === 'local_demo') return;
     (async () => {
@@ -13514,26 +13492,13 @@ function ChatOverlay({
     }
   }, React.createElement("button", {
     className: "mode",
-    onClick: () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.pdf,.doc,.docx,.txt,image/*';
-      input.onchange = async e => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64 = reader.result.split(',')[1];
-          setMessages(m => [...m, {
-            role: 'user',
-            text: '📄 Документ отправлен на анализ: ' + file.name
-          }]);
-          askClaudeWithImage(base64, file.type);
-        };
-        reader.readAsDataURL(file);
-      };
-      input.click();
-    }
+    onClick: () => pickAndAnalyzeDoc({
+      context: mode || 'general',
+      onUser: name => setMessages(m => [...m, { role: 'user', text: '📎 ' + name + ' — на анализ' }]),
+      onPending: setPending,
+      onResult: reply => setMessages(m => [...m, { role: 'ai', text: reply, source: 'OkTolk AI' }]),
+      onError: msg => setMessages(m => [...m, { role: 'ai', text: msg, source: 'OkTolk AI' }])
+    })
   }, React.createElement("span", {
     className: "mode-icon"
   }, React.createElement(IconDoc, {
@@ -14326,6 +14291,7 @@ function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [tab, setTab] = React.useState(getInitialTab);
   const [chat, setChat] = React.useState(null);
+  const [chatInitMsgs, setChatInitMsgs] = React.useState(null);
   const [overlay, setOverlay] = React.useState(null);
   const [unread, setUnread] = React.useState(0);
   const [locked, setLocked] = React.useState(() => isPinEnabled());
@@ -14508,6 +14474,19 @@ function App() {
     setChatMode(null);
     setChat(text || '');
   };
+  const openDocResult = (fileName, reply, ctx) => {
+    setChatMode(ctx && ctx !== 'general' ? ctx : null);
+    setChatInitMsgs([
+      { role: 'user', text: '📎 ' + fileName + ' — прошу разобрать' },
+      { role: 'ai', text: reply, source: 'OkTolk AI' }
+    ]);
+    setChat('');
+  };
+  const askDocOnScreen = ctx => pickAndAnalyzeDoc({
+    context: ctx || 'general',
+    onResult: (reply, fileName) => openDocResult(fileName || 'документ', reply, ctx),
+    onError: msg => { try { window.alert(msg); } catch (e) {} }
+  });
   const onAskHealth = text => {
     setChatMode('health');
     setChat(text || '');
@@ -14547,13 +14526,16 @@ function App() {
     unread: unread
   }), tab === 'home' && React.createElement(HomeScreen, {
     onAsk: onAsk,
+    onDoc: () => askDocOnScreen('general'),
     onMode: onMode,
     voiceText: voiceText,
     onVoiceClear: () => setVoiceText(null)
   }), tab === 'finance' && React.createElement(FinanceScreen, {
-    onAsk: onAskFinance
+    onAsk: onAskFinance,
+    onDoc: () => askDocOnScreen('shop')
   }), tab === 'health' && React.createElement(HealthScreen, {
     onAsk: onAskHealth,
+    onDoc: () => askDocOnScreen('pharmacy'),
     onMode: onMode
   }), tab === 'news' && React.createElement(NewsScreen, {
     onAsk: onAsk
@@ -14578,10 +14560,12 @@ function App() {
     }
   }), chat !== null && React.createElement(ChatOverlay, {
     initialMsg: chat,
+    initialMessages: chatInitMsgs,
     mode: chatMode,
     onClose: () => {
       setChat(null);
       setChatMode(null);
+      setChatInitMsgs(null);
     }
   }), overlay === 'profile' && React.createElement(ProfileSheet, {
     onClose: () => setOverlay(null),

@@ -3652,34 +3652,82 @@ async def analyze_document(req: DocumentAnalyzeRequest, user=Depends(get_current
     ))
 
     try:
-        is_pdf = (req.mime_type == "application/pdf"
-                  or (req.file_name or "").lower().endswith(".pdf"))
-        if is_pdf:
-            content = [
-                {"type": "text", "text": extract_prompt},
-                {"type": "file", "file": {"file_data": f"data:application/pdf;base64,{req.file_base64}"}},
-            ]
-        else:
-            content = [
-                {"type": "text", "text": extract_prompt},
-                {"type": "image_url", "image_url": {"url": f"data:{req.mime_type};base64,{req.file_base64}"}},
-            ]
+        fname = (req.file_name or "").lower()
+        extracted = ""
 
-        def _call_extract():
-            headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
-            data = {
-                "model": "gemini-2.5-flash-lite",
-                "messages": [{"role": "user", "content": content}],
-                "max_tokens": 1500,
-            }
-            r = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=60)
-            return r.json()["choices"][0]["message"]["content"]
+        # ── Текстовые форматы извлекаем локально (без Gemini) ──
+        if fname.endswith(".txt") or req.mime_type == "text/plain":
+            try:
+                raw = base64.b64decode(req.file_base64)
+                extracted = raw.decode("utf-8", errors="ignore")[:8000]
+            except Exception as e:
+                print(f"[document/analyze] txt error: {e}")
 
-        extracted = await asyncio.to_thread(_call_extract)
-        if not extracted or len(extracted.strip()) < 30:
-            return {"status": "error", "message": "Не удалось прочитать документ. Попробуйте сделать фото почётче или прислать в другом формате."}
+        elif fname.endswith(".docx") or "wordprocessingml" in req.mime_type:
+            try:
+                import docx
+                import io as _io
+                d = docx.Document(_io.BytesIO(base64.b64decode(req.file_base64)))
+                parts = [p.text for p in d.paragraphs if p.text.strip()]
+                # таблицы тоже
+                for tbl in d.tables:
+                    for row in tbl.rows:
+                        cells = [c.text.strip() for c in row.cells if c.text.strip()]
+                        if cells:
+                            parts.append(" | ".join(cells))
+                extracted = "\n".join(parts)[:8000]
+            except Exception as e:
+                print(f"[document/analyze] docx error: {e}")
 
-        print(f"[document/analyze] context={context}, extracted={len(extracted)} символов")
+        elif fname.endswith((".xlsx", ".xls")) or "spreadsheetml" in req.mime_type:
+            try:
+                import openpyxl
+                import io as _io
+                wb = openpyxl.load_workbook(_io.BytesIO(base64.b64decode(req.file_base64)), read_only=True, data_only=True)
+                rows = []
+                for ws in wb.worksheets:
+                    rows.append(f"Лист: {ws.title}")
+                    for row in ws.iter_rows(values_only=True):
+                        cells = [str(c) for c in row if c is not None]
+                        if cells:
+                            rows.append("\t".join(cells))
+                        if len(rows) > 200:
+                            break
+                extracted = "\n".join(rows)[:8000]
+            except Exception as e:
+                print(f"[document/analyze] xlsx error: {e}")
+
+        # ── PDF и изображения читаем через Gemini Vision ──
+        if not extracted:
+            is_pdf = (req.mime_type == "application/pdf"
+                      or fname.endswith(".pdf"))
+            if is_pdf:
+                content = [
+                    {"type": "text", "text": extract_prompt},
+                    {"type": "file", "file": {"file_data": f"data:application/pdf;base64,{req.file_base64}"}},
+                ]
+            else:
+                content = [
+                    {"type": "text", "text": extract_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:{req.mime_type};base64,{req.file_base64}"}},
+                ]
+
+            def _call_extract():
+                headers = {"Authorization": f"Bearer {AITUNNEL_API_KEY}", "Content-Type": "application/json"}
+                data = {
+                    "model": "gemini-2.5-flash-lite",
+                    "messages": [{"role": "user", "content": content}],
+                    "max_tokens": 1500,
+                }
+                r = requests.post(f"{AITUNNEL_BASE_URL}chat/completions", headers=headers, json=data, timeout=60)
+                return r.json()["choices"][0]["message"]["content"]
+
+            extracted = await asyncio.to_thread(_call_extract)
+
+        if not extracted or len(extracted.strip()) < 20:
+            return {"status": "error", "message": "Не удалось прочитать документ. Попробуйте более чёткое фото или другой формат файла."}
+
+        print(f"[document/analyze] context={context}, формат={fname.split('.')[-1] if '.' in fname else req.mime_type}, extracted={len(extracted)} символов")
 
         expert_prompt = FINANCE_CATEGORY_PROMPTS.get(context, FINANCE_CHAT_PROMPT)
         profile_ctx = await build_profile_context(user["id"]) if user else ""

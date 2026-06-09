@@ -1,4 +1,4 @@
-// OkTolk Service Worker v6 (fix restoreFullscreen)
+// OkTolk Service Worker v7 (universal doc analyze all sections)
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => {
   e.waitUntil(
