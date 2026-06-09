@@ -4821,7 +4821,6 @@ function CategoryDetailScreen({
     inp.accept = "image/*";
     inp.capture = "environment";
     inp.onchange = async e => {
-      restoreFullscreen();
       const file = e.target.files[0];
       if (!file) return;
       const base64 = await new Promise(res => {
@@ -4839,7 +4838,6 @@ function CategoryDetailScreen({
     inp.type = "file";
     inp.accept = ".pdf,.jpg,.jpeg,.png,.webp,image/*";
     inp.onchange = async e => {
-      restoreFullscreen();
       const f = e.target.files[0];
       if (!f) {
         console.log("[handleDoc] файл не выбран");
