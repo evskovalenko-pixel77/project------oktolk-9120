@@ -953,8 +953,13 @@ async def classify_domain(message: str) -> str:
 
 
 # Ключевые слова намерения записать данные
-_RECORD_KW = ("запиши", "запомни", "добавь", "сохрани", "внеси", "занеси",
-              "зафиксируй", "записать", "отметь", "фиксируй")
+_RECORD_KW = ("запиши", "запомни", "добавь", "сохрани", "внес", "занеси",
+              "зафиксируй", "записать", "отметь", "фиксируй", "учти расход", "плюсуй")
+
+# Косвенные траты (только finance) — глаголы покупки. Срабатывают если есть сумма.
+_SPEND_KW = ("купил", "купила", "куплю", "покупк", "потрат", "заплат", "оплат",
+             "истрат", "обошлся", "обошёлся", "стоил", "ушло на", "ушло ", "взял за",
+             "приобрёл", "приобрел", "расход")
 
 # Ключевые слова info/research-запроса → подключаем Tavily
 _RESEARCH_KW = ("закон", "льгот", "пособи", "выплат", "субсиди", "пенси",
@@ -1464,11 +1469,14 @@ async def chat_v1(req: ChatRequest, request: Request):
 
         # Этап 2: запись данных через чат (с подтверждением на фронте)
         ql = (req.message or "").lower()
-        if domain in ("health", "finance") and any(kw in ql for kw in _RECORD_KW):
+        import re as _re
+        is_explicit_record = domain in ("health", "finance") and any(kw in ql for kw in _RECORD_KW)
+        is_implicit_spend = domain == "finance" and any(kw in ql for kw in _SPEND_KW) and bool(_re.search(r"\d", ql))
+        if is_explicit_record or is_implicit_spend:
             ext = await extract_record(req.message, domain)
             if ext.get("ok"):
                 await add_tokens(user_id, req.message, ext["label"])
-                confirm_text = f"Записать: {ext['label']}?"
+                confirm_text = f"Записать в расходы: {ext['label']}?" if domain == "finance" else f"Записать: {ext['label']}?"
                 await save_chat_message(user_id, domain, "user", req.message)
                 await save_chat_message(user_id, domain, "ai", confirm_text, action="confirm_record")
                 return {

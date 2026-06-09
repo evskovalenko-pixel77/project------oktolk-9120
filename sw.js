@@ -1,4 +1,4 @@
-// OkTolk Service Worker v7 (universal doc analyze all sections)
+// OkTolk Service Worker v8 (RichText AI-анализ + умная запись трат)
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => {
   e.waitUntil(

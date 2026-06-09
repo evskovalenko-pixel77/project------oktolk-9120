@@ -5018,7 +5018,7 @@ function CategoryDetailScreen({
       opacity: 0.96,
       whiteSpace: "pre-wrap"
     }
-  }, aiText)), !aiLoading && aiText && React.createElement("button", {
+  }, React.createElement(RichText, { text: aiText }))), !aiLoading && aiText && React.createElement("button", {
     onClick: () => {
       setAiText("");
       loadAI();
@@ -7289,7 +7289,7 @@ function HealthDetailScreen({
       lineHeight: 1.65,
       opacity: 0.95
     }
-  }, aiText)), !aiLoading && !aiText && records.length > 0 && React.createElement("button", {
+  }, React.createElement(RichText, { text: aiText }))), !aiLoading && !aiText && records.length > 0 && React.createElement("button", {
     onClick: loadAI,
     style: {
       padding: '12px',
@@ -14475,7 +14475,8 @@ function App() {
     setChat(text || '');
   };
   const openDocResult = (fileName, reply, ctx) => {
-    setChatMode(ctx && ctx !== 'general' ? ctx : null);
+    console.log('[openDocResult] открываю чат с результатом, файл:', fileName);
+    setChatMode(null);
     setChatInitMsgs([
       { role: 'user', text: '📎 ' + fileName + ' — прошу разобрать' },
       { role: 'ai', text: reply, source: 'OkTolk AI' }
