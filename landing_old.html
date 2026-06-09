@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<script>
+/* Вернувшийся пользователь (уже регистрировался/входил) попадает сразу в приложение,
+   минуя лендинг. Новый посетитель видит лендинг. ?stay=1 — остаться на лендинге. */
+(function(){
+  try {
+    var params = new URLSearchParams(location.search);
+    if (params.get('stay') === '1') return;
+    if (localStorage.getItem('oktolk_token')) {
+      location.replace('/app');
+    }
+  } catch(e){}
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<!-- ═══ SEO ═══ -->
+<title>OkTolk — AI-помощник: защита от мошенников, здоровье, финансы</title>
+<meta name="description" content="OkTolk — простой AI-помощник для всей семьи. Защита от мошенников, контроль давления и лекарств, учёт расходов, новости от МВД и Минздрав понятным языком. Серверы в России. Попробуйте бесплатно.">
+<meta name="keywords" content="защита от мошенников, AI помощник, контроль давления, напоминание лекарства, учёт расходов, новости МВД, приложение для здоровья, проверить смс мошенники">
+<link rel="canonical" href="https://oktolk.ru/">
+<meta name="theme-color" content="#3B4FE0">
+<meta name="application-name" content="OkTolk">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="OkTolk">
+<meta property="og:title" content="OkTolk — AI-помощник: защита от мошенников, здоровье, финансы">
+<meta property="og:description" content="Проверьте подозрительное сообщение за 10 секунд. Следите за давлением и лекарствами. Записывайте расходы фото чека. Новости от МВД и Минздрав простым языком. Серверы в России.">
+<meta property="og:url" content="https://oktolk.ru/">
+<meta property="og:image" content="https://oktolk.ru/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="OkTolk — AI-помощник для защиты и здоровья">
+<meta property="og:locale" content="ru_RU">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="OkTolk — AI-помощник: защита от мошенников, здоровье, финансы">
+<meta name="twitter:description" content="Защита от мошенников, контроль здоровья, учёт расходов — всё в одном приложении. Серверы в России.">
+<meta name="twitter:image" content="https://oktolk.ru/og-image.png">
+
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "OkTolk",
+  "applicationCategory": "LifestyleApplication",
+  "operatingSystem": "Web, iOS, Android",
+  "description": "AI-помощник для защиты от мошенников, контроля здоровья, учёта финансов и получения новостей от госорганов простым языком",
+  "offers": [
+    {"@type": "Offer", "price": "0", "priceCurrency": "RUB", "description": "1 день бесплатно"},
+    {"@type": "Offer", "price": "390", "priceCurrency": "RUB", "description": "500 000 токенов в месяц"},
+    {"@type": "Offer", "price": "590", "priceCurrency": "RUB", "description": "1 500 000 токенов в месяц"}
+  ]
+}
+</script>
+
+<style>
+  :root{
+    --bg:#FAFAF7; --surface:#FFFFFF; --surface-2:#F5F5F1;
+    --text:#16161A; --text-muted:#6B6B72; --text-subtle:#9B9BA3;
+    --primary:#3B4FE0; --primary-hover:#2D3FC5; --primary-tint:#EEF0FF;
+    --border:rgba(15,15,20,0.08); --border-strong:rgba(15,15,20,0.12);
+    --danger:#D14343; --success:#1F8A5B; --warn:#C77A20;
+    --radius:18px; --radius-lg:26px;
+    --shadow:0 1px 2px rgba(15,15,20,.04), 0 8px 30px rgba(15,15,20,.06);
+    --shadow-lg:0 4px 12px rgba(15,15,20,.06), 0 30px 60px rgba(59,79,224,.10);
+    --maxw:1140px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Onest',-apple-system,system-ui,'Segoe UI',sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.6;
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  a{color:inherit; text-decoration:none}
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:9px;
+    font-family:inherit; font-size:16px; font-weight:600; cursor:pointer;
+    padding:14px 26px; border-radius:14px; border:none; transition:.2s ease; white-space:nowrap;
+  }
+  .btn-primary{background:var(--primary); color:#fff; box-shadow:0 8px 24px rgba(59,79,224,.28)}
+  .btn-primary:hover{background:var(--primary-hover); transform:translateY(-2px); box-shadow:0 12px 32px rgba(59,79,224,.36)}
+  .btn-ghost{background:var(--surface); color:var(--text); border:1px solid var(--border-strong)}
+  .btn-ghost:hover{background:var(--surface-2); transform:translateY(-2px)}
+
+  /* ─── Header ─── */
+  header{
+    position:sticky; top:0; z-index:100; background:rgba(250,250,247,.82);
+    backdrop-filter:saturate(180%) blur(14px); border-bottom:1px solid var(--border);
+  }
+  .nav{display:flex; align-items:center; justify-content:space-between; height:68px}
+  .logo{display:flex; align-items:center; gap:11px; font-weight:800; font-size:20px; letter-spacing:-.5px}
+  .logo .mark{
+    width:38px; height:38px; border-radius:11px; background:var(--primary);
+    display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:17px;
+    box-shadow:0 6px 16px rgba(59,79,224,.32);
+  }
+  .nav-links{display:flex; align-items:center; gap:32px}
+  .nav-links a{font-size:15px; font-weight:500; color:var(--text-muted); transition:.15s}
+  .nav-links a:hover{color:var(--text)}
+  .nav-cta{display:flex; gap:12px; align-items:center}
+  .burger{display:none; flex-direction:column; gap:5px; background:none; border:none; cursor:pointer; padding:8px}
+  .burger span{width:24px; height:2px; background:var(--text); border-radius:2px; transition:.25s}
+
+  /* ─── Hero ─── */
+  .hero{position:relative; padding:96px 0 80px; text-align:center; overflow:hidden}
+  .hero::before{
+    content:""; position:absolute; top:-200px; left:50%; transform:translateX(-50%);
+    width:900px; height:600px; background:radial-gradient(closest-side, rgba(59,79,224,.14), transparent 70%);
+    z-index:0; pointer-events:none;
+  }
+  .hero .wrap{position:relative; z-index:1}
+  .pill{
+    display:inline-flex; align-items:center; gap:8px; background:var(--primary-tint); color:var(--primary);
+    font-size:14px; font-weight:600; padding:8px 16px; border-radius:100px; margin-bottom:26px;
+  }
+  .pill .dot{width:7px; height:7px; border-radius:50%; background:var(--success); box-shadow:0 0 0 4px rgba(31,138,91,.18)}
+  h1{
+    font-size:clamp(34px, 6vw, 60px); font-weight:800; line-height:1.08; letter-spacing:-1.5px;
+    max-width:14ch; margin:0 auto 22px;
+  }
+  h1 .accent{color:var(--primary)}
+  .hero p.lead{
+    font-size:clamp(17px,2.2vw,21px); color:var(--text-muted); max-width:60ch; margin:0 auto 36px;
+  }
+  .hero-cta{display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:22px}
+  .trust{display:flex; gap:22px; justify-content:center; flex-wrap:wrap; font-size:14px; color:var(--text-subtle); font-weight:500}
+  .trust span{display:inline-flex; align-items:center; gap:7px}
+  .trust svg{flex-shrink:0}
+
+  /* ─── Section base ─── */
+  section{padding:84px 0}
+  .sec-head{text-align:center; max-width:640px; margin:0 auto 56px}
+  .sec-head .eyebrow{color:var(--primary); font-weight:600; font-size:14px; letter-spacing:.6px; text-transform:uppercase; margin-bottom:14px}
+  .sec-head h2{font-size:clamp(28px,4vw,42px); font-weight:800; letter-spacing:-1px; line-height:1.12; margin-bottom:16px}
+  .sec-head p{font-size:18px; color:var(--text-muted)}
+
+  /* ─── Features ─── */
+  .features{display:grid; grid-template-columns:repeat(3,1fr); gap:22px}
+  .feature{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+    padding:34px 30px; box-shadow:var(--shadow); transition:.28s ease; position:relative; overflow:hidden;
+  }
+  .feature:hover{transform:translateY(-6px); box-shadow:var(--shadow-lg); border-color:transparent}
+  .feature .ficon{
+    width:56px; height:56px; border-radius:16px; display:flex; align-items:center; justify-content:center;
+    margin-bottom:22px; color:#fff;
+  }
+  .feature h3{font-size:21px; font-weight:700; margin-bottom:10px; letter-spacing:-.3px}
+  .feature p{font-size:15.5px; color:var(--text-muted)}
+  .feature.span2{grid-column:span 2}
+  .g-danger{background:linear-gradient(135deg,#E5484D,#B83232)}
+  .g-finance{background:linear-gradient(135deg,#2D3FC5,#5B6EF0)}
+  .g-health{background:linear-gradient(135deg,#1F6E54,#2E8E73)}
+  .g-news{background:linear-gradient(135deg,#2C2B36,#18171F)}
+  .g-search{background:linear-gradient(135deg,#5340A8,#6B53C9)}
+
+  /* ─── How / steps ─── */
+  .steps{display:grid; grid-template-columns:repeat(3,1fr); gap:24px; counter-reset:step}
+  .step{padding:28px; background:var(--surface-2); border-radius:var(--radius); position:relative}
+  .step .num{
+    width:40px;height:40px;border-radius:11px;background:var(--primary);color:#fff;font-weight:700;font-size:18px;
+    display:flex;align-items:center;justify-content:center;margin-bottom:16px;
+  }
+  .step h4{font-size:18px;font-weight:700;margin-bottom:6px}
+  .step p{font-size:15px;color:var(--text-muted)}
+
+  /* ─── Pricing ─── */
+  .pricing{display:grid; grid-template-columns:repeat(3,1fr); gap:22px; align-items:stretch}
+  .plan{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+    padding:34px 30px; display:flex; flex-direction:column; box-shadow:var(--shadow); transition:.25s;
+  }
+  .plan:hover{transform:translateY(-4px); box-shadow:var(--shadow-lg)}
+  .plan.featured{border:2px solid var(--primary); position:relative}
+  .plan.featured::after{
+    content:"Популярный"; position:absolute; top:-13px; left:50%; transform:translateX(-50%);
+    background:var(--primary); color:#fff; font-size:12.5px; font-weight:600; padding:5px 16px; border-radius:100px;
+  }
+  .plan .pname{font-size:15px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px}
+  .plan .price{font-size:42px; font-weight:800; letter-spacing:-1.5px; margin:14px 0 4px}
+  .plan .price span{font-size:17px; font-weight:500; color:var(--text-subtle)}
+  .plan .pdesc{font-size:14.5px; color:var(--text-subtle); margin-bottom:22px}
+  .plan ul{list-style:none; margin-bottom:28px; flex:1}
+  .plan li{display:flex; align-items:flex-start; gap:10px; font-size:15px; padding:7px 0; color:var(--text)}
+  .plan li svg{flex-shrink:0; margin-top:3px; color:var(--success)}
+  .plan .btn{width:100%}
+
+  /* ─── Install ─── */
+  .install-grid{
+    display:grid; grid-template-columns:1.2fr 1fr; gap:48px; align-items:center;
+    background:linear-gradient(135deg,#16161A,#28283A); border-radius:var(--radius-lg);
+    padding:56px; color:#fff; overflow:hidden; position:relative;
+  }
+  .install-grid::before{
+    content:""; position:absolute; right:-120px; top:-120px; width:380px; height:380px;
+    background:radial-gradient(closest-side,rgba(59,79,224,.4),transparent 70%);
+  }
+  .install-text{position:relative; z-index:1}
+  .install-text h2{font-size:clamp(26px,3.5vw,38px); font-weight:800; letter-spacing:-1px; margin-bottom:16px}
+  .install-text p{font-size:17px; color:rgba(255,255,255,.72); margin-bottom:26px}
+  .install-text ol{list-style:none; counter-reset:i}
+  .install-text li{counter-increment:i; display:flex; gap:14px; align-items:center; padding:9px 0; font-size:15.5px; color:rgba(255,255,255,.9)}
+  .install-text li::before{
+    content:counter(i); width:30px;height:30px;flex-shrink:0;border-radius:9px;
+    background:rgba(255,255,255,.12); display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;
+  }
+  .qr-card{background:#fff; border-radius:22px; padding:24px; text-align:center; position:relative; z-index:1; justify-self:center}
+  .qr-card img{width:200px; height:200px; display:block; border-radius:10px}
+  .qr-card p{color:var(--text-muted); font-size:14px; font-weight:600; margin-top:14px}
+
+  /* ─── FAQ ─── */
+  .faq{max-width:760px; margin:0 auto}
+  .faq details{
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    margin-bottom:12px; overflow:hidden; transition:.2s;
+  }
+  .faq details[open]{box-shadow:var(--shadow); border-color:var(--border-strong)}
+  .faq summary{
+    padding:20px 24px; font-weight:600; font-size:17px; cursor:pointer; list-style:none;
+    display:flex; justify-content:space-between; align-items:center; gap:16px;
+  }
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary .chev{transition:.25s; flex-shrink:0; color:var(--text-subtle)}
+  .faq details[open] summary .chev{transform:rotate(180deg)}
+  .faq .ans{padding:0 24px 22px; color:var(--text-muted); font-size:15.5px}
+
+  /* ─── CTA band ─── */
+  .cta-band{text-align:center; background:var(--primary-tint); border-radius:var(--radius-lg); padding:64px 32px}
+  .cta-band h2{font-size:clamp(26px,3.5vw,38px); font-weight:800; letter-spacing:-1px; margin-bottom:14px}
+  .cta-band p{font-size:18px; color:var(--text-muted); margin-bottom:30px; max-width:50ch; margin-left:auto; margin-right:auto}
+
+  /* ─── Footer ─── */
+  footer{border-top:1px solid var(--border); padding:56px 0 40px; margin-top:40px}
+  .foot-top{display:flex; justify-content:space-between; gap:40px; flex-wrap:wrap; margin-bottom:40px}
+  .foot-brand{max-width:300px}
+  .foot-brand p{color:var(--text-muted); font-size:14.5px; margin-top:14px}
+  .foot-links{display:flex; gap:60px; flex-wrap:wrap}
+  .foot-col h5{font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:var(--text-subtle); margin-bottom:14px; font-weight:600}
+  .foot-col a{display:block; color:var(--text-muted); font-size:15px; padding:5px 0; transition:.15s}
+  .foot-col a:hover{color:var(--primary)}
+  .foot-bottom{border-top:1px solid var(--border); padding-top:24px; color:var(--text-subtle); font-size:13.5px; line-height:1.7}
+
+  /* ─── Animations ─── */
+  .reveal{opacity:0; transform:translateY(24px); transition:opacity .7s ease, transform .7s ease}
+  .reveal.in{opacity:1; transform:none}
+  @media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+
+  /* ─── Responsive ─── */
+  @media (max-width:900px){
+    .features,.steps,.pricing{grid-template-columns:1fr 1fr}
+    .feature.span2{grid-column:span 2}
+    .install-grid{grid-template-columns:1fr; padding:40px 28px; text-align:center}
+    .install-text ol{text-align:left; max-width:340px; margin:0 auto}
+    .qr-card{margin-top:8px}
+  }
+  @media (max-width:640px){
+    .wrap{padding:0 18px}
+    .nav-links{
+      position:fixed; inset:68px 0 auto 0; background:var(--bg); flex-direction:column; gap:0;
+      padding:8px 18px 18px; border-bottom:1px solid var(--border); display:none;
+    }
+    .nav-links.open{display:flex}
+    .nav-links a{width:100%; padding:14px 0; font-size:17px; border-bottom:1px solid var(--border)}
+    .nav-cta .btn-ghost{display:none}
+    .burger{display:flex}
+    .features,.steps,.pricing{grid-template-columns:1fr}
+    .feature.span2{grid-column:span 1}
+    section{padding:60px 0}
+    .hero{padding:64px 0 56px}
+    .foot-links{gap:36px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a href="/" class="logo"><span class="mark">Ok</span> OkTolk</a>
+    <nav class="nav-links" id="navLinks">
+      <a href="#features">Возможности</a>
+      <a href="#how">Как работает</a>
+      <a href="#pricing">Тарифы</a>
+      <a href="#install">Установка</a>
+      <a href="#faq">Вопросы</a>
+    </nav>
+    <div class="nav-cta">
+      <a href="/app" class="btn btn-ghost">Войти</a>
+      <a href="/app" class="btn btn-primary">Открыть</a>
+      <button class="burger" id="burger" aria-label="Меню"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap">
+    <span class="pill"><span class="dot"></span> Серверы в России · Работает без VPN</span>
+    <h1>Персональный <span class="accent">AI-помощник</span>, который вас понимает</h1>
+    <p class="lead">Защита от мошенников, контроль здоровья, учёт расходов и новости простым языком — всё в одном приложении. Просто, по-русски, без сложных слов.</p>
+    <div class="hero-cta">
+      <a href="/app" class="btn btn-primary">Попробовать бесплатно →</a>
+      <a href="#install" class="btn btn-ghost">Установить на телефон</a>
+    </div>
+    <div class="trust">
+      <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F8A5B" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg> 1 день бесплатно</span>
+      <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F8A5B" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg> Без установки — открывается в браузере</span>
+      <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F8A5B" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg> Данные под защитой 152-ФЗ</span>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Возможности</div>
+      <h2>Пять помощников в одном приложении</h2>
+      <p>Каждый раздел решает реальную задачу — без сложных интерфейсов и непонятных терминов.</p>
+    </div>
+    <div class="features">
+      <div class="feature span2 reveal">
+        <div class="ficon g-danger"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 2L4 5v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V5l-8-3z"/><path d="M12 8v4M12 16h.01"/></svg></div>
+        <h3>Стоп Мошенник</h3>
+        <p>Пришло подозрительное СМС, звонок или ссылка? Покажите OkTolk — AI за 10 секунд распознаёт схемы обмана и объяснит, что делать. Анализирует скриншоты, тексты и голосовые.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="ficon g-finance"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></div>
+        <h3>Финансы</h3>
+        <p>Записывайте расходы фото чека или голосом. AI сам разнесёт по категориям и подскажет, куда уходят деньги.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="ficon g-health"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg></div>
+        <h3>Здоровье</h3>
+        <p>Давление, пульс, сахар, вес. Напоминания о лекарствах. Сфотографируйте тонометр — AI прочитает цифры сам.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="ficon g-news"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
+        <h3>Новости</h3>
+        <p>Главное от МВД, СФР и Минздрава — простым языком. Только то, что касается вас и вашей семьи.</p>
+      </div>
+      <div class="feature reveal">
+        <div class="ficon g-search"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+        <h3>Поиск</h3>
+        <p>Найдите товары и услуги по всему интернету одним запросом. AI соберёт варианты и сравнит цены.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW -->
+<section id="how" style="background:var(--surface-2)">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Как работает</div>
+      <h2>Начать — три простых шага</h2>
+      <p>Никаких настроек и инструкций. Открыли — и пользуетесь.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><div class="num">1</div><h4>Откройте приложение</h4><p>Прямо в браузере на oktolk.ru/app или установите иконку на телефон.</p></div>
+      <div class="step reveal"><div class="num">2</div><h4>Спросите своими словами</h4><p>Напишите, скажите голосом или сфотографируйте — AI поймёт и поможет.</p></div>
+      <div class="step reveal"><div class="num">3</div><h4>Получите понятный ответ</h4><p>Без терминов, пошагово. Как будто объясняет внимательный близкий человек.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Тарифы</div>
+      <h2>Честная цена, без скрытых платежей</h2>
+      <p>Попробуйте бесплатно. Оплата помесячно, без автопродления.</p>
+    </div>
+    <div class="pricing">
+      <div class="plan reveal">
+        <div class="pname">Демо</div>
+        <div class="price">0 ₽</div>
+        <div class="pdesc">1 день, чтобы всё попробовать</div>
+        <ul>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg> Все 5 разделов</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg> До 50 000 токенов</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg> Без карты</li>
+        </ul>
+        <a href="/app" class="btn btn-ghost">Начать бесплатно</a>
+      </div>
+      <div class="plan featured reveal">
+        <div class="pname">Стандарт</div>
+        <div class="price">390 ₽<span> / мес</span></div>
+        <div class="pdesc">Для повседневных задач</div>
+        <ul>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg> Все 5 разделов</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg> До 500 000 токенов в месяц</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg> Защита от мошенников без лимитов</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg> Озвучка новостей</li>
+        </ul>
+        <a href="/app" class="btn btn-primary">Выбрать Стандарт</a>
+      </div>
+      <div class="plan reveal">
+        <div class="pname">Про</div>
+        <div class="price">590 ₽<span> / мес</span></div>
+        <div class="pdesc">Максимум возможностей</div>
+        <ul>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg> Всё из Стандарта</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg> До 1 500 000 токенов в месяц</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg> Расширенное здоровье и графики</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg> Приоритетная поддержка</li>
+        </ul>
+        <a href="/app" class="btn btn-ghost">Выбрать Про</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section id="install">
+  <div class="wrap">
+    <div class="install-grid reveal">
+      <div class="install-text">
+        <h2>Установите на телефон за минуту</h2>
+        <p>OkTolk — это приложение, которое работает прямо из браузера. Установите иконку на главный экран, чтобы открывать одним касанием.</p>
+        <ol>
+          <li>Наведите камеру телефона на QR-код</li>
+          <li>Откройте oktolk.ru/app в браузере</li>
+          <li>Нажмите «Поделиться» → «На экран Домой»</li>
+        </ol>
+      </div>
+      <div class="qr-card">
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASIAAAEiCAIAAADS3EjhAAAFFElEQVR4nO3dMW4bMRBA0TjwHVzk/kdL4VOs21QEAupjuKv32kDyWtEHCw+GH9d1/QJKv6cfAJ5PZpCTGeRkBjmZQU5mkJMZ5GQGOZlBTmaQkxnkZAY5mUFOZpCTGeRkBjmZQU5mkJMZ5D53Xvz19edVz3GI7++/i3/d+X3X77y2/rk7zzz12jva+R90mkFOZpCTGeRkBjmZQU5mkJMZ5GQGOZlBbmsKZG3nr+adbpJj/c7dVMQd5y2e991Yc5pBTmaQkxnkZAY5mUFOZpCTGeRkBjmZQS6cAlnr/uLeTRjs7MbYeecd3baPzh2/G2tOM8jJDHIyg5zMICczyMkMcjKDnMwgJzPIjU2B3FE3UdHdrjJ1Iwz/cppBTmaQkxnkZAY5mUFOZpCTGeRkBjmZQc4UyMucuQtkhzmPV3GaQU5mkJMZ5GQGOZlBTmaQkxnkZAY5mUFubArkjhMGU7sx7vhZ7Xje7+s0g5zMICczyMkMcjKDnMwgJzPIyQxyMoNcOAVy5n6LKVM3s5x5I8y7fTecZpCTGeRkBjmZQU5mkJMZ5GQGOZlBTmaQ+7iua/oZHqKbbJiat3jeTo4pTjPIyQxyMoOczCAnM8jJDHIyg5zMICczyG1NgZy5Z2Jtaipi6vddO/N/Yepz7p7KaQY5mUFOZpCTGeRkBjmZQU5mkJMZ5GQGuXAXyNStH2fOapw5fbJjZ6Kie+epp1pzmkFOZpCTGeRkBjmZQU5mkJMZ5GQGOZlB7nPnxWdONkxNn6x10wlTv+/ztpt0n6TTDHIyg5zMICczyMkMcjKDnMwgJzPIyQxy4Y0wZ5qaA3je/Thnmpo+WXOaQU5mkJMZ5GQGOZlBTmaQkxnkZAY5mUFu7EaYqXtbztxgsXbmjMiZd6/s6D5npxnkZAY5mUFOZpCTGeRkBjmZQU5mkJMZ5LZuhNlx5oxI985nTnKsTe1N6Uw9s9MMcjKDnMwgJzPIyQxyMoOczCAnM8jJDHJbUyDPmwNYzz2cORUx9XOnpl7uONfiNIOczCAnM8jJDHIyg5zMICczyMkMcjKDXHgjzI6prRvdHMCZ96fccUPJ2pl3+jjNICczyMkMcjKDnMwgJzPIyQxyMoOczCBnF8jL7MwfvNtujB13nHpxmkFOZpCTGeRkBjmZQU5mkJMZ5GQGOZlB7tBdIGc6c4Jk6u6VqU0hd/y5TjPIyQxyMoOczCAnM8jJDHIyg5zMICczyL3dLpC1bp/H+rPamT848w6UqUmOMznNICczyMkMcjKDnMwgJzPIyQxyMoOczCC3NQWyduZf+qfuTzlzg8WZ2006boSBx5IZ5GQGOZlBTmaQkxnkZAY5mUFOZpALp0DW3m3+YO2OW1Xu+MxTczxOM8jJDHIyg5zMICczyMkMcjKDnMwgJzPIjU2BPE83YdBNJ+y8tnuqnfmSbtfLDqcZ5GQGOZlBTmaQkxnkZAY5mUFOZpCTGeRMgfyHM7dfnDn3sNbNeezM09gFAjcmM8jJDHIyg5zMICczyMkMcjKDnMwgNzYFcsd7W7pn7iY5pvZqnHnjz9S3zmkGOZlBTmaQkxnkZAY5mUFOZpCTGeRkBrlwCuTMzRk7ulmNqftTdpy5R+TMO26cZpCTGeRkBjmZQU5mkJMZ5GQGOZlBTmaQ+7iua/oZ4OGcZpCTGeRkBjmZQU5mkJMZ5GQGOZlBTmaQkxnkZAY5mUFOZpCTGeRkBjmZQU5mkJMZ5GQGuR/xRYdTXDvAJQAAAABJRU5ErkJggg==" alt="QR-код для установки OkTolk">
+        <p>Наведите камеру</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq" style="background:var(--surface-2)">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Вопросы</div>
+      <h2>Частые вопросы</h2>
+    </div>
+    <div class="faq">
+      <details class="reveal"><summary>Это безопасно? Где хранятся мои данные?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></summary><div class="ans">Все серверы находятся в России, обработка данных соответствует Федеральному закону № 152-ФЗ. Мы не передаём ваши данные третьим лицам.</div></details>
+      <details class="reveal"><summary>Нужно ли что-то устанавливать?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></summary><div class="ans">Нет. OkTolk открывается прямо в браузере на oktolk.ru/app. По желанию можно добавить иконку на главный экран телефона — как обычное приложение.</div></details>
+      <details class="reveal"><summary>Как работает защита от мошенников?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></summary><div class="ans">Покажите подозрительное сообщение, ссылку или скриншот звонка. AI проанализирует и скажет, мошенничество это или нет, и что делать дальше.</div></details>
+      <details class="reveal"><summary>Можно ли пользоваться бесплатно?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></summary><div class="ans">Да, есть бесплатный демо-период на 1 день со всеми разделами. Карта не требуется.</div></details>
+      <details class="reveal"><summary>Как оплатить подписку?<svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></summary><div class="ans">Оплата российскими картами помесячно. Без автопродления — подписка не спишется сама, вы продлеваете её, когда захотите.</div></details>
+    </div>
+  </div>
+</section>
+
+<!-- CTA BAND -->
+<section>
+  <div class="wrap">
+    <div class="cta-band reveal">
+      <h2>Попробуйте OkTolk прямо сейчас</h2>
+      <p>Бесплатно, без установки и без карты. Откройте приложение и задайте первый вопрос.</p>
+      <a href="/app" class="btn btn-primary">Открыть приложение →</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <a href="/" class="logo"><span class="mark">Ok</span> OkTolk</a>
+        <p>Персональный AI-помощник для защиты от мошенников, здоровья, финансов и новостей. Простым языком.</p>
+      </div>
+      <div class="foot-links">
+        <div class="foot-col">
+          <h5>Продукт</h5>
+          <a href="#features">Возможности</a>
+          <a href="#pricing">Тарифы</a>
+          <a href="#install">Установка</a>
+          <a href="/app">Открыть приложение</a>
+        </div>
+        <div class="foot-col">
+          <h5>Документы</h5>
+          <a href="/terms.html">Пользовательское соглашение</a>
+          <a href="/privacy.html">Политика конфиденциальности</a>
+          <a href="/requisites.html">Реквизиты</a>
+        </div>
+        <div class="foot-col">
+          <h5>Контакты</h5>
+          <a href="mailto:info@oktolk.ru">info@oktolk.ru</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <p>ИП Коваленко Евгений Сергеевич · ИНН 262901419034 · ОГРНИП 322265100125183</p>
+      <p>© 2026 OkTolk. Регистрация в реестре операторов персональных данных № 8093152.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Бургер-меню
+  var burger = document.getElementById('burger');
+  var navLinks = document.getElementById('navLinks');
+  burger.addEventListener('click', function(){ navLinks.classList.toggle('open'); });
+  navLinks.querySelectorAll('a').forEach(function(a){
+    a.addEventListener('click', function(){ navLinks.classList.remove('open'); });
+  });
+  // Анимация появления при скролле
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, {threshold:0.12});
+  document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+</script>
+</body>
+</html>
