@@ -387,6 +387,36 @@ SYSTEM_PROMPTS = {
     "search": SEARCH_CHAT_PROMPT,
 }
 
+# Агенты-аналитики — работают с реальными данными пользователя
+FINANCE_ANALYST_PROMPT = """Ты — финансовый аналитик-помощник OkTolk. Перед тобой реальные траты пользователя.
+
+Твоя задача:
+1. Скажи на что уходит больше всего — назови 1-2 главные категории с суммами.
+2. Отметь что-то заметное, если видишь (крупная категория, резкая трата).
+3. Если есть доход — прикинь долю расходов.
+4. В КОНЦЕ обязательно задай один уточняющий вопрос ИЛИ предложи что ещё посмотреть — например: «Хотите сравнить с прошлым месяцем?», «Показать только крупные траты?», «Разобрать конкретную категорию?».
+
+Правила: тёплый простой язык, без финансового жаргона, без markdown (** ## не используй).
+Если перечисляешь — каждый пункт с новой строки через «— ». Коротко: 4-7 предложений."""
+
+HEALTH_ANALYST_PROMPT = """Ты — помощник по здоровью OkTolk. Перед тобой реальные показатели пользователя.
+
+Твоя задача:
+1. Оцени динамику показателя — растёт, стабилен или снижается.
+2. Сравни с нормой, а если задано рабочее давление пользователя — сравнивай и с ним.
+3. Отметь если есть тревожные значения, но мягко.
+4. В КОНЦЕ задай один уточняющий вопрос ИЛИ предложи что ещё посмотреть — например: «Хотите посмотреть пульс?», «Показать за более долгий период?».
+
+Правила: не ставь диагнозы, не назначай лекарства. Тёплый простой язык, без markdown.
+При тревожных показателях мягко советуй обратиться к врачу. Коротко: 4-7 предложений."""
+
+# Ключевые слова намерения «проанализировать данные пользователя»
+_ANALYSIS_KW = ("проанализир", "анализ", "разбор", "статистик", "отчёт", "отчет",
+                "динамик", "потрат", "трач", "уход", "ушло", "больше всего",
+                "мои расход", "мои трат", "куда ден", "на что ден",
+                "как показат", "что с давлен", "что с весом", "что с сахар",
+                "что с пульс", "как давлен", "как вес", "как сахар", "показател")
+
 def call_ai(messages, model="deepseek-chat"):
     # Основной: DeepSeek напрямую (дешевле в разы)
     if DEEPSEEK_API_KEY:
@@ -895,6 +925,75 @@ async def research_answer(query: str) -> str:
         return ""
 
 
+async def finance_data_context(user_id) -> str:
+    """Собирает реальные траты пользователя (30 дней + 7 дней) для агента-аналитика."""
+    if not db_pool or not user_id:
+        return ""
+    cat_ru = {"shop": "Покупки/продукты", "pharmacy": "Аптека/медицина", "utility": "ЖКУ",
+              "credit": "Кредиты", "transport": "Транспорт", "leisure": "Досуг", "other": "Прочее"}
+    try:
+        async with db_pool.acquire() as conn:
+            month = await conn.fetch(
+                "SELECT category, SUM(amount) t, COUNT(*) c FROM finance_records "
+                "WHERE user_id=$1 AND recorded_at >= NOW() - INTERVAL '30 days' "
+                "GROUP BY category ORDER BY t DESC", user_id)
+            week = await conn.fetch(
+                "SELECT category, SUM(amount) t FROM finance_records "
+                "WHERE user_id=$1 AND recorded_at >= NOW() - INTERVAL '7 days' "
+                "GROUP BY category ORDER BY t DESC", user_id)
+        if not month:
+            return "NO_DATA"
+        total_m = sum(float(r["t"]) for r in month)
+        lines = [f"Расходы за 30 дней (всего {int(total_m)} ₽):"]
+        for r in month:
+            lines.append(f"— {cat_ru.get(r['category'], r['category'])}: {int(r['t'])} ₽ ({r['c']} опер.)")
+        if week:
+            total_w = sum(float(r["t"]) for r in week)
+            lines.append(f"\nЗа последние 7 дней (всего {int(total_w)} ₽):")
+            for r in week:
+                lines.append(f"— {cat_ru.get(r['category'], r['category'])}: {int(r['t'])} ₽")
+        return "\n".join(lines)
+    except Exception as e:
+        print(f"[analyze finance] error: {e}")
+        return ""
+
+
+async def health_data_context(user_id, message: str) -> str:
+    """Собирает показатели здоровья для агента-аналитика. Тип берётся из сообщения."""
+    if not db_pool or not user_id:
+        return ""
+    ql = (message or "").lower()
+    type_map = {"pressure": ["давлен"], "pulse": ["пульс"],
+                "sugar": ["сахар", "глюкоз"], "weight": ["вес", "похуд", "килогр"]}
+    chosen = None
+    for t, kws in type_map.items():
+        if any(k in ql for k in kws):
+            chosen = t
+            break
+    types = [chosen] if chosen else ["pressure", "pulse", "sugar", "weight"]
+    type_ru = {"pressure": "Давление", "pulse": "Пульс", "sugar": "Сахар", "weight": "Вес"}
+    try:
+        async with db_pool.acquire() as conn:
+            lines = []
+            for t in types:
+                rows = await conn.fetch(
+                    "SELECT value_1, value_2, recorded_at FROM health_records "
+                    "WHERE user_id=$1 AND type=$2 ORDER BY recorded_at DESC LIMIT 10", user_id, t)
+                if not rows:
+                    continue
+                vals = []
+                for r in reversed(rows):
+                    v = f"{int(r['value_1'])}/{int(r['value_2'])}" if r["value_2"] else str(r["value_1"])
+                    vals.append(v)
+                lines.append(f"{type_ru[t]} (от старых к новым): {', '.join(vals)}")
+            if not lines:
+                return "NO_DATA"
+            return "\n".join(lines)
+    except Exception as e:
+        print(f"[analyze health] error: {e}")
+        return ""
+
+
 @app.post("/api/v1/chat")
 async def chat_v1(req: ChatRequest, request: Request):
     try:
@@ -941,6 +1040,34 @@ async def chat_v1(req: ChatRequest, request: Request):
                     "records": ext["records"],
                 }
             # не распозналось как запись — продолжаем обычным ответом
+
+        # Этап 4: анализ данных пользователя (траты/показатели) агентом-аналитиком
+        if domain in ("health", "finance") and any(k in ql for k in _ANALYSIS_KW):
+            prof = await build_profile_context(user_id) if user_id else ""
+            if domain == "finance":
+                ctx = await finance_data_context(user_id)
+                if ctx == "NO_DATA":
+                    return {"reply": "Пока не вижу записанных трат. Добавьте расходы — и я разберу, на что уходят деньги. Можно прямо здесь: «запиши такси 500».", "domain": domain}
+                if ctx:
+                    msgs = [{"role": "system", "content": FINANCE_ANALYST_PROMPT + prof},
+                            {"role": "user", "content": f"Данные трат:\n{ctx}\n\nЗапрос: {req.message}"}]
+                    reply = await asyncio.to_thread(call_ai, msgs)
+                    await add_tokens(user_id, ctx, reply)
+                    await save_chat_message(user_id, domain, "user", req.message)
+                    await save_chat_message(user_id, domain, "ai", reply)
+                    return {"reply": reply, "domain": domain}
+            else:  # health
+                ctx = await health_data_context(user_id, req.message)
+                if ctx == "NO_DATA":
+                    return {"reply": "Пока нет записанных показателей. Внесите измерения — и я оценю динамику. Можно здесь: «запиши давление 120 на 80».", "domain": domain}
+                if ctx:
+                    msgs = [{"role": "system", "content": HEALTH_ANALYST_PROMPT + prof},
+                            {"role": "user", "content": f"Показатели:\n{ctx}\n\nЗапрос: {req.message}"}]
+                    reply = await asyncio.to_thread(call_ai, msgs)
+                    await add_tokens(user_id, ctx, reply)
+                    await save_chat_message(user_id, domain, "user", req.message)
+                    await save_chat_message(user_id, domain, "ai", reply)
+                    return {"reply": reply, "domain": domain}
 
         # info-вопрос про законы/льготы/новости/как оформить → Tavily research
         is_research = _is_info_query(req.message) or any(k in ql for k in _RESEARCH_KW)

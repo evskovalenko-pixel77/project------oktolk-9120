@@ -13096,12 +13096,16 @@ function ChatOverlay({
   }, []);
   const askClaude = async text => {
     setPending(true);
+    const history = messages.filter(x => x.text && (x.role === 'user' || x.role === 'ai')).slice(-10).map(x => ({
+      role: x.role === 'ai' ? 'assistant' : 'user',
+      content: x.text
+    }));
     try {
       const res = await apiFetch('/api/v1/chat', {
         method: 'POST',
         body: JSON.stringify({
           message: text,
-          history: [],
+          history: history,
           mode: mode || null
         })
       });
