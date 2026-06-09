@@ -193,6 +193,18 @@ async def init_db():
                 notes       TEXT,
                 created_at  TIMESTAMP DEFAULT NOW()
             );
+
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER NOT NULL,
+                domain      VARCHAR(20),
+                role        VARCHAR(10),
+                text        TEXT,
+                action      VARCHAR(30),
+                created_at  TIMESTAMP DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_messages_user_domain
+                ON chat_messages (user_id, domain, created_at);
         """)
 
         # Миграции для существующих таблиц (CREATE IF NOT EXISTS не добавляет колонки)
@@ -479,6 +491,20 @@ async def add_tokens(user_id, prompt_text: str, reply_text: str):
             )
     except Exception as e:
         print(f"[tokens] add error: {e}")
+
+
+async def save_chat_message(user_id, domain, role, text, action=None):
+    """Сохраняет сообщение в единую историю диалогов (для дублирования в разделах)."""
+    if not db_pool or not user_id:
+        return
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO chat_messages (user_id, domain, role, text, action) VALUES ($1,$2,$3,$4,$5)",
+                user_id, domain, role, (text or "")[:4000], action
+            )
+    except Exception as e:
+        print(f"[chat_history] save error: {e}")
 
 # ── API v1 ───────────────────────────────────────────────────────
 
@@ -843,8 +869,12 @@ async def chat_v1(req: ChatRequest, request: Request):
             ext = await extract_record(req.message, domain)
             if ext.get("ok"):
                 await add_tokens(user_id, req.message, ext["label"])
+                confirm_text = f"Записать {ext['label']}?"
+                # Этап 3: единая история — дублируется в раздел
+                await save_chat_message(user_id, domain, "user", req.message)
+                await save_chat_message(user_id, domain, "ai", confirm_text, action="confirm_record")
                 return {
-                    "reply": f"Записать {ext['label']}?",
+                    "reply": confirm_text,
                     "action": "confirm_record",
                     "domain": domain,
                     "record": ext["record"],
@@ -863,11 +893,41 @@ async def chat_v1(req: ChatRequest, request: Request):
         reply = call_ai(messages)
         # Учёт израсходованных токенов
         await add_tokens(user_id, sys_prompt + req.message, reply)
+        # Этап 3: единая история диалога — дублируется в раздел
+        await save_chat_message(user_id, domain, "user", req.message)
+        await save_chat_message(user_id, domain, "ai", reply)
         return {"reply": reply, "domain": domain}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI недоступен: {str(e)}")
+
+
+@app.get("/api/v1/chat/history")
+async def chat_history(domain: str = None, limit: int = 50, user=Depends(get_current_user)):
+    """Единая история диалогов. domain=health → срез по разделу (дублирование)."""
+    if not db_pool:
+        return {"messages": []}
+    try:
+        async with db_pool.acquire() as conn:
+            if domain:
+                rows = await conn.fetch(
+                    "SELECT domain, role, text, action, created_at FROM chat_messages "
+                    "WHERE user_id=$1 AND domain=$2 ORDER BY created_at DESC LIMIT $3",
+                    user["id"], domain, min(limit, 100))
+            else:
+                rows = await conn.fetch(
+                    "SELECT domain, role, text, action, created_at FROM chat_messages "
+                    "WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2",
+                    user["id"], min(limit, 100))
+        msgs = []
+        for r in reversed(rows):
+            msgs.append({"domain": r["domain"], "role": r["role"], "text": r["text"],
+                         "action": r["action"], "created_at": str(r["created_at"])})
+        return {"messages": msgs}
+    except Exception as e:
+        print(f"[chat_history] read error: {e}")
+        return {"messages": []}
 
 # Antiscam
 @app.post("/api/v1/analyze/text")

@@ -6134,6 +6134,9 @@ function FinanceScreen({
   };
   React.useEffect(() => {
     loadSummary();
+    const h = () => loadSummary();
+    window.addEventListener('oktolk-finance-updated', h);
+    return () => window.removeEventListener('oktolk-finance-updated', h);
   }, []);
   const catMap = {
     'Магазины': 'shop',
@@ -7529,18 +7532,24 @@ function HealthScreen({
   React.useEffect(() => {
     const token = localStorage.getItem('oktolk_token');
     if (!token || token === 'local_demo') return;
-    Promise.all(METRICS.map(m => authGet('/api/v1/health/records?type=' + m.type + '&days=30&limit=1').then(d => {
-      const arr = Array.isArray(d) ? d : d.records || [];
-      const last = arr[0];
-      return [m.type, last ? last.value_2 ? last.value_1 + '/' + last.value_2 : String(last.value_1) : null];
-    }).catch(() => [m.type, null]))).then(results => {
-      const obj = {};
-      results.forEach(([type, val]) => {
-        obj[type] = val;
+    const loadLatest = () => {
+      Promise.all(METRICS.map(m => authGet('/api/v1/health/records?type=' + m.type + '&days=30&limit=1').then(d => {
+        const arr = Array.isArray(d) ? d : d.records || [];
+        const last = arr[0];
+        return [m.type, last ? last.value_2 ? last.value_1 + '/' + last.value_2 : String(last.value_1) : null];
+      }).catch(() => [m.type, null]))).then(results => {
+        const obj = {};
+        results.forEach(([type, val]) => {
+          obj[type] = val;
+        });
+        setLatestData(obj);
       });
-      setLatestData(obj);
-    });
+    };
+    loadLatest();
     loadMeds();
+    const h = () => loadLatest();
+    window.addEventListener('oktolk-health-updated', h);
+    return () => window.removeEventListener('oktolk-health-updated', h);
   }, []);
   if (selectedMetric) {
     return React.createElement(HealthDetailScreen, {
