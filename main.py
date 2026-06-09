@@ -205,6 +205,20 @@ async def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_chat_messages_user_domain
                 ON chat_messages (user_id, domain, created_at);
+
+            CREATE TABLE IF NOT EXISTS saved_searches (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER NOT NULL,
+                title       TEXT,
+                url         TEXT,
+                description TEXT,
+                source      TEXT,
+                image       TEXT,
+                price       TEXT,
+                cat         TEXT,
+                saved_at    TIMESTAMP DEFAULT NOW(),
+                UNIQUE (user_id, url)
+            );
         """)
 
         # Миграции для существующих таблиц (CREATE IF NOT EXISTS не добавляет колонки)
@@ -1111,16 +1125,13 @@ async def chat_v1(req: ChatRequest, request: Request):
                 return {"reply": ans, "domain": domain}
             # Tavily не дал ответа — продолжаем обычным ответом
 
-        # Поиск товара/услуги/места → реальные ссылки прямо в чат
+        # Поиск товара/услуги/события → тот же движок раздела Поиск, результаты в чат
         if domain == "search":
-            results = await search_links(req.message)
-            if results:
-                reply = "Вот что нашёл по вашему запросу:"
-                await add_tokens(user_id, req.message, reply)
-                await save_chat_message(user_id, domain, "user", req.message)
-                await save_chat_message(user_id, domain, "ai", f"{reply} ({len(results)} ссылок)")
-                return {"reply": reply, "action": "search_results", "results": results, "domain": domain}
-            # ничего не нашли — продолжаем обычным ответом
+            await add_tokens(user_id, req.message, "поиск")
+            await save_chat_message(user_id, domain, "user", req.message)
+            await save_chat_message(user_id, domain, "ai", "Ищу по вашему запросу…")
+            return {"reply": "Ищу по вашему запросу…", "action": "search_results",
+                    "query": req.message, "domain": domain}
 
         # Строим системный промпт с профилем
         base_prompt = req.system or SYSTEM_PROMPTS.get(domain, SYSTEM_PROMPT)
@@ -1169,6 +1180,64 @@ async def chat_history(domain: str = None, limit: int = 50, user=Depends(get_cur
     except Exception as e:
         print(f"[chat_history] read error: {e}")
         return {"messages": []}
+
+
+class SavedSearchRequest(BaseModel):
+    title: str = ""
+    url: str = ""
+    description: str = ""
+    source: str = ""
+    image: str = ""
+    price: str = ""
+    cat: str = ""
+
+
+@app.get("/api/v1/search/saved")
+async def get_saved_searches(user=Depends(get_current_user)):
+    if not db_pool:
+        return {"items": []}
+    try:
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT title, url, description, source, image, price, cat, saved_at "
+                "FROM saved_searches WHERE user_id=$1 ORDER BY saved_at DESC", user["id"])
+        items = []
+        for r in rows:
+            items.append({"title": r["title"], "url": r["url"], "description": r["description"],
+                          "source": r["source"], "image": r["image"], "price": r["price"], "cat": r["cat"]})
+        return {"items": items}
+    except Exception as e:
+        print(f"[saved] read error: {e}")
+        return {"items": []}
+
+
+@app.post("/api/v1/search/saved")
+async def add_saved_search(req: SavedSearchRequest, user=Depends(get_current_user)):
+    if not db_pool or not req.url:
+        return {"status": "error"}
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO saved_searches (user_id, title, url, description, source, image, price, cat) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (user_id, url) DO NOTHING",
+                user["id"], req.title, req.url, req.description, req.source, req.image, req.price, req.cat)
+        return {"status": "saved"}
+    except Exception as e:
+        print(f"[saved] add error: {e}")
+        return {"status": "error"}
+
+
+@app.delete("/api/v1/search/saved")
+async def delete_saved_search(url: str, user=Depends(get_current_user)):
+    if not db_pool:
+        return {"status": "error"}
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute("DELETE FROM saved_searches WHERE user_id=$1 AND url=$2", user["id"], url)
+        return {"status": "deleted"}
+    except Exception as e:
+        print(f"[saved] delete error: {e}")
+        return {"status": "error"}
 
 # Antiscam
 @app.post("/api/v1/analyze/text")

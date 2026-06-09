@@ -9494,13 +9494,37 @@ function SitesScreen({
     setState2('results');
     setInput('');
   };
-  const saveResult = item => {
-    setSaved(s => s.find(x => x.url === item.url) ? s : [...s, {
-      ...item,
-      savedAt: new Date()
-    }]);
+  React.useEffect(() => {
+    const token = localStorage.getItem('oktolk_token');
+    if (!token || token === 'local_demo') return;
+    const loadSaved = () => apiFetch('/api/v1/search/saved').then(r => r.json()).then(d => {
+      if (d.items) setSaved(d.items);
+    }).catch(() => {});
+    loadSaved();
+    const h = () => loadSaved();
+    window.addEventListener('oktolk-saved-updated', h);
+    return () => window.removeEventListener('oktolk-saved-updated', h);
+  }, []);
+  const saveResult = async item => {
+    setSaved(s => s.find(x => x.url === item.url) ? s : [...s, { ...item, savedAt: new Date() }]);
+    try {
+      await apiFetch('/api/v1/search/saved', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: item.title || '', url: item.url || '',
+          description: item.description || item.snippet || '',
+          source: item.source || item.domain || '', image: item.image || '',
+          price: item.price || '', cat: item.cat || ''
+        })
+      });
+    } catch (e) {}
   };
-  const removeFromSaved = url => setSaved(s => s.filter(x => x.url !== url));
+  const removeFromSaved = async url => {
+    setSaved(s => s.filter(x => x.url !== url));
+    try {
+      await apiFetch('/api/v1/search/saved?url=' + encodeURIComponent(url), { method: 'DELETE' });
+    } catch (e) {}
+  };
   const getVisible = () => {
     if (curTab === 'saved') return saved;
     const pool = state === 'results' ? results : [];
@@ -13120,13 +13144,24 @@ function ChatOverlay({
           source: 'OkTolk AI'
         }]);
       } else if (data.action === 'search_results') {
-        setMessages(m => [...m, {
-          role: 'ai',
-          type: 'search',
-          text: data.reply,
-          results: data.results || [],
-          source: 'OkTolk AI'
-        }]);
+        try {
+          const sres = await fetch('/api/v1/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: data.query })
+          });
+          const sdata = await sres.json();
+          const results = Array.isArray(sdata.results) ? sdata.results : [];
+          setMessages(m => [...m, {
+            role: 'ai',
+            type: 'search',
+            text: results.length ? 'Вот что нашёл по вашему запросу:' : 'Ничего не нашлось. Попробуйте уточнить запрос.',
+            results: results,
+            source: 'OkTolk AI'
+          }]);
+        } catch (e) {
+          setMessages(m => [...m, { role: 'ai', text: 'Не удалось выполнить поиск. Попробуйте позже.', source: 'OkTolk AI' }]);
+        }
       } else {
         setMessages(m => [...m, {
           role: 'ai',
@@ -13184,6 +13219,36 @@ function ChatOverlay({
       navigator.clipboard.writeText(url);
       setCopiedUrl(url);
       setTimeout(() => setCopiedUrl(''), 1500);
+    } catch (e) {}
+  };
+  const [savedUrls, setSavedUrls] = React.useState([]);
+  React.useEffect(() => {
+    const token = localStorage.getItem('oktolk_token');
+    if (!token || token === 'local_demo') return;
+    apiFetch('/api/v1/search/saved').then(r => r.json()).then(d => {
+      if (d.items) setSavedUrls(d.items.map(x => x.url));
+    }).catch(() => {});
+  }, []);
+  const saveSearchItem = async item => {
+    try {
+      await apiFetch('/api/v1/search/saved', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: item.title || '', url: item.url || '',
+          description: item.description || item.snippet || '',
+          source: item.source || item.domain || '', image: item.image || '',
+          price: item.price || '', cat: item.cat || ''
+        })
+      });
+      setSavedUrls(u => u.includes(item.url) ? u : [...u, item.url]);
+      try { window.dispatchEvent(new Event('oktolk-saved-updated')); } catch (e) {}
+    } catch (e) {}
+  };
+  const removeSearchItem = async url => {
+    try {
+      await apiFetch('/api/v1/search/saved?url=' + encodeURIComponent(url), { method: 'DELETE' });
+      setSavedUrls(u => u.filter(x => x !== url));
+      try { window.dispatchEvent(new Event('oktolk-saved-updated')); } catch (e) {}
     } catch (e) {}
   };
   const askClaudeWithImage = async (base64, mimeType) => {
@@ -13288,21 +13353,14 @@ function ChatOverlay({
     onClick: () => cancelRecord(i),
     style: { padding: '9px 16px', borderRadius: 10, border: '1px solid var(--border)', cursor: 'pointer', background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: 14, fontFamily: 'inherit' }
   }, "Отмена")), m.type === 'search' && m.results && React.createElement("div", {
-    style: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }
-  }, m.results.map((r, ri) => React.createElement("div", {
+    style: { display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }
+  }, m.results.map((r, ri) => React.createElement(SearchResultCard, {
     key: ri,
-    style: { border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px', background: 'var(--surface)' }
-  }, React.createElement("a", {
-    href: r.url, target: '_blank', rel: 'noopener noreferrer',
-    style: { fontWeight: 600, fontSize: 14, color: 'var(--primary)', textDecoration: 'none', display: 'block', marginBottom: 2 }
-  }, r.title), React.createElement("div", {
-    style: { fontSize: 12, color: 'var(--text-subtle)', marginBottom: 4 }
-  }, r.domain), r.snippet && React.createElement("div", {
-    style: { fontSize: 13, color: 'var(--text-muted)', marginBottom: 6, lineHeight: 1.4 }
-  }, r.snippet), React.createElement("button", {
-    onClick: () => copyLink(r.url),
-    style: { fontSize: 12, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: copiedUrl === r.url ? 'var(--success)' : 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit' }
-  }, copiedUrl === r.url ? '✓ Скопировано' : 'Сохранить ссылку')))), m.role === 'ai' && m.source && React.createElement("div", {
+    item: r,
+    isSaved: savedUrls.includes(r.url),
+    onSave: () => saveSearchItem(r),
+    onRemove: () => removeSearchItem(r.url)
+  }))), m.role === 'ai' && m.source && React.createElement("div", {
     className: "source"
   }, React.createElement(IconSparkles, {
     size: 11
