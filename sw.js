@@ -1,4 +1,4 @@
-// OkTolk Service Worker v12 (оплата Robokassa)
+// OkTolk Service Worker v13 (маркировка рекламы Ticketland)
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => {
   e.waitUntil(
