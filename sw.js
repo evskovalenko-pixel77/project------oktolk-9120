@@ -1,4 +1,4 @@
-// OkTolk Service Worker v10 (AI-агенты в админке + Яндекс.Метрика)
+// OkTolk Service Worker v11 (fix клавиатура перекрывает ввод)
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => {
   e.waitUntil(
