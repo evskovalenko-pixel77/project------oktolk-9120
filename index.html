@@ -14858,11 +14858,13 @@ function App() {
 }
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(App, null));
-// Возврат с оплаты Robokassa
+// Возврат с оплаты Robokassa (на Success/Fail URL Robokassa добавляет свои параметры)
 try {
-  var pp = new URLSearchParams(location.search).get('payment');
-  if (pp === 'success') {
-    setTimeout(function () { alert('Оплата прошла! Подписка активируется в течение минуты.'); }, 600);
+  var qs = new URLSearchParams(location.search);
+  var rkInv = qs.get('InvId') || qs.get('InvoiceID');
+  var pp = qs.get('payment');
+  if (rkInv || pp === 'success') {
+    setTimeout(function () { alert('Оплата принята! Подписка активируется в течение минуты. Обновите страницу.'); }, 600);
     history.replaceState(null, '', location.pathname);
   } else if (pp === 'fail') {
     setTimeout(function () { alert('Оплата не завершена. Попробуйте ещё раз.'); }, 600);
