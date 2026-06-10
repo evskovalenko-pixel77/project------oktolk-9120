@@ -1269,6 +1269,23 @@ body{margin:0;height:100dvh;max-height:100dvh;overflow:hidden;box-sizing:border-
 .mode { height: 40px !important; font-size: 13px !important; }
 .composer { margin-top: 6px !important; }
 </style>
+<!-- Yandex.Metrika counter -->
+<script type="text/javascript">
+   (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+   m[i].l=1*new Date();
+   for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+   k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+   (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+
+   ym(METRIKA_ID_PLACEHOLDER, "init", {
+        clickmap:true,
+        trackLinks:true,
+        accurateTrackBounce:true,
+        webvisor:true
+   });
+</script>
+<noscript><div><img src="https://mc.yandex.ru/watch/METRIKA_ID_PLACEHOLDER" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+<!-- /Yandex.Metrika counter -->
 </head>
 <body>
 <div id="root"></div>
@@ -12595,6 +12612,10 @@ function AdminScreen({ onClose }) {
   const [bPush, setBPush] = React.useState(true);
   const [sending, setSending] = React.useState(false);
   const [toast, setToast] = React.useState('');
+  const [finReport, setFinReport] = React.useState(null);
+  const [finLoading, setFinLoading] = React.useState(false);
+  const [healthReport, setHealthReport] = React.useState(null);
+  const [healthLoading, setHealthLoading] = React.useState(false);
   const showToast = m => { setToast(m); setTimeout(() => setToast(''), 3000); };
   React.useEffect(() => {
     apiFetch('/api/v1/admin/overview').then(r => r.json()).then(setOv).catch(() => {});
@@ -12619,6 +12640,24 @@ function AdminScreen({ onClose }) {
     setSending(false);
   };
   const fmtRub = n => (n == null ? '—' : Math.round(n).toLocaleString('ru-RU') + ' ₽');
+  const runFinanceAgent = async () => {
+    setFinLoading(true);
+    try {
+      const res = await apiFetch('/api/v1/admin/agent/finance');
+      const d = await res.json();
+      setFinReport(d.report || 'Не удалось получить анализ.');
+    } catch (e) { setFinReport('Ошибка: агент недоступен.'); }
+    setFinLoading(false);
+  };
+  const runHealthAgent = async () => {
+    setHealthLoading(true);
+    try {
+      const res = await apiFetch('/api/v1/admin/agent/health');
+      const d = await res.json();
+      setHealthReport(d.report || 'Не удалось получить анализ.');
+    } catch (e) { setHealthReport('Ошибка: агент недоступен.'); }
+    setHealthLoading(false);
+  };
   const Stat = (val, label, accent) => React.createElement("div", {
     style: { flex: 1, background: 'var(--surface)', borderRadius: 14, padding: '14px 14px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }
   }, React.createElement("div", { style: { fontSize: 24, fontWeight: 800, color: accent || 'var(--text)', letterSpacing: '-0.5px' } }, val),
@@ -12637,8 +12676,8 @@ function AdminScreen({ onClose }) {
   const tabBtn = (key, label) => React.createElement("button", {
     onClick: () => setTab(key),
     style: {
-      flex: 1, padding: '9px 4px', border: 'none', borderRadius: 10, cursor: 'pointer',
-      fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+      flex: '1 1 28%', minWidth: 0, padding: '9px 4px', border: 'none', borderRadius: 10, cursor: 'pointer',
+      fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600,
       background: tab === key ? 'var(--primary)' : 'transparent',
       color: tab === key ? '#fff' : 'var(--text-muted)'
     }
@@ -12686,6 +12725,34 @@ function AdminScreen({ onClose }) {
         React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 12.5 } },
           React.createElement("span", { style: { color: 'var(--text-muted)' } }, 'Токены: ' + (u.tokens_used || 0).toLocaleString('ru-RU')),
           React.createElement("span", { style: { fontWeight: 700, color: 'var(--shop, #D97706)' } }, fmtRub(u.cost_rub))))));
+  } else if (tab === 'fin_agent') {
+    content = React.createElement("div", null,
+      React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 11, marginBottom: 12 } },
+        React.createElement("div", { style: { width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg,#1F8A5B,#15724A)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 20 } }, '💼'),
+        React.createElement("div", null,
+          React.createElement("div", { style: { fontWeight: 700, fontSize: 15 } }, 'Финансовый директор'),
+          React.createElement("div", { style: { fontSize: 12, color: 'var(--text-subtle)' } }, 'Анализ рентабельности по реальным данным'))),
+      React.createElement("button", {
+        onClick: runFinanceAgent, disabled: finLoading,
+        style: { width: '100%', padding: '13px', border: 'none', borderRadius: 12, background: finLoading ? 'var(--text-subtle)' : '#1F8A5B', color: '#fff', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: finLoading ? 'default' : 'pointer', marginBottom: 14 } },
+        finLoading ? 'Анализирую данные…' : (finReport ? 'Обновить анализ' : 'Запустить анализ')),
+      finReport && React.createElement("div", { style: { background: 'var(--surface)', borderRadius: 14, padding: '16px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', fontSize: 14, lineHeight: 1.55 } },
+        React.createElement(RichText, { text: finReport })),
+      !finReport && !finLoading && React.createElement("div", { style: { color: 'var(--text-subtle)', fontSize: 13, textAlign: 'center', padding: '20px 0' } }, 'Агент посмотрит выручку, расходы, НДС, токены и точку безубыточности, затем даст вывод и рекомендации.'));
+  } else if (tab === 'health_agent') {
+    content = React.createElement("div", null,
+      React.createElement("div", { style: { display: 'flex', alignItems: 'center', gap: 11, marginBottom: 12 } },
+        React.createElement("div", { style: { width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg,#3B4FE0,#2D3FC5)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 20 } }, '🩺'),
+        React.createElement("div", null,
+          React.createElement("div", { style: { fontWeight: 700, fontSize: 15 } }, 'Мониторинг системы'),
+          React.createElement("div", { style: { fontSize: 12, color: 'var(--text-subtle)' } }, 'Проверка сервера, БД, push, ошибок'))),
+      React.createElement("button", {
+        onClick: runHealthAgent, disabled: healthLoading,
+        style: { width: '100%', padding: '13px', border: 'none', borderRadius: 12, background: healthLoading ? 'var(--text-subtle)' : 'var(--primary)', color: '#fff', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: healthLoading ? 'default' : 'pointer', marginBottom: 14 } },
+        healthLoading ? 'Проверяю систему…' : (healthReport ? 'Проверить снова' : 'Запустить проверку')),
+      healthReport && React.createElement("div", { style: { background: 'var(--surface)', borderRadius: 14, padding: '16px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', fontSize: 14, lineHeight: 1.55 } },
+        React.createElement(RichText, { text: healthReport })),
+      !healthReport && !healthLoading && React.createElement("div", { style: { color: 'var(--text-subtle)', fontSize: 13, textAlign: 'center', padding: '20px 0' } }, 'Агент проверит доступность БД, работу планировщика push, внешние API и ошибки за сутки, затем даст отчёт о здоровье системы.'));
   } else {
     content = React.createElement("div", null,
       React.createElement("div", { style: { fontSize: 13, color: 'var(--text-muted)', margin: '0 2px 14px', lineHeight: 1.5 } }, 'Сообщение придёт всем пользователям в ленту уведомлений (колокольчик), а при включённом push — ещё и push-уведомлением.'),
@@ -12716,8 +12783,8 @@ function AdminScreen({ onClose }) {
       React.createElement("button", { onClick: onClose, style: { width: 40, height: 40, flex: 'none', border: 'none', background: 'var(--surface)', borderRadius: 12, display: 'grid', placeItems: 'center', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' } },
         React.createElement("svg", { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }, React.createElement("path", { d: 'M15 18l-6-6 6-6' }))),
       React.createElement("div", { style: { fontSize: 19, fontWeight: 700 } }, 'Админ-панель')),
-    React.createElement("div", { style: { display: 'flex', gap: 4, padding: '4px', margin: '0 14px 8px', background: 'var(--surface-2)', borderRadius: 13, flexShrink: 0 } },
-      tabBtn('metrics', 'Метрики'), tabBtn('demo', 'Аудитория'), tabBtn('users', 'Юзеры'), tabBtn('broadcast', 'Рассылка')),
+    React.createElement("div", { style: { display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px', margin: '0 14px 8px', background: 'var(--surface-2)', borderRadius: 13, flexShrink: 0 } },
+      tabBtn('metrics', 'Метрики'), tabBtn('demo', 'Аудитория'), tabBtn('users', 'Юзеры'), tabBtn('broadcast', 'Рассылка'), tabBtn('fin_agent', '💼 Финансы'), tabBtn('health_agent', '🩺 Система')),
     React.createElement("div", { style: { flex: 1, overflowY: 'auto', padding: '8px 14px 28px' } }, content),
     toast && React.createElement("div", { style: { position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)', background: 'var(--text)', color: '#fff', padding: '11px 20px', borderRadius: 100, fontSize: 13.5, fontWeight: 500, zIndex: 80, maxWidth: '90%', textAlign: 'center' } }, toast)));
 }

@@ -1,4 +1,4 @@
-// OkTolk Service Worker v9 (admin panel + broadcast)
+// OkTolk Service Worker v10 (AI-агенты в админке + Яндекс.Метрика)
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => {
   e.waitUntil(

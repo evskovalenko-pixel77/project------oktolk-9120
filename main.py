@@ -248,6 +248,13 @@ async def init_db():
                 visited_at  TIMESTAMP DEFAULT NOW()
             );
             CREATE INDEX IF NOT EXISTS idx_visits_date ON site_visits(visited_at);
+            CREATE TABLE IF NOT EXISTS app_errors (
+                id          SERIAL PRIMARY KEY,
+                source      VARCHAR(80),
+                message     TEXT,
+                created_at  TIMESTAMP DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_errors_date ON app_errors(created_at DESC);
             ALTER TABLE users ADD COLUMN IF NOT EXISTS news_topics TEXT;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS alcohol INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking INTEGER DEFAULT 0;
@@ -1622,8 +1629,182 @@ async def chat_history(domain: str = None, limit: int = 50, user=Depends(get_cur
 # ── Админ-панель владельца ───────────────────────────────────────
 # Внутренний счётчик учитывает только финальный обмен; реальные API-вызовы
 # (оркестрация classify/extract/research/vision) ~ в 3.5 раза больше.
-# Цена ~$0.20/млн реальных токенов, курс ~73 ₽/$.
-_TOKEN_COST_RUB_PER_INTERNAL = (3.5 * 0.20 * 73) / 1_000_000
+# Цена ~$0.20/млн реальных токенов, курс ~92 ₽/$.
+_USD_RUB = 92
+_TOKEN_COST_RUB_PER_INTERNAL = (3.5 * 0.20 * _USD_RUB) / 1_000_000
+
+
+async def log_app_error(source: str, message: str):
+    """Логирует ошибку в БД для агента-мониторинга."""
+    if not db_pool:
+        return
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO app_errors (source, message) VALUES ($1,$2)",
+                source[:80], str(message)[:2000])
+    except Exception:
+        pass
+
+
+def call_reasoner(prompt: str, system: str = None, max_tokens: int = 1500) -> str:
+    """Глубокий анализ через DeepSeek Reasoner (для умных агентов)."""
+    ds_key = DEEPSEEK_API_KEY or AITUNNEL_API_KEY
+    ds_base = DEEPSEEK_BASE_URL if DEEPSEEK_API_KEY else AITUNNEL_BASE_URL
+    ds_model = "deepseek-reasoner" if DEEPSEEK_API_KEY else "deepseek-r1-0528"
+    msgs = []
+    if system:
+        msgs.append({"role": "system", "content": system})
+    msgs.append({"role": "user", "content": prompt})
+    headers = {"Authorization": f"Bearer {ds_key}", "Content-Type": "application/json"}
+    data = {"model": ds_model, "messages": msgs, "max_tokens": max_tokens}
+    r = requests.post(f"{ds_base}chat/completions", headers=headers, json=data, timeout=90)
+    if r.status_code == 200:
+        return r.json()["choices"][0]["message"]["content"].strip()
+    # fallback на обычный chat
+    return call_ai(msgs)
+
+
+async def collect_finance_metrics() -> dict:
+    """Собирает реальные финансовые данные для агента-финансиста."""
+    PRICES = {"standard": 390, "pro": 590}
+    async with db_pool.acquire() as conn:
+        tariffs = await conn.fetch("SELECT tariff, COUNT(*) c FROM users GROUP BY tariff")
+        tmap = {r["tariff"]: r["c"] for r in tariffs}
+        total_users = sum(tmap.values())
+        tokens_total = int(await conn.fetchval("SELECT COALESCE(SUM(tokens_used),0) FROM users") or 0)
+        new_30d = await conn.fetchval("SELECT COUNT(*) FROM users WHERE created_at >= NOW() - interval '30 days'") or 0
+        visits_total = await conn.fetchval("SELECT COUNT(*) FROM site_visits") or 0
+    # выручка-прокси по тарифам
+    revenue = sum(PRICES.get(t, 0) * c for t, c in tmap.items())
+    paid = sum(c for t, c in tmap.items() if t in PRICES)
+    # расходы
+    infra = 740  # Amvera + Tavily + TTS
+    tokens_cost = round(tokens_total * _TOKEN_COST_RUB_PER_INTERNAL, 2)
+    nds = round(revenue * 22 / 122, 2)          # НДС 22% (внутри цены)
+    acquiring = round(revenue * 0.039, 2)        # эквайринг 3.9%
+    ad = round(revenue * 0.15, 2)                # реклама 15%
+    expenses_total = round(infra + tokens_cost + nds + acquiring + ad, 2)
+    profit = round(revenue - expenses_total, 2)
+    margin = round(profit / revenue * 100, 1) if revenue else None
+    breakeven_std = round(740 / 226, 1)
+    return {
+        "currency_rate": _USD_RUB,
+        "users": {"total": total_users, "paid": paid, "new_30d": new_30d, "by_tariff": tmap},
+        "visits_total": visits_total,
+        "revenue_proxy": revenue,
+        "tokens": {"internal": tokens_total, "cost_rub": tokens_cost},
+        "expenses": {"infra": infra, "tokens": tokens_cost, "nds_22": nds,
+                     "acquiring_3.9": acquiring, "advertising_15": ad, "total": expenses_total},
+        "profit": profit, "margin_pct": margin,
+        "prices": PRICES,
+    }
+
+
+async def collect_health_metrics() -> dict:
+    """Собирает реальные технические метрики для агента-мониторинга."""
+    m = {"db": "unknown", "tables": {}, "scheduler": {}, "push_subs": 0,
+         "errors_24h": 0, "recent_errors": [], "external_apis": {}}
+    # БД
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+            m["db"] = "ok"
+            for t in ("users", "finance_records", "health_records", "chat_messages",
+                      "notifications", "push_subscriptions", "site_visits"):
+                try:
+                    m["tables"][t] = await conn.fetchval(f"SELECT COUNT(*) FROM {t}") or 0
+                except Exception:
+                    m["tables"][t] = "n/a"
+            # scheduler heartbeat
+            try:
+                sch = await conn.fetchrow("SELECT last_check, leader_pid, pushes_sent FROM scheduler_state LIMIT 1")
+                if sch and sch["last_check"]:
+                    delta = (datetime.now() - sch["last_check"]).total_seconds()
+                    m["scheduler"] = {"last_check_sec_ago": int(delta),
+                                      "alive": delta < 180,
+                                      "pushes_sent": sch["pushes_sent"]}
+                else:
+                    m["scheduler"] = {"alive": False, "note": "нет heartbeat"}
+            except Exception as e:
+                m["scheduler"] = {"alive": False, "error": str(e)[:100]}
+            m["push_subs"] = await conn.fetchval("SELECT COUNT(*) FROM push_subscriptions") or 0
+            # ошибки за 24ч
+            try:
+                m["errors_24h"] = await conn.fetchval(
+                    "SELECT COUNT(*) FROM app_errors WHERE created_at >= NOW() - interval '24 hours'") or 0
+                errs = await conn.fetch(
+                    "SELECT source, message, created_at FROM app_errors ORDER BY created_at DESC LIMIT 8")
+                m["recent_errors"] = [{"source": e["source"], "message": (e["message"] or "")[:200],
+                                       "at": e["created_at"].isoformat() if e["created_at"] else None} for e in errs]
+            except Exception:
+                pass
+    except Exception as e:
+        m["db"] = f"error: {str(e)[:120]}"
+    # ping внешних API (быстро, с коротким timeout)
+    def _ping(name, url, headers=None):
+        try:
+            t0 = __import__("time").time()
+            r = requests.get(url, headers=headers or {}, timeout=8)
+            return {"status": r.status_code, "ms": int((__import__("time").time() - t0) * 1000)}
+        except Exception as e:
+            return {"status": "error", "error": str(e)[:80]}
+    m["external_apis"]["deepseek"] = _ping("deepseek", "https://api.deepseek.com/v1/models",
+                                           {"Authorization": f"Bearer {DEEPSEEK_API_KEY}"} if DEEPSEEK_API_KEY else None)
+    m["external_apis"]["aitunnel"] = _ping("aitunnel", f"{AITUNNEL_BASE_URL}models",
+                                           {"Authorization": f"Bearer {AITUNNEL_API_KEY}"} if AITUNNEL_API_KEY else None)
+    return m
+
+
+FINANCE_AGENT_PROMPT = """Ты — финансовый директор (CFO) SaaS-стартапа OkTolk с 15-летним опытом в unit-экономике подписочных продуктов. Перед тобой РЕАЛЬНЫЕ данные из базы. Анализируй только их, не выдумывай.
+
+Контекст бизнеса: OkTolk — PWA AI-помощник, ИП на ОСНО (НДС 22%), подписки Стандарт 390₽ и Про 590₽/мес. Эквайринг Робокасса 3.9%, реклама ~15%, инфраструктура ~740₽/мес фикс. Себестоимость токенов считается по реальному потреблению.
+
+Дай краткий, конкретный анализ как живому фаундеру:
+1. **Здоровье экономики** — рентабельность, маржа, где сейчас бизнес (прибыль/убыток/около нуля).
+2. **Что в цифрах беспокоит** — самые тяжёлые статьи расходов, точка безубыточности, насколько близко.
+3. **2-3 конкретных действия** — что сделать чтобы улучшить unit-экономику (не общие слова, а под эти цифры).
+
+Тон — деловой партнёр, без воды. Цифры округляй. Если данных мало (мало юзеров) — честно скажи что выводы предварительные. Структура: короткие абзацы, **жирным** ключевые числа, списки через «— »."""
+
+HEALTH_AGENT_PROMPT = """Ты — Senior SRE/DevOps инженер с опытом эксплуатации production-систем. Перед тобой РЕАЛЬНЫЕ технические метрики приложения OkTolk (FastAPI + PostgreSQL на Amvera, Москва). Анализируй только фактические данные.
+
+Стек: FastAPI, PostgreSQL, фоновый scheduler push-уведомлений (должен слать heartbeat каждую минуту, alive если последний <180 сек назад), Web Push (VAPID), внешние API (DeepSeek, AItunnel).
+
+Дай чёткий отчёт о состоянии системы:
+1. **Статус** — система здорова / есть проблемы / критично. Одной фразой.
+2. **Что проверено и что нашёл** — БД, scheduler, push, внешние API, ошибки за 24ч. Отметь конкретные проблемы (scheduler не шлёт heartbeat, API недоступен, всплеск ошибок).
+3. **Что делать** — если есть проблемы, конкретные шаги. Если всё ок — так и скажи, без выдумывания проблем.
+
+Тон — технический, точный, без паники и без воды. Если метрика в норме — не раздувай. Структура: короткие абзацы, **жирным** статусы, списки через «— »."""
+
+
+@app.get("/api/v1/admin/agent/finance")
+async def admin_agent_finance(admin=Depends(get_admin_user)):
+    """Агент-финансист: реальные данные → анализ рентабельности через Reasoner."""
+    metrics = await collect_finance_metrics()
+    prompt = ("РЕАЛЬНЫЕ ФИНАНСОВЫЕ ДАННЫЕ (JSON):\n" + json.dumps(metrics, ensure_ascii=False, indent=2) +
+              "\n\nПроанализируй unit-экономику и дай рекомендации.")
+    try:
+        report = await asyncio.to_thread(call_reasoner, prompt, FINANCE_AGENT_PROMPT, 1800)
+    except Exception as e:
+        await log_app_error("agent_finance", str(e))
+        raise HTTPException(status_code=500, detail="Агент недоступен")
+    return {"metrics": metrics, "report": report}
+
+
+@app.get("/api/v1/admin/agent/health")
+async def admin_agent_health(admin=Depends(get_admin_user)):
+    """Агент-мониторинг: реальные тех-метрики → анализ через Reasoner."""
+    metrics = await collect_health_metrics()
+    prompt = ("РЕАЛЬНЫЕ ТЕХНИЧЕСКИЕ МЕТРИКИ (JSON):\n" + json.dumps(metrics, ensure_ascii=False, indent=2) +
+              "\n\nПроанализируй состояние системы и дай отчёт.")
+    try:
+        report = await asyncio.to_thread(call_reasoner, prompt, HEALTH_AGENT_PROMPT, 1500)
+    except Exception as e:
+        await log_app_error("agent_health", str(e))
+        raise HTTPException(status_code=500, detail="Агент недоступен")
+    return {"metrics": metrics, "report": report}
 
 
 @app.post("/api/v1/track/visit")
