@@ -1,4 +1,4 @@
-// OkTolk Service Worker v8 (RichText AI-анализ + умная запись трат)
+// OkTolk Service Worker v9 (admin panel + broadcast)
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => {
   e.waitUntil(

@@ -241,6 +241,13 @@ async def init_db():
             CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, created_at DESC);
             ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens_used INTEGER DEFAULT 0;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens_limit INTEGER DEFAULT 50000;
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+            CREATE TABLE IF NOT EXISTS site_visits (
+                id          SERIAL PRIMARY KEY,
+                path        VARCHAR(120),
+                visited_at  TIMESTAMP DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_visits_date ON site_visits(visited_at);
             ALTER TABLE users ADD COLUMN IF NOT EXISTS news_topics TEXT;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS alcohol INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking INTEGER DEFAULT 0;
@@ -295,6 +302,14 @@ async def get_current_user(authorization: str = Header(None)):
             raise HTTPException(status_code=401, detail="Токен истёк или неверный")
         user = await conn.fetchrow("SELECT * FROM users WHERE id=$1", session["user_id"])
         return dict(user)
+
+
+async def get_admin_user(authorization: str = Header(None)):
+    """Только для администратора (владельца проекта)."""
+    user = await get_current_user(authorization)
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Доступ только для администратора")
+    return user
 
 # ── Models ───────────────────────────────────────────────────────
 class RegisterRequest(BaseModel):
@@ -1602,6 +1617,152 @@ async def chat_history(domain: str = None, limit: int = 50, user=Depends(get_cur
     except Exception as e:
         print(f"[chat_history] read error: {e}")
         return {"messages": []}
+
+
+# ── Админ-панель владельца ───────────────────────────────────────
+# Внутренний счётчик учитывает только финальный обмен; реальные API-вызовы
+# (оркестрация classify/extract/research/vision) ~ в 3.5 раза больше.
+# Цена ~$0.20/млн реальных токенов, курс ~73 ₽/$.
+_TOKEN_COST_RUB_PER_INTERNAL = (3.5 * 0.20 * 73) / 1_000_000
+
+
+@app.post("/api/v1/track/visit")
+async def track_visit(request: Request):
+    """Публичный счётчик переходов. Фронт вызывает при загрузке."""
+    if not db_pool:
+        return {"ok": False}
+    try:
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        path = (body.get("path") or "/")[:120]
+        async with db_pool.acquire() as conn:
+            await conn.execute("INSERT INTO site_visits (path) VALUES ($1)", path)
+        return {"ok": True}
+    except Exception as e:
+        print(f"[track_visit] error: {e}")
+        return {"ok": False}
+
+
+@app.get("/api/v1/admin/check")
+async def admin_check(user=Depends(get_current_user)):
+    """Проверка прав админа — для показа кнопки в профиле."""
+    return {"is_admin": bool(user.get("is_admin"))}
+
+
+@app.get("/api/v1/admin/overview")
+async def admin_overview(admin=Depends(get_admin_user)):
+    """Сводка: переходы, регистрации, подписки, токены, себестоимость."""
+    async with db_pool.acquire() as conn:
+        total_users = await conn.fetchval("SELECT COUNT(*) FROM users") or 0
+        new_7d = await conn.fetchval("SELECT COUNT(*) FROM users WHERE created_at >= NOW() - interval '7 days'") or 0
+        new_30d = await conn.fetchval("SELECT COUNT(*) FROM users WHERE created_at >= NOW() - interval '30 days'") or 0
+        tariffs = await conn.fetch("SELECT tariff, COUNT(*) c FROM users GROUP BY tariff")
+        tariff_map = {r["tariff"]: r["c"] for r in tariffs}
+        paid = sum(c for t, c in tariff_map.items() if t and t != "demo")
+        visits_total = await conn.fetchval("SELECT COUNT(*) FROM site_visits") or 0
+        visits_7d = await conn.fetchval("SELECT COUNT(*) FROM site_visits WHERE visited_at >= NOW() - interval '7 days'") or 0
+        tokens_total = await conn.fetchval("SELECT COALESCE(SUM(tokens_used),0) FROM users") or 0
+        cost_rub = round(float(tokens_total) * _TOKEN_COST_RUB_PER_INTERNAL, 2)
+        conv_reg = round(total_users / visits_total * 100, 1) if visits_total else None
+        conv_paid = round(paid / total_users * 100, 1) if total_users else None
+    return {
+        "users": {"total": total_users, "new_7d": new_7d, "new_30d": new_30d},
+        "visits": {"total": visits_total, "last_7d": visits_7d},
+        "subscriptions": {"paid": paid, "by_tariff": tariff_map},
+        "tokens": {"total_internal": int(tokens_total), "est_cost_rub": cost_rub},
+        "conversion": {"visit_to_reg_pct": conv_reg, "reg_to_paid_pct": conv_paid},
+    }
+
+
+@app.get("/api/v1/admin/demographics")
+async def admin_demographics(admin=Depends(get_admin_user)):
+    """Распределение по полу, возрасту, городу."""
+    async with db_pool.acquire() as conn:
+        gender = await conn.fetch(
+            "SELECT COALESCE(gender,'не указан') g, COUNT(*) c FROM user_profile GROUP BY gender ORDER BY c DESC")
+        cities = await conn.fetch(
+            "SELECT COALESCE(city,'не указан') city, COUNT(*) c FROM users GROUP BY city ORDER BY c DESC LIMIT 15")
+        ages = await conn.fetch("""
+            SELECT CASE
+              WHEN age IS NULL THEN 'не указан'
+              WHEN age < 25 THEN 'до 25'
+              WHEN age < 35 THEN '25–34'
+              WHEN age < 45 THEN '35–44'
+              WHEN age < 55 THEN '45–54'
+              WHEN age < 65 THEN '55–64'
+              ELSE '65+' END grp, COUNT(*) c
+            FROM user_profile GROUP BY grp ORDER BY c DESC""")
+    return {
+        "gender": [{"label": r["g"], "count": r["c"]} for r in gender],
+        "age": [{"label": r["grp"], "count": r["c"]} for r in ages],
+        "city": [{"label": r["city"], "count": r["c"]} for r in cities],
+    }
+
+
+@app.get("/api/v1/admin/users")
+async def admin_users_list(admin=Depends(get_admin_user), limit: int = 100):
+    """Список пользователей с токенами и себестоимостью."""
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT u.id, u.name, u.phone, u.tariff, u.city, u.created_at,
+                   COALESCE(u.tokens_used,0) tokens_used, u.tokens_limit,
+                   p.gender, p.age
+            FROM users u LEFT JOIN user_profile p ON p.user_id = u.id
+            ORDER BY u.created_at DESC LIMIT $1""", limit)
+    users = []
+    for r in rows:
+        tu = int(r["tokens_used"] or 0)
+        ph = r["phone"] or ""
+        ph_mask = (ph[:2] + "***" + ph[-2:]) if len(ph) >= 4 else "***"
+        users.append({
+            "id": r["id"], "name": r["name"] or "—", "phone": ph_mask,
+            "tariff": r["tariff"], "city": r["city"], "gender": r["gender"], "age": r["age"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "tokens_used": tu, "tokens_limit": r["tokens_limit"],
+            "cost_rub": round(tu * _TOKEN_COST_RUB_PER_INTERNAL, 2),
+        })
+    return {"users": users}
+
+
+class BroadcastRequest(BaseModel):
+    title: str
+    body: str
+    push: bool = True
+
+
+@app.post("/api/v1/admin/broadcast")
+async def admin_broadcast(req: BroadcastRequest, admin=Depends(get_admin_user)):
+    """Рассылка уведомления всем пользователям (колокольчик + push)."""
+    if not req.title.strip() or not req.body.strip():
+        raise HTTPException(status_code=400, detail="Заголовок и текст обязательны")
+    notif_count = 0
+    push_count = 0
+    async with db_pool.acquire() as conn:
+        user_ids = [r["id"] for r in await conn.fetch("SELECT id FROM users")]
+        for uid in user_ids:
+            try:
+                await conn.execute(
+                    "INSERT INTO notifications (user_id, type, title, body, is_read) VALUES ($1,'system',$2,$3,FALSE)",
+                    uid, req.title.strip(), req.body.strip())
+                notif_count += 1
+            except Exception as e:
+                print(f"[broadcast] notif {uid}: {e}")
+        if req.push:
+            subs = await conn.fetch("SELECT user_id, endpoint, p256dh, auth FROM push_subscriptions")
+            for s in subs:
+                try:
+                    ok = send_web_push(
+                        {"endpoint": s["endpoint"], "keys": {"p256dh": s["p256dh"], "auth": s["auth"]}},
+                        req.title.strip(), req.body.strip())
+                    if ok:
+                        push_count += 1
+                except Exception as e:
+                    print(f"[broadcast] push {s['user_id']}: {e}")
+    print(f"[broadcast] notif={notif_count}, push={push_count}")
+    return {"ok": True, "notifications_sent": notif_count, "push_sent": push_count}
 
 
 @app.get("/api/v1/research/stats")
