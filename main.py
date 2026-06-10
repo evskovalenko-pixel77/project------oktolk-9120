@@ -27,6 +27,14 @@ AITUNNEL_API_KEY  = os.getenv("AITUNNEL_API_KEY", "")
 AITUNNEL_BASE_URL = os.getenv("AITUNNEL_BASE_URL", "https://api.aitunnel.ru/v1/")
 YANDEX_API_KEY    = os.getenv("YANDEX_API_KEY", "")
 DEEPSEEK_API_KEY  = os.getenv("DEEPSEEK_API_KEY", "")
+
+# Robokassa
+ROBOKASSA_LOGIN      = os.getenv("ROBOKASSA_LOGIN", "oktolk")
+ROBOKASSA_PASS1      = os.getenv("ROBOKASSA_PASS1", "")
+ROBOKASSA_PASS2      = os.getenv("ROBOKASSA_PASS2", "")
+ROBOKASSA_TEST_PASS1 = os.getenv("ROBOKASSA_TEST_PASS1", "")
+ROBOKASSA_TEST_PASS2 = os.getenv("ROBOKASSA_TEST_PASS2", "")
+ROBOKASSA_TEST       = os.getenv("ROBOKASSA_TEST", "1") == "1"  # 1 = тестовый режим
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1/"
 SECRET_KEY        = os.getenv("SECRET_KEY", "oktolk-super-secret-key-2026-production")
 
@@ -255,6 +263,16 @@ async def init_db():
                 created_at  TIMESTAMP DEFAULT NOW()
             );
             CREATE INDEX IF NOT EXISTS idx_errors_date ON app_errors(created_at DESC);
+            CREATE TABLE IF NOT EXISTS payments (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER,
+                tariff      VARCHAR(20),
+                amount      NUMERIC(10,2),
+                status      VARCHAR(20) DEFAULT 'pending',
+                created_at  TIMESTAMP DEFAULT NOW(),
+                paid_at     TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id, created_at DESC);
             ALTER TABLE users ADD COLUMN IF NOT EXISTS news_topics TEXT;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS alcohol INTEGER DEFAULT 0;
             ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS smoking INTEGER DEFAULT 0;
@@ -1944,6 +1962,131 @@ async def admin_broadcast(req: BroadcastRequest, admin=Depends(get_admin_user)):
                     print(f"[broadcast] push {s['user_id']}: {e}")
     print(f"[broadcast] notif={notif_count}, push={push_count}")
     return {"ok": True, "notifications_sent": notif_count, "push_sent": push_count}
+
+
+# ── Платежи Robokassa ────────────────────────────────────────────
+import hashlib
+from urllib.parse import quote
+from fastapi.responses import Response
+
+_TARIFF_INFO = {
+    "standard": {"price": 390, "limit": 500000, "title": "Стандарт"},
+    "pro":      {"price": 590, "limit": 1500000, "title": "Про"},
+}
+
+
+def _rk_pass1():
+    return ROBOKASSA_TEST_PASS1 if ROBOKASSA_TEST else ROBOKASSA_PASS1
+
+
+def _rk_pass2():
+    return ROBOKASSA_TEST_PASS2 if ROBOKASSA_TEST else ROBOKASSA_PASS2
+
+
+def _rk_sign(*parts) -> str:
+    """SHA256 подпись из частей через двоеточие."""
+    raw = ":".join(str(p) for p in parts)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+class PaymentCreateRequest(BaseModel):
+    tariff: str  # standard | pro
+
+
+@app.post("/api/v1/payment/create")
+async def payment_create(req: PaymentCreateRequest, user=Depends(get_current_user)):
+    """Создаёт платёж в Robokassa с фискальным чеком (НДС 22%, ОСНО)."""
+    info = _TARIFF_INFO.get(req.tariff)
+    if not info:
+        raise HTTPException(status_code=400, detail="Неизвестный тариф")
+    if not _rk_pass1():
+        raise HTTPException(status_code=503, detail="Оплата временно недоступна (не настроены ключи)")
+
+    amount = info["price"]
+    out_sum = f"{amount:.2f}"
+    # создаём запись платежа → её id = InvId
+    async with db_pool.acquire() as conn:
+        inv_id = await conn.fetchval(
+            "INSERT INTO payments (user_id, tariff, amount, status) VALUES ($1,$2,$3,'pending') RETURNING id",
+            user["id"], req.tariff, amount)
+
+    description = f"Подписка OkTolk {info['title']}, 30 дней"
+    # Фискальный чек (54-ФЗ): ОСНО, НДС 22%
+    receipt = {
+        "sno": "osn",
+        "items": [{
+            "name": description,
+            "quantity": 1,
+            "sum": amount,
+            "payment_method": "full_payment",
+            "payment_object": "service",
+            "tax": "vat22",
+        }],
+    }
+    receipt_json = json.dumps(receipt, ensure_ascii=False)
+    receipt_enc = quote(receipt_json, safe="")
+    # подпись: MerchantLogin:OutSum:InvId:Receipt(url-encoded):Пароль#1
+    signature = _rk_sign(ROBOKASSA_LOGIN, out_sum, inv_id, receipt_enc, _rk_pass1())
+
+    params = [
+        f"MerchantLogin={quote(ROBOKASSA_LOGIN)}",
+        f"OutSum={out_sum}",
+        f"InvId={inv_id}",
+        f"Description={quote(description)}",
+        f"Receipt={receipt_enc}",
+        f"SignatureValue={signature}",
+    ]
+    if ROBOKASSA_TEST:
+        params.append("IsTest=1")
+    pay_url = "https://auth.robokassa.ru/Merchant/Index.aspx?" + "&".join(params)
+    print(f"[payment] создан InvId={inv_id} user={user['id']} {req.tariff} {out_sum}₽ test={ROBOKASSA_TEST}")
+    return {"ok": True, "inv_id": inv_id, "payment_url": pay_url}
+
+
+@app.post("/api/v1/payment/robokassa/result")
+async def payment_result(request: Request):
+    """Webhook Robokassa — подтверждение оплаты. Проверяет подпись (Пароль#2),
+    активирует тариф. Должен вернуть 'OK<InvId>'."""
+    # Robokassa шлёт form-data (POST)
+    form = await request.form()
+    out_sum = form.get("OutSum") or form.get("OutSumm") or ""
+    inv_id = form.get("InvId") or ""
+    sig = (form.get("SignatureValue") or "").lower()
+    # подпись result: OutSum:InvId:Пароль#2
+    expected = _rk_sign(out_sum, inv_id, _rk_pass2()).lower()
+    if sig != expected:
+        print(f"[payment] BAD signature InvId={inv_id} got={sig[:12]} exp={expected[:12]}")
+        await log_app_error("payment_result", f"bad signature InvId={inv_id}")
+        return Response(content="bad sign", media_type="text/plain", status_code=400)
+    try:
+        async with db_pool.acquire() as conn:
+            pay = await conn.fetchrow("SELECT * FROM payments WHERE id=$1", int(inv_id))
+            if not pay:
+                return Response(content="no order", media_type="text/plain", status_code=400)
+            if pay["status"] == "paid":
+                # повторное уведомление — просто подтверждаем
+                return Response(content=f"OK{inv_id}", media_type="text/plain")
+            info = _TARIFF_INFO.get(pay["tariff"], {})
+            limit = info.get("limit", 500000)
+            # активируем тариф на 30 дней, сбрасываем счётчик токенов
+            await conn.execute(
+                "UPDATE users SET tariff=$1, tariff_until=NOW() + interval '30 days', "
+                "tokens_limit=$2, tokens_used=0 WHERE id=$3",
+                pay["tariff"], limit, pay["user_id"])
+            await conn.execute(
+                "UPDATE payments SET status='paid', paid_at=NOW() WHERE id=$1", int(inv_id))
+            # уведомление пользователю
+            await conn.execute(
+                "INSERT INTO notifications (user_id, type, title, body, is_read) "
+                "VALUES ($1,'system',$2,$3,FALSE)",
+                pay["user_id"], "Подписка активна",
+                f"Тариф «{info.get('title', pay['tariff'])}» подключён на 30 дней. Спасибо!")
+        print(f"[payment] PAID InvId={inv_id} user={pay['user_id']} tariff={pay['tariff']}")
+        return Response(content=f"OK{inv_id}", media_type="text/plain")
+    except Exception as e:
+        print(f"[payment] result error: {e}")
+        await log_app_error("payment_result", str(e))
+        return Response(content="error", media_type="text/plain", status_code=500)
 
 
 @app.get("/api/v1/research/stats")

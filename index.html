@@ -14174,7 +14174,22 @@ function SubscriptionScreen({
       color: 'var(--text-muted)'
     }
   }, f)))), tariff !== plan.id && plan.price !== '0' && React.createElement("button", {
-    onClick: () => alert('Оплата через ЮKassa — скоро!'),
+    onClick: async () => {
+      try {
+        const res = await apiFetch('/api/v1/payment/create', {
+          method: 'POST',
+          body: JSON.stringify({ tariff: plan.id })
+        });
+        const d = await res.json();
+        if (d.ok && d.payment_url) {
+          window.location.href = d.payment_url;
+        } else {
+          alert(d.detail || 'Не удалось создать платёж. Попробуйте позже.');
+        }
+      } catch (e) {
+        alert('Оплата временно недоступна. Попробуйте позже.');
+      }
+    },
     style: {
       width: '100%',
       padding: '12px',
@@ -14843,6 +14858,17 @@ function App() {
 }
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(App, null));
+// Возврат с оплаты Robokassa
+try {
+  var pp = new URLSearchParams(location.search).get('payment');
+  if (pp === 'success') {
+    setTimeout(function () { alert('Оплата прошла! Подписка активируется в течение минуты.'); }, 600);
+    history.replaceState(null, '', location.pathname);
+  } else if (pp === 'fail') {
+    setTimeout(function () { alert('Оплата не завершена. Попробуйте ещё раз.'); }, 600);
+    history.replaceState(null, '', location.pathname);
+  }
+} catch (e) {}
 // Счётчик переходов (один раз за сессию вкладки)
 try {
   if (!sessionStorage.getItem('oktolk_visit_tracked')) {

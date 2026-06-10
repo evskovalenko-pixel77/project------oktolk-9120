@@ -1,4 +1,4 @@
-// OkTolk Service Worker v11 (fix клавиатура перекрывает ввод)
+// OkTolk Service Worker v12 (оплата Robokassa)
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => {
   e.waitUntil(
