@@ -2077,6 +2077,54 @@ async def agent_execute(req: AgentExecuteRequest, user=Depends(get_current_user)
         raise HTTPException(status_code=500, detail="Не удалось выполнить действие")
 
 
+# ── Билеты Ticketland: фид AdvCake ───────────────────────────────
+ADVCAKE_FEED_URL = os.getenv("ADVCAKE_FEED_URL", "")
+
+@app.get("/api/v1/feed/inspect")
+async def feed_inspect():
+    """Диагностика: скачивает фид AdvCake и показывает структуру первых offer.
+    Используется один раз, чтобы понять реальные поля (дата, город, площадка)."""
+    import xml.etree.ElementTree as ET
+    if not ADVCAKE_FEED_URL:
+        return {"error": "ADVCAKE_FEED_URL не задан в переменных окружения"}
+    try:
+        r = await asyncio.to_thread(
+            lambda: requests.get(ADVCAKE_FEED_URL, timeout=90, headers={"User-Agent": "OkTolk/1.0"})
+        )
+        if r.status_code != 200:
+            return {"error": f"HTTP {r.status_code}", "body": r.text[:300]}
+        root = ET.fromstring(r.content)
+        shop = root.find("shop")
+        cats = shop.find("categories") if shop is not None else None
+        offers = shop.find("offers") if shop is not None else None
+        cat_map = {}
+        if cats is not None:
+            for c in cats:
+                cat_map[c.get("id")] = c.text
+        offer_list = list(offers) if offers is not None else []
+        sample = []
+        for o in offer_list[:3]:
+            item = {"attribs": dict(o.attrib), "fields": {}, "params": {}}
+            for ch in o:
+                if ch.tag == "param":
+                    item["params"][ch.get("name")] = (ch.text or "")[:120]
+                else:
+                    item["fields"][ch.tag] = (ch.text or "")[:200]
+            # подставим имя категории
+            cid = item["fields"].get("categoryId")
+            if cid and cid in cat_map:
+                item["category_name"] = cat_map[cid]
+            sample.append(item)
+        return {
+            "feed_date": root.get("date"),
+            "categories_count": len(cat_map),
+            "offers_count": len(offer_list),
+            "sample_offers": sample
+        }
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
 # ── Админ-панель владельца ───────────────────────────────────────
 
 # Внутренний счётчик учитывает только финальный обмен; реальные API-вызовы
