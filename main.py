@@ -76,6 +76,8 @@ async def startup():
         # Запускаем планировщик push-уведомлений
         asyncio.create_task(push_scheduler())
         print("✅ Push scheduler started")
+        asyncio.create_task(_feed_auto_loader())
+        print("✅ Feed auto-loader started")
     except Exception as e:
         print(f"⚠️ PostgreSQL not available: {e}")
 
@@ -2234,6 +2236,24 @@ async def feed_reload():
     return await reload_ticketland_feed()
 
 
+async def _feed_auto_loader():
+    """Фоновая автозагрузка фида Ticketland раз в 6 часов (если устарел)."""
+    while True:
+        try:
+            if ADVCAKE_FEED_URL and db_pool:
+                async with db_pool.acquire() as conn:
+                    need = await conn.fetchval(
+                        "SELECT (count(*) = 0 OR COALESCE(MAX(updated_at), NOW() - INTERVAL '100 days')"
+                        " < NOW() - INTERVAL '6 hours') FROM events_feed"
+                    )
+                if need:
+                    res = await reload_ticketland_feed()
+                    print(f"[feed auto] {res}")
+        except Exception as e:
+            print(f"[feed auto] error: {e}")
+        await asyncio.sleep(21600)  # 6 часов
+
+
 # ── Админ-панель владельца ───────────────────────────────────────
 
 # Внутренний счётчик учитывает только финальный обмен; реальные API-вызовы
@@ -4048,6 +4068,70 @@ def _rank_search_results(query: str, results: list) -> list:
         print(f"[rank] error: {e}")
         return results[:6]
 
+_EVENT_STOP = {"билет", "билеты", "билетов", "купить", "найди", "найти", "хочу",
+               "сходить", "пойти", "мне", "для", "сегодня", "завтра", "выходные",
+               "недорого", "дешево", "дешевле", "посетить", "посмотреть", "цена"}
+_TICKETLAND_KW = ("концерт", "театр", "балет", "опера", "мюзикл", "цирк", "спектакл",
+                  "стендап", "фестиваль", "выставк", "экскурс", "мероприят", "афиша",
+                  "билет", "гастрол", "премьер", "ёлка", "елка", "новогодн", "шоу")
+_MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
+
+def _is_ticketland_query(q: str) -> bool:
+    ql = q.lower()
+    return any(kw in ql for kw in _TICKETLAND_KW)
+
+async def search_events_feed(query: str, city: str = None, limit: int = 8):
+    """Поиск мероприятий в локальной базе events_feed (фид Ticketland)."""
+    if not db_pool:
+        return []
+    import re as _re
+    words = [w for w in _re.findall(r'[а-яёa-z0-9]+', query.lower())
+             if len(w) > 2 and w not in _EVENT_STOP]
+    if not words:
+        words = [query.lower().strip()]
+    conds, params, n = [], [], 1
+    for w in words[:4]:
+        conds.append(f"(name ILIKE ${n} OR category ILIKE ${n} OR vendor ILIKE ${n})")
+        params.append(f"%{w}%")
+        n += 1
+    where_text = " OR ".join(conds)
+    params.append(f"%{city}%" if city else "%")
+    city_idx = n
+    n += 1
+    params.append(limit)
+    sql = f"""SELECT name, vendor, category, region, price, picture, url, event_date
+              FROM events_feed
+              WHERE event_date >= NOW() AND ({where_text})
+              ORDER BY (CASE WHEN region ILIKE ${city_idx} THEN 0 ELSE 1 END), event_date ASC
+              LIMIT ${n}"""
+    try:
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch(sql, *params)
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[events_feed search] {e}")
+        return []
+
+def _event_to_card(r: dict) -> dict:
+    d = r.get("event_date")
+    date_str = ""
+    if d:
+        date_str = f"{d.day} {_MONTHS_SHORT[d.month-1]} {d.strftime('%H:%M')}"
+    region = r.get("region")
+    if region:
+        date_str = (date_str + " · " + region) if date_str else region
+    price = r.get("price")
+    return {
+        "title": r.get("name") or "",
+        "description": r.get("category") or "",
+        "price": (f"{int(price)} ₽" if price else None),
+        "picture": r.get("picture"),
+        "url": r.get("url"),
+        "date": date_str,
+        "place": r.get("vendor"),
+        "cat": "events"
+    }
+
 @app.post("/api/v1/search")
 async def search_agent(request: Request):
     """Агент-поисковик: KudaGo (мероприятия) + Wildberries + Tavily + AI (синхронный, надёжный)"""
@@ -4093,6 +4177,14 @@ async def search_agent(request: Request):
         cat = "goods"
 
     print(f"[search] category={cat}")
+
+    # Билеты Ticketland из локальной базы — приоритет для событий/билетов
+    if cat in ("events", "leisure") or _is_ticketland_query(query):
+        user_city = (data.get("city") or "").strip() or None
+        events = await search_events_feed(query, city=user_city, limit=8)
+        if events:
+            print(f"[search] events_feed: {len(events)} мероприятий Ticketland")
+            return {"results": [_event_to_card(e) for e in events], "query": query, "cat": "events"}
 
     raw_results = []
 
