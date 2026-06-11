@@ -2039,7 +2039,12 @@ async def payment_create(req: PaymentCreateRequest, user=Depends(get_current_use
     if ROBOKASSA_TEST:
         params.append("IsTest=1")
     pay_url = "https://auth.robokassa.ru/Merchant/Index.aspx?" + "&".join(params)
+    # Диагностика (пароль НЕ логируется — только длина и факт наличия)
+    _p1 = _rk_pass1()
     print(f"[payment] создан InvId={inv_id} user={user['id']} {req.tariff} {out_sum}₽ test={ROBOKASSA_TEST}")
+    print(f"[payment][diag] login='{ROBOKASSA_LOGIN}' pass1_len={len(_p1)} pass1_empty={_p1==''} "
+          f"sign_base='{ROBOKASSA_LOGIN}:{out_sum}:{inv_id}:Receipt[{len(receipt_enc)}]:PASS1' "
+          f"sign={signature[:16]}... receipt_raw={receipt_json[:80]}")
     return {"ok": True, "inv_id": inv_id, "payment_url": pay_url}
 
 
