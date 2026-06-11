@@ -3731,6 +3731,9 @@ def build_ticketland_url(title: str, event_url: str = "", sub1: str = "") -> str
     - Если задан TICKETLAND_AFFILIATE_TEMPLATE — оборачиваем в Advcake deeplink
     """
     from urllib.parse import quote
+    # Если ссылка уже готовый deeplink (из фида) — возвращаем как есть, не оборачиваем повторно
+    if event_url and ("redav.online" in event_url or "advcake" in event_url):
+        return event_url
     # Прямая ссылка на Ticketland → оборачиваем в affiliate (рабочая страница + комиссия)
     if event_url and "ticketland.ru" in event_url:
         if TICKETLAND_AFFILIATE_TEMPLATE:
