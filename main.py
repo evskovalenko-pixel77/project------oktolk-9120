@@ -3842,6 +3842,55 @@ def _kudago_format(e: dict) -> dict:
         "cat": "events",
     }
 
+def _rank_search_results(query: str, results: list) -> list:
+    """AI ранжирует результаты по соответствию, рейтингу, отзывам, цене.
+    Отбирает лучшие, добавляет краткий вердикт. Синхронная (вызывать через to_thread)."""
+    if not results or len(results) <= 2:
+        return results
+    import json as _json, re as _re2
+    try:
+        brief = []
+        for i, r in enumerate(results[:12]):
+            brief.append({
+                "i": i,
+                "title": (r.get("title") or "")[:80],
+                "price": r.get("price") or "",
+                "desc": (r.get("description") or "")[:90],
+                "src": r.get("source") or ""
+            })
+        prompt = (
+            f"Пользователь ищет: «{query}».\n"
+            f"Найденные варианты (JSON):\n{_json.dumps(brief, ensure_ascii=False)}\n\n"
+            "Отбери до 5 ЛУЧШИХ с учётом: точное соответствие запросу, рейтинг и количество отзывов, "
+            "адекватная цена (не подозрительно дёшево/дорого), надёжность магазина. "
+            "Отсортируй от лучшего к худшему.\n"
+            "Для каждого дай очень короткий вердикт (до 7 слов): почему стоит брать.\n"
+            "Верни СТРОГО JSON-массив без markdown: [{\"i\": индекс, \"verdict\": \"...\"}]"
+        )
+        resp = call_ai([{"role": "user", "content": prompt}])
+        m = _re2.search(r'\[.*\]', resp or "", _re2.DOTALL)
+        if not m:
+            return results[:6]
+        order = _json.loads(m.group(0))
+        ranked, seen = [], set()
+        for o in order:
+            idx = o.get("i")
+            if isinstance(idx, int) and 0 <= idx < len(results) and idx not in seen:
+                r = dict(results[idx])
+                v = (o.get("verdict") or "").strip()
+                if v:
+                    # вердикт в начало описания (фронт не меняем)
+                    r["description"] = "✓ " + v + ((" · " + r["description"]) if r.get("description") else "")
+                ranked.append(r)
+                seen.add(idx)
+        for i, r in enumerate(results):
+            if i not in seen and len(ranked) < 5:
+                ranked.append(r)
+        return ranked[:5] if ranked else results[:6]
+    except Exception as e:
+        print(f"[rank] error: {e}")
+        return results[:6]
+
 @app.post("/api/v1/search")
 async def search_agent(request: Request):
     """Агент-поисковик: KudaGo (мероприятия) + Wildberries + Tavily + AI (синхронный, надёжный)"""
@@ -4020,12 +4069,12 @@ async def search_agent(request: Request):
 
     # ── 4. TAVILY — для досуга/услуг всегда, для товаров если WB пустой ──
     # events — не используем Tavily, только KudaGo
-    if cat not in ("events", "info") and (len(raw_results) < 3 or cat in ["leisure", "services"]):
-        # Для товаров — естественный запрос с упоминанием маркетплейса
+    if cat not in ("events", "info") and (len(raw_results) < 3 or cat in ["leisure", "services", "goods"]):
+        # Для товаров — добавляем Ozon и Яндекс.Маркет (WB уже через API выше)
         if cat == "goods":
-            tq = f"{query} купить цена ozon wildberries"
+            tq = f"{query} купить цена site:ozon.ru OR site:market.yandex.ru"
         elif cat == "leisure":
-            tq = f"{query} site:afisha.ru OR site:kinopoisk.ru OR site:kassir.ru OR site:kudago.com"
+            tq = f"{query} билеты site:ticketland.ru OR site:afisha.ru OR site:kassir.ru OR site:kudago.com"
         else:  # services
             tq = f"{query} site:profi.ru OR site:youdo.ru"
 
@@ -4084,6 +4133,24 @@ async def search_agent(request: Request):
         except Exception as e:
             print(f"[search] Tavily error: {e}")
 
+    # Билеты: гарантированно добавляем Ticketland (через affiliate) для билетных запросов
+    _ticket_kw = ("билет", "цирк", "концерт", "театр", "спектакл", "шоу", "выступлен", "мюзикл", "опера", "балет")
+    if cat == "leisure" and any(w in q_lower for w in _ticket_kw):
+        has_tl = any("ticketland.ru" in (r.get("url") or "") for r in raw_results)
+        if not has_tl:
+            raw_results.insert(0, {
+                "title": f"Билеты: {query}",
+                "description": "Поиск и покупка билетов на Ticketland",
+                "source": "ticketland.ru",
+                "url": build_ticketland_url(query),
+                "cat": "leisure"
+            })
+    # Оборачиваем прямые ссылки Ticketland в реферальные
+    for r in raw_results:
+        u = r.get("url") or ""
+        if "ticketland.ru" in u and "redav.online" not in u:
+            r["url"] = build_ticketland_url(r.get("title", query), u)
+
     if not raw_results:
         return {"results": [], "query": query, "error": "Ничего не нашлось"}
 
@@ -4091,6 +4158,10 @@ async def search_agent(request: Request):
     raw_results = [r for r in raw_results if r.get("title") and len(r["title"].strip()) > 2]
     if not raw_results:
         return {"results": [], "query": query, "error": "Результаты некачественные"}
+
+    # AI-ранжирование для товаров/услуг/досуга (info/events — свой формат)
+    if cat in ("goods", "leisure", "services"):
+        raw_results = await _asyncio.to_thread(_rank_search_results, query, raw_results)
 
     print(f"[search] returning {len(raw_results)} valid results")
     return {"results": raw_results[:6], "query": query, "cat": cat}
