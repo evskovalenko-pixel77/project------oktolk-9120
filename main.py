@@ -853,6 +853,23 @@ AGENT_SYSTEM_BASE = (
     "подскажи, чем ещё будешь полезен. Например, если ищет подарок дочери, после вызова поиска "
     "можешь добавить: «Кстати, если расскажешь, что любит дочь, я запомню и подберу точнее». "
     "Но это ДОПОЛНЕНИЕ к действию, а не замена вызову инструмента.\n\n"
+    "ЗНАНИЯ ПО РАЗДЕЛАМ (применяй по теме вопроса):\n"
+    "- Финансы: помогай вести учёт расходов, находить, на чём сэкономить, разбирать траты. "
+    "Не давай гарантий по инвестициям — только аккуратные ориентиры.\n"
+    "- Здоровье: давление, пульс, сахар, вес, лекарства, самочувствие. НЕ ставь диагнозы. "
+    "При тревожных симптомах (сильная боль, высокое давление, одышка) мягко советуй обратиться к врачу.\n"
+    "- Мошенники: если сообщение/звонок подозрительные — насторожи, объясни признаки обмана, "
+    "посоветуй не сообщать коды и данные карты, перезвонить в банк по официальному номеру.\n"
+    "- Новости: объясняй простым языком, что это значит лично для человека.\n"
+    "- Поиск: помогай найти товары, услуги, места, мероприятия.\n\n"
+    "ФОРМАТ ОТВЕТА (всегда оформляй аккуратно и читаемо):\n"
+    "- Разбивай на короткие абзацы, между ними — пустая строка.\n"
+    "- Пошаговые инструкции давай нумерованным списком: 1. 2. 3.\n"
+    "- Перечисления — маркированным списком через «- ».\n"
+    "- Важное выделяй **жирным** — умеренно, только ключевое.\n"
+    "- Подзаголовки (если ответ длинный) — через «## ».\n"
+    "- Эмодзи — изредка и по смыслу (не в каждой строке).\n"
+    "- Пиши тёплым простым языком, без канцелярита и сложных слов.\n\n"
     "Время приёма всегда переводи в формат ЧЧ:ММ (9 утра=09:00, 9 вечера=21:00). "
     "Не выдумывай факты о пользователе — используй только память ниже или то, что он сам сказал."
 )
@@ -1883,6 +1900,35 @@ async def chat_history(domain: str = None, limit: int = 50, user=Depends(get_cur
 
 
 # ── Агент: тестовый эндпоинт (что решил оркестратор) ─────────────
+_CATEGORY_RU = {"shop": "магазины", "pharmacy": "аптека", "utility": "ЖКУ",
+                "credit": "кредиты", "transport": "транспорт", "leisure": "досуг", "other": "прочее"}
+_HEALTH_RU = {"pressure": "давление", "pulse": "пульс", "sugar": "сахар", "weight": "вес"}
+
+def _agent_confirm_label(tool: str, a: dict) -> str:
+    """Человекочитаемый текст карточки подтверждения действия."""
+    if tool == "create_medication_reminder":
+        s = f"Создать напоминание: {a.get('name','')}"
+        if a.get("dose"): s += f", {a['dose']}"
+        if a.get("time"): s += f", каждый день в {a['time']}"
+        return s + "?"
+    if tool == "record_expense":
+        amt = a.get("amount", "")
+        c = _CATEGORY_RU.get(a.get("category", "other"), a.get("category", ""))
+        com = a.get("comment", "")
+        return f"Записать расход: {amt} ₽" + (f" на {com}" if com else f" ({c})") + "?"
+    if tool == "record_health":
+        t = _HEALTH_RU.get(a.get("type", ""), a.get("type", ""))
+        v = f"{a.get('value_1','')}/{a.get('value_2','')}" if (a.get("type") == "pressure" and a.get("value_2")) else a.get("value_1", "")
+        return f"Записать {t}: {v}?"
+    if tool == "update_profile":
+        return f"Сохранить в профиль: {a.get('field','')} = {a.get('value','')}?"
+    if tool == "remember_fact":
+        ab = a.get("about", "")
+        return "Запомнить: " + (f"{ab} — " if ab else "") + f"{a.get('fact','')}?"
+    if tool == "save_instruction":
+        return f"Учитывать впредь: {a.get('instruction','')}?"
+    return "Выполнить действие?"
+
 @app.post("/api/v1/agent/parse")
 async def agent_parse(req: ChatRequest, request: Request):
     """ТЕСТОВЫЙ эндпоинт: показывает, что агент решил по сообщению —
@@ -1905,10 +1951,11 @@ async def agent_parse(req: ChatRequest, request: Request):
         if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content"):
             messages.append({"role": h["role"], "content": str(h["content"])[:1000]})
     messages.append({"role": "user", "content": req.message})
-    result = await asyncio.to_thread(call_ai_with_tools, messages, AGENT_TOOLS)
-    # требуется ли подтверждение для этого действия
+    result = await asyncio.to_thread(call_ai_with_tools, messages, AGENT_TOOLS, 1000)
+    # требуется ли подтверждение + готовый текст карточки
     if result.get("type") == "tool_call":
         result["needs_confirm"] = result.get("name") in AGENT_CONFIRM_ACTIONS
+        result["confirm_label"] = _agent_confirm_label(result.get("name"), result.get("args") or {})
     # raw_msg не отдаём клиенту — только суть
     return {k: v for k, v in result.items() if k != "raw_msg"}
 
