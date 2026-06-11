@@ -14687,6 +14687,18 @@ function App() {
       });
     }
   }, [user]);
+  // Синхронизация тарифа с сервером (после оплаты тариф в БД меняется —
+  // подтягиваем актуальный, не полагаясь на localStorage)
+  React.useEffect(() => {
+    if (user && user.token && user.token !== 'local_demo') {
+      authGet('/api/v1/profile').then(d => {
+        if (d && d.tariff && d.tariff !== user.tariff) {
+          localStorage.setItem('oktolk_tariff', d.tariff);
+          setUser(prev => ({ ...prev, tariff: d.tariff }));
+        }
+      }).catch(() => {});
+    }
+  }, [user && user.token]);
   React.useLayoutEffect(() => {
     applyTheme(t);
   }, [t]);

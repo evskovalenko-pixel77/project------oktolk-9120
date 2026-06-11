@@ -1,4 +1,4 @@
-// OkTolk Service Worker v14 (оплата через POST-форму)
+// OkTolk Service Worker v15 (синхронизация тарифа)
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => {
   e.waitUntil(
