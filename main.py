@@ -3554,24 +3554,23 @@ def build_ticketland_url(title: str, event_url: str = "", sub1: str = "") -> str
     - Если задан TICKETLAND_AFFILIATE_TEMPLATE — оборачиваем в Advcake deeplink
     """
     from urllib.parse import quote
-    # Определяем целевой URL
+    # Прямая ссылка на Ticketland → оборачиваем в affiliate (рабочая страница + комиссия)
     if event_url and "ticketland.ru" in event_url:
-        target_url = event_url
-    else:
-        # У Ticketland нет /search/?q= (даёт 404). Ведём на рабочую главную —
-        # пользователь увидит каталог и встроенный поиск.
-        target_url = "https://www.ticketland.ru/"
-    # Если есть шаблон от Advcake — оборачиваем
-    if TICKETLAND_AFFILIATE_TEMPLATE:
-        encoded_target = quote(target_url, safe="")
-        link = TICKETLAND_AFFILIATE_TEMPLATE.replace("{url}", encoded_target)
-        if sub1:
-            link = link.replace("{sub1}", quote(sub1, safe=""))
-        else:
-            link = link.replace("&sub1={sub1}", "").replace("{sub1}", "")
-        return link
-    # Без шаблона — просто ссылка на Ticketland (без комиссии, но рабочая)
-    return target_url
+        if TICKETLAND_AFFILIATE_TEMPLATE:
+            encoded_target = quote(event_url, safe="")
+            link = TICKETLAND_AFFILIATE_TEMPLATE.replace("{url}", encoded_target)
+            if sub1:
+                link = link.replace("{sub1}", quote(sub1, safe=""))
+            else:
+                link = link.replace("&sub1={sub1}", "").replace("{sub1}", "")
+            return link
+        return event_url
+    # Ссылка на другую площадку (afisha/kassir/kudago) → ведём на неё напрямую
+    # (рабочая страница события, без комиссии — лучше, чем бесполезная главная)
+    if event_url:
+        return event_url
+    # Совсем нет ссылки → главная Ticketland (крайний случай)
+    return "https://www.ticketland.ru/"
 
 @app.get("/api/v1/events/ticket-link")
 async def ticket_link_redirect(
