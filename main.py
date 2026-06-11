@@ -703,6 +703,95 @@ def _ds_post(messages, system=None, max_tokens=800):
         return r.json()["choices"][0]["message"]["content"].strip()
     raise Exception("AI недоступен")
 
+# ── Агент-оркестратор: инструменты (function calling) ─────────────
+AGENT_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "create_medication_reminder",
+            "description": "Создать напоминание о приёме лекарства. Вызывай, когда пользователь просит напомнить принимать лекарство, таблетки или препарат в определённое время.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Название лекарства, например Липримар"},
+                    "dose": {"type": "string", "description": "Дозировка, например 40 мг. Если не указана — пустая строка"},
+                    "time": {"type": "string", "description": "Время приёма в формате ЧЧ:ММ, 24 часа. Например: 9 утра=09:00, 9 вечера=21:00, полдень=12:00"},
+                    "frequency": {"type": "string", "description": "Частота приёма: daily (каждый день) или once (разово). По умолчанию daily"}
+                },
+                "required": ["name", "time"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_products",
+            "description": "Найти товары, услуги, места или мероприятия в интернете. Вызывай, когда пользователь просит найти, купить, подобрать товар/услугу, билеты, куда сходить, где купить.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Поисковый запрос — что именно искать"}
+                },
+                "required": ["query"]
+            }
+        }
+    }
+]
+
+AGENT_SYSTEM = (
+    "Ты — AI-ассистент приложения OkTolk. Помогаешь с финансами, здоровьем, новостями, поиском и защитой от мошенников. "
+    "Если пользователь просит создать напоминание о приёме лекарства — вызови инструмент create_medication_reminder. "
+    "Если просит найти/купить товар, услугу, билеты, мероприятие — вызови инструмент search_products. "
+    "Для остальных вопросов просто отвечай текстом: тепло, понятно, без сложных слов. "
+    "Время приёма всегда переводи в формат ЧЧ:ММ (9 утра=09:00, 9 вечера=21:00)."
+)
+
+def call_ai_with_tools(messages, tools=None, max_tokens=800):
+    """Вызов DeepSeek V4 Flash с поддержкой function calling.
+    Возвращает dict:
+      {"type":"tool_call","name":str,"args":dict,"raw_msg":dict}
+      {"type":"text","text":str}
+      {"type":"error","error":str}
+    """
+    last_err = None
+    for base, key in (
+        ("https://api.deepseek.com/v1/chat/completions", DEEPSEEK_API_KEY),
+        (f"{AITUNNEL_BASE_URL}chat/completions", AITUNNEL_API_KEY),
+    ):
+        if not key:
+            continue
+        try:
+            body = {"model": "deepseek-v4-flash", "messages": messages,
+                    "max_tokens": max_tokens, "temperature": 0.3}
+            if tools:
+                body["tools"] = tools
+                body["tool_choice"] = "auto"
+            r = requests.post(base, headers={"Authorization": f"Bearer {key}",
+                              "Content-Type": "application/json"}, json=body, timeout=30)
+            if r.status_code != 200:
+                last_err = f"HTTP {r.status_code}: {r.text[:200]}"
+                print(f"[agent] {last_err}")
+                continue
+            j = r.json()
+            msg = j["choices"][0]["message"]
+            u = j.get("usage", {})
+            print(f"[agent] ok | in={u.get('prompt_tokens','?')} out={u.get('completion_tokens','?')}")
+            tc = msg.get("tool_calls")
+            if tc:
+                fn = tc[0]["function"]
+                try:
+                    args = json.loads(fn.get("arguments") or "{}")
+                except Exception:
+                    args = {}
+                return {"type": "tool_call", "name": fn.get("name"), "args": args, "raw_msg": msg}
+            return {"type": "text", "text": (msg.get("content") or "").strip()}
+        except Exception as e:
+            last_err = str(e)
+            print(f"[agent] error: {e}")
+            continue
+    return {"type": "error", "error": last_err or "AI недоступен"}
+
+
 # ── Лимиты токенов ───────────────────────────────────────────────
 async def check_token_limit(user_id) -> bool:
     """True если пользователь в пределах лимита. При ошибке/отсутствии user_id — не блокируем."""
@@ -1646,6 +1735,21 @@ async def chat_history(domain: str = None, limit: int = 50, user=Depends(get_cur
     except Exception as e:
         print(f"[chat_history] read error: {e}")
         return {"messages": []}
+
+
+# ── Агент: тестовый эндпоинт (что решил оркестратор) ─────────────
+@app.post("/api/v1/agent/parse")
+async def agent_parse(req: ChatRequest):
+    """ТЕСТОВЫЙ эндпоинт: показывает, что агент решил по сообщению —
+    вызвать инструмент (tool_call) или ответить текстом."""
+    messages = [{"role": "system", "content": AGENT_SYSTEM}]
+    for h in (req.history or [])[-6:]:
+        if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content"):
+            messages.append({"role": h["role"], "content": str(h["content"])[:1000]})
+    messages.append({"role": "user", "content": req.message})
+    result = await asyncio.to_thread(call_ai_with_tools, messages, AGENT_TOOLS)
+    # raw_msg не отдаём клиенту — только суть
+    return {k: v for k, v in result.items() if k != "raw_msg"}
 
 
 # ── Админ-панель владельца ───────────────────────────────────────
