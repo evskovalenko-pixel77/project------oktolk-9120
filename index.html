@@ -14190,8 +14190,20 @@ function SubscriptionScreen({
           body: JSON.stringify({ tariff: plan.id })
         });
         const d = await res.json();
-        if (d.ok && d.payment_url) {
-          window.location.href = d.payment_url;
+        if (d.ok && d.action_url && d.fields) {
+          // POST-форма на Robokassa (браузер корректно закодирует Receipt)
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = d.action_url;
+          Object.keys(d.fields).forEach(function (k) {
+            const inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = k;
+            inp.value = d.fields[k];
+            form.appendChild(inp);
+          });
+          document.body.appendChild(form);
+          form.submit();
         } else {
           alert(d.detail || 'Не удалось создать платёж. Попробуйте позже.');
         }

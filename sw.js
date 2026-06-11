@@ -1,4 +1,4 @@
-// OkTolk Service Worker v13 (маркировка рекламы Ticketland)
+// OkTolk Service Worker v14 (оплата через POST-форму)
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => {
   e.waitUntil(

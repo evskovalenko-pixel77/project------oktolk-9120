@@ -2028,24 +2028,26 @@ async def payment_create(req: PaymentCreateRequest, user=Depends(get_current_use
     # подпись: MerchantLogin:OutSum:InvId:Receipt(url-encoded):Пароль#1
     signature = _rk_sign(ROBOKASSA_LOGIN, out_sum, inv_id, receipt_enc, _rk_pass1())
 
-    params = [
-        f"MerchantLogin={quote(ROBOKASSA_LOGIN)}",
-        f"OutSum={out_sum}",
-        f"InvId={inv_id}",
-        f"Description={quote(description)}",
-        f"Receipt={receipt_enc}",
-        f"SignatureValue={signature}",
-    ]
+    # POST-форма (а не GET-редирект): браузер сам корректно закодирует Receipt,
+    # и подпись сойдётся. Receipt передаём в том же url-encoded виде, что и в подписи.
+    fields = {
+        "MerchantLogin": ROBOKASSA_LOGIN,
+        "OutSum": out_sum,
+        "InvId": str(inv_id),
+        "Description": description,
+        "Receipt": receipt_enc,
+        "SignatureValue": signature,
+    }
     if ROBOKASSA_TEST:
-        params.append("IsTest=1")
-    pay_url = "https://auth.robokassa.ru/Merchant/Index.aspx?" + "&".join(params)
+        fields["IsTest"] = "1"
+    action_url = "https://auth.robokassa.ru/Merchant/Index.aspx"
     # Диагностика (пароль НЕ логируется — только длина и факт наличия)
     _p1 = _rk_pass1()
     print(f"[payment] создан InvId={inv_id} user={user['id']} {req.tariff} {out_sum}₽ test={ROBOKASSA_TEST}")
     print(f"[payment][diag] login='{ROBOKASSA_LOGIN}' pass1_len={len(_p1)} pass1_empty={_p1==''} "
           f"sign_base='{ROBOKASSA_LOGIN}:{out_sum}:{inv_id}:Receipt[{len(receipt_enc)}]:PASS1' "
           f"sign={signature[:16]}... receipt_raw={receipt_json[:80]}")
-    return {"ok": True, "inv_id": inv_id, "payment_url": pay_url}
+    return {"ok": True, "inv_id": inv_id, "action_url": action_url, "fields": fields}
 
 
 @app.post("/api/v1/payment/robokassa/result")
