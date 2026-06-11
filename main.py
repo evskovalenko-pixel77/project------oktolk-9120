@@ -45,7 +45,11 @@ TICKETLAND_AFFILIATE_TEMPLATE = os.getenv("TICKETLAND_AFFILIATE_TEMPLATE", "")
 
 # VAPID ключи для Web Push (хранить в env Amvera!)
 VAPID_PUBLIC_KEY  = os.getenv("VAPID_PUBLIC_KEY",  "BPuepfkM-HSrhHb8NZPZ2HfhFDNYEZd2TUiwZN7tvCij3qNNhqMyUMWDtuOObEEGbeYnWnhBaSF8sGdeSQrApt4")
-VAPID_PRIVATE_PEM = os.getenv("VAPID_PRIVATE_PEM", "")  # полный PEM в env переменной
+# base64url raw приватный ключ (одна строка — устойчив к ENV, в отличие от PEM с переносами)
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_PRIVATE_PEM = os.getenv("VAPID_PRIVATE_PEM", "")  # legacy PEM (fallback)
+# Что реально используем: приоритет base64url, иначе PEM
+VAPID_PRIVATE     = VAPID_PRIVATE_KEY or VAPID_PRIVATE_PEM
 VAPID_CLAIMS      = {"sub": "mailto:info@oktolk.ru"}
 
 DB_HOST = os.getenv("DB_HOST", "amvera-kes-cnpg-oktolk-db-rw")
@@ -4458,15 +4462,15 @@ def _normalize_time(t: str) -> str:
 
 def send_web_push(subscription_info: dict, title: str, body: str, icon: str = "/icon-192.png"):
     """Отправить Web Push через pywebpush. Возвращает (ok: bool, error: str)."""
-    if not VAPID_PRIVATE_PEM:
-        return False, "VAPID_PRIVATE_PEM не задан"
+    if not VAPID_PRIVATE:
+        return False, "VAPID приватный ключ не задан"
     try:
         from pywebpush import webpush, WebPushException
         try:
             webpush(
                 subscription_info=subscription_info,
                 data=json.dumps({"title": title, "body": body, "icon": icon}),
-                vapid_private_key=VAPID_PRIVATE_PEM,
+                vapid_private_key=VAPID_PRIVATE,
                 vapid_claims=dict(VAPID_CLAIMS)  # копируем, pywebpush мутирует
             )
             return True, ""
@@ -4558,8 +4562,8 @@ async def push_scheduler():
                     _push_scheduler_state["checks_count"] += 1
 
                     last_err = None
-                    if not VAPID_PRIVATE_PEM:
-                        last_err = "VAPID_PRIVATE_PEM не задан"
+                    if not VAPID_PRIVATE:
+                        last_err = "VAPID приватный ключ не задан"
                         _push_scheduler_state["last_error"] = last_err
 
                     # Heartbeat в БД
@@ -4577,7 +4581,7 @@ async def push_scheduler():
                         _push_scheduler_state["pushes_sent"],
                         last_err, os.getpid())
 
-                    if not VAPID_PRIVATE_PEM:
+                    if not VAPID_PRIVATE:
                         # lock освободится при выходе из transaction
                         continue
 
@@ -4865,8 +4869,10 @@ async def push_diagnostic():
     """Диагностика push-уведомлений + состояние лекарств в БД"""
     diag = {
         "vapid_public_key_set": bool(VAPID_PUBLIC_KEY),
+        "vapid_private_b64_set": bool(VAPID_PRIVATE_KEY),
         "vapid_private_pem_set": bool(VAPID_PRIVATE_PEM),
-        "vapid_private_length": len(VAPID_PRIVATE_PEM) if VAPID_PRIVATE_PEM else 0,
+        "vapid_private_active": "base64url" if VAPID_PRIVATE_KEY else ("pem" if VAPID_PRIVATE_PEM else "none"),
+        "vapid_private_length": len(VAPID_PRIVATE) if VAPID_PRIVATE else 0,
         "db_pool_ready": db_pool is not None,
         "scheduler": dict(_push_scheduler_state),  # копия
         "worker_pid": os.getpid(),
@@ -4949,14 +4955,14 @@ async def push_diagnostic():
     scheduler_alive = diag.get("scheduler_db", {}) and diag["scheduler_db"].get("alive", False)
     diag["status"] = "ok" if (
         diag["vapid_public_key_set"] and
-        diag["vapid_private_pem_set"] and
+        bool(VAPID_PRIVATE) and
         diag["db_pool_ready"] and
         diag["pywebpush_available"] and
         scheduler_alive
     ) else "broken"
     diag["issues"] = []
     if not diag["vapid_public_key_set"]: diag["issues"].append("VAPID_PUBLIC_KEY не задан")
-    if not diag["vapid_private_pem_set"]: diag["issues"].append("VAPID_PRIVATE_PEM не задан в Amvera env")
+    if not VAPID_PRIVATE: diag["issues"].append("VAPID приватный ключ не задан в Amvera env")
     if not diag["db_pool_ready"]: diag["issues"].append("База данных недоступна")
     if not diag["pywebpush_available"]: diag["issues"].append("pywebpush не установлен")
     # Проверка scheduler по БД (реальное состояние)
