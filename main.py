@@ -1913,7 +1913,116 @@ async def agent_parse(req: ChatRequest, request: Request):
     return {k: v for k, v in result.items() if k != "raw_msg"}
 
 
+# ── Агент: выполнение подтверждённого действия ───────────────────
+class AgentExecuteRequest(BaseModel):
+    tool: str
+    args: Optional[dict] = {}
+
+_PROFILE_FIELDS = {"age", "gender", "height", "weight", "profession",
+                   "hobbies", "income", "chronic", "heredity"}
+_PROFILE_INT = {"age", "height"}
+_PROFILE_FLOAT = {"weight", "income"}
+
+@app.post("/api/v1/agent/execute")
+async def agent_execute(req: AgentExecuteRequest, user=Depends(get_current_user)):
+    """Выполняет ПОДТВЕРЖДЁННОЕ пользователем действие агента.
+    Действия привязаны к user из токена — чужие данные недоступны."""
+    if not db_pool:
+        raise HTTPException(status_code=503, detail="БД недоступна")
+    import json as _json
+    from datetime import date
+    uid = user["id"]
+    tool = req.tool
+    a = req.args or {}
+    try:
+        async with db_pool.acquire() as conn:
+            if tool == "create_medication_reminder":
+                name = (a.get("name") or "").strip()
+                if not name:
+                    raise HTTPException(status_code=400, detail="Не указано название лекарства")
+                tm = (a.get("time") or "").strip()
+                dose = (a.get("dose") or "").strip()
+                rid = await conn.fetchval(
+                    """INSERT INTO medications
+                       (user_id, name, dose, times_per_day, times_json, notify, start_date, is_active)
+                       VALUES ($1,$2,$3,1,$4,TRUE,$5,TRUE) RETURNING id""",
+                    uid, name, dose, _json.dumps([tm] if tm else []), date.today())
+                label = f"Напоминание «{name}»" + (f", {dose}" if dose else "") + (f", в {tm}" if tm else "")
+                return {"status": "ok", "result": label, "id": rid, "need_push": True}
+
+            if tool == "record_expense":
+                try:
+                    amount = float(a.get("amount") or 0)
+                except Exception:
+                    raise HTTPException(status_code=400, detail="Некорректная сумма")
+                cat = (a.get("category") or "other").strip()
+                comment = (a.get("comment") or "").strip()
+                rid = await conn.fetchval(
+                    "INSERT INTO finance_records (user_id, category, amount, comment) VALUES ($1,$2,$3,$4) RETURNING id",
+                    uid, cat, amount, comment)
+                return {"status": "ok", "result": f"Расход {amount:.0f} ₽" + (f" ({comment})" if comment else ""), "id": rid}
+
+            if tool == "record_health":
+                typ = (a.get("type") or "").strip()
+                if typ not in ("pressure", "pulse", "sugar", "weight"):
+                    raise HTTPException(status_code=400, detail="Неизвестный показатель")
+                v1 = a.get("value_1")
+                v2 = a.get("value_2")
+                rid = await conn.fetchval(
+                    "INSERT INTO health_records (user_id, type, value_1, value_2) VALUES ($1,$2,$3,$4) RETURNING id",
+                    uid, typ, v1, v2)
+                names = {"pressure": "Давление", "pulse": "Пульс", "sugar": "Сахар", "weight": "Вес"}
+                val = f"{v1}/{v2}" if (typ == "pressure" and v2) else str(v1)
+                return {"status": "ok", "result": f"{names[typ]}: {val}", "id": rid}
+
+            if tool == "update_profile":
+                field = (a.get("field") or "").strip()
+                if field not in _PROFILE_FIELDS:
+                    raise HTTPException(status_code=400, detail="Недопустимое поле профиля")
+                value = a.get("value")
+                try:
+                    if field in _PROFILE_INT:
+                        value = int(float(value))
+                    elif field in _PROFILE_FLOAT:
+                        value = float(value)
+                    else:
+                        value = str(value)
+                except Exception:
+                    raise HTTPException(status_code=400, detail="Некорректное значение")
+                await conn.execute(
+                    "INSERT INTO user_profile (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", uid)
+                # field из белого списка _PROFILE_FIELDS — инъекция исключена
+                await conn.execute(
+                    f"UPDATE user_profile SET {field}=$2, updated_at=NOW() WHERE user_id=$1", uid, value)
+                return {"status": "ok", "result": f"Профиль обновлён ({field})"}
+
+            if tool == "remember_fact":
+                about = (a.get("about") or "").strip()[:80]
+                fact = (a.get("fact") or "").strip()
+                if not fact:
+                    raise HTTPException(status_code=400, detail="Пустой факт")
+                await conn.execute(
+                    "INSERT INTO user_memory (user_id, about, fact) VALUES ($1,$2,$3)", uid, about, fact)
+                return {"status": "ok", "result": "Запомнил" + (f" ({about})" if about else "")}
+
+            if tool == "save_instruction":
+                instr = (a.get("instruction") or "").strip()
+                if not instr:
+                    raise HTTPException(status_code=400, detail="Пустая инструкция")
+                await conn.execute(
+                    "INSERT INTO user_instructions (user_id, instruction) VALUES ($1,$2)", uid, instr)
+                return {"status": "ok", "result": "Учту это в общении"}
+
+        raise HTTPException(status_code=400, detail=f"Неизвестное действие: {tool}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[agent/execute] error: {e}")
+        raise HTTPException(status_code=500, detail="Не удалось выполнить действие")
+
+
 # ── Админ-панель владельца ───────────────────────────────────────
+
 # Внутренний счётчик учитывает только финальный обмен; реальные API-вызовы
 # (оркестрация classify/extract/research/vision) ~ в 3.5 раза больше.
 # Цена ~$0.20/млн реальных токенов, курс ~92 ₽/$.
