@@ -4658,6 +4658,15 @@ async def push_scheduler():
                                         push_err)
                                 except Exception:
                                     pass
+                                # Протухшая подписка (410 Gone / 404) — удаляем из БД
+                                if "410" in push_err or "404" in push_err:
+                                    try:
+                                        await conn.execute(
+                                            "DELETE FROM push_subscriptions WHERE endpoint=$1",
+                                            sub["endpoint"])
+                                        print(f"[push] 🗑 удалена протухшая подписка user {med['user_id']}")
+                                    except Exception:
+                                        pass
                     # Транзакция завершается → lock автоматически освобождается
 
         except Exception as e:
@@ -4778,16 +4787,22 @@ async def test_push(user=Depends(get_current_user)):
         return {"status": "no_subscriptions", "message": "Нет активных подписок"}
     sent = 0
     errors = []
-    for sub in subs:
-        ok, err = send_web_push(
-            {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
-            "OkTolk — тест уведомлений",
-            "Push работает! Лекарства будут напоминать вовремя."
-        )
-        if ok:
-            sent += 1
-        elif err:
-            errors.append(err)
+    async with db_pool.acquire() as conn2:
+        for sub in subs:
+            ok, err = send_web_push(
+                {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
+                "OkTolk — тест уведомлений",
+                "Push работает! Лекарства будут напоминать вовремя."
+            )
+            if ok:
+                sent += 1
+            elif err:
+                errors.append(err)
+                if "410" in err or "404" in err:
+                    try:
+                        await conn2.execute("DELETE FROM push_subscriptions WHERE endpoint=$1", sub["endpoint"])
+                    except Exception:
+                        pass
     return {"status": "ok", "sent": sent, "total": len(subs), "errors": errors}
 
 # ═════════════════════════════════════════════════════════════════
