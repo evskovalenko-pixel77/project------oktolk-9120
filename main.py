@@ -2023,7 +2023,7 @@ async def payment_create(req: PaymentCreateRequest, user=Depends(get_current_use
             "tax": "vat22",
         }],
     }
-    receipt_json = json.dumps(receipt, ensure_ascii=False)
+    receipt_json = json.dumps(receipt, ensure_ascii=False, separators=(',', ':'))
     receipt_enc = quote(receipt_json, safe="")
     # подпись: MerchantLogin:OutSum:InvId:Receipt(url-encoded):Пароль#1
     signature = _rk_sign(ROBOKASSA_LOGIN, out_sum, inv_id, receipt_enc, _rk_pass1())
