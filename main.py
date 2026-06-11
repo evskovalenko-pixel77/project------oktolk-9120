@@ -266,6 +266,21 @@ async def init_db():
                 created_at  TIMESTAMP DEFAULT NOW()
             );
             CREATE INDEX IF NOT EXISTS idx_instr_user ON user_instructions(user_id);
+            CREATE TABLE IF NOT EXISTS events_feed (
+                offer_id    TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                vendor      TEXT,
+                category    TEXT,
+                region      TEXT,
+                price       NUMERIC,
+                age         INTEGER,
+                picture     TEXT,
+                url         TEXT,
+                event_date  TIMESTAMP,
+                updated_at  TIMESTAMP DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_events_date ON events_feed(event_date);
+            CREATE INDEX IF NOT EXISTS idx_events_region ON events_feed(region);
             ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens_used INTEGER DEFAULT 0;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens_limit INTEGER DEFAULT 50000;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
@@ -2123,6 +2138,100 @@ async def feed_inspect():
         }
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}"}
+
+
+def _parse_feed_sync(xml_bytes):
+    """Парсит YML-фид Ticketland → список словарей мероприятий."""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(xml_bytes)
+    shop = root.find("shop")
+    if shop is None:
+        return []
+    cats = {}
+    cnode = shop.find("categories")
+    if cnode is not None:
+        for c in cnode:
+            cats[c.get("id")] = c.text
+    offers = shop.find("offers")
+    rows = []
+    if offers is None:
+        return []
+    for o in offers:
+        if o.get("available") != "true":
+            continue
+        def g(tag):
+            e = o.find(tag)
+            return e.text.strip() if (e is not None and e.text) else None
+        oid = o.get("id")
+        name = g("model") or g("name")
+        if not oid or not name:
+            continue
+        price = g("price")
+        try:
+            price = float(price) if price else None
+        except Exception:
+            price = None
+        age = g("age")
+        try:
+            age = int(age) if age else None
+        except Exception:
+            age = None
+        cid = g("categoryId")
+        category = g("typePrefix") or (cats.get(cid) if cid else None)
+        ev_date = g("date")  # ISO строка, парсим при вставке
+        rows.append((oid, name, g("vendor"), category, g("region"),
+                     price, age, g("picture"), g("url"), ev_date))
+    return rows
+
+
+async def reload_ticketland_feed():
+    """Скачивает фид, парсит, перезаписывает таблицу events_feed."""
+    if not ADVCAKE_FEED_URL:
+        return {"error": "ADVCAKE_FEED_URL не задан"}
+    if not db_pool:
+        return {"error": "БД недоступна"}
+    from datetime import datetime as _dt
+    try:
+        r = await asyncio.to_thread(
+            lambda: requests.get(ADVCAKE_FEED_URL, timeout=120, headers={"User-Agent": "OkTolk/1.0"})
+        )
+        if r.status_code != 200:
+            return {"error": f"HTTP {r.status_code}"}
+        rows = await asyncio.to_thread(_parse_feed_sync, r.content)
+        if not rows:
+            return {"error": "Фид пуст или не распознан"}
+        # Преобразуем дату-строку в datetime
+        prepared = []
+        for row in rows:
+            oid, name, vendor, category, region, price, age, picture, url, ev_date = row
+            dt = None
+            if ev_date:
+                try:
+                    dt = _dt.fromisoformat(ev_date)
+                except Exception:
+                    dt = None
+            prepared.append((oid, name, vendor, category, region, price, age, picture, url, dt))
+        async with db_pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute("DELETE FROM events_feed")
+                await conn.executemany(
+                    """INSERT INTO events_feed
+                       (offer_id, name, vendor, category, region, price, age, picture, url, event_date)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                       ON CONFLICT (offer_id) DO NOTHING""",
+                    prepared
+                )
+        print(f"[feed] загружено {len(prepared)} мероприятий Ticketland")
+        return {"status": "ok", "loaded": len(prepared)}
+    except Exception as e:
+        print(f"[feed] reload error: {e}")
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
+@app.post("/api/v1/feed/reload")
+async def feed_reload():
+    """Ручная перезагрузка фида Ticketland."""
+    return await reload_ticketland_feed()
 
 
 # ── Админ-панель владельца ───────────────────────────────────────
