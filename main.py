@@ -251,6 +251,21 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT NOW()
             );
             CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, created_at DESC);
+            CREATE TABLE IF NOT EXISTS user_memory (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                about       VARCHAR(80),
+                fact        TEXT NOT NULL,
+                created_at  TIMESTAMP DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_memory_user ON user_memory(user_id);
+            CREATE TABLE IF NOT EXISTS user_instructions (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                instruction TEXT NOT NULL,
+                created_at  TIMESTAMP DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_instr_user ON user_instructions(user_id);
             ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens_used INTEGER DEFAULT 0;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens_limit INTEGER DEFAULT 50000;
             ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
@@ -716,7 +731,7 @@ AGENT_TOOLS = [
                     "name": {"type": "string", "description": "Название лекарства, например Липримар"},
                     "dose": {"type": "string", "description": "Дозировка, например 40 мг. Если не указана — пустая строка"},
                     "time": {"type": "string", "description": "Время приёма в формате ЧЧ:ММ, 24 часа. Например: 9 утра=09:00, 9 вечера=21:00, полдень=12:00"},
-                    "frequency": {"type": "string", "description": "Частота приёма: daily (каждый день) или once (разово). По умолчанию daily"}
+                    "frequency": {"type": "string", "description": "daily (каждый день) или once (разово). По умолчанию daily"}
                 },
                 "required": ["name", "time"]
             }
@@ -726,7 +741,7 @@ AGENT_TOOLS = [
         "type": "function",
         "function": {
             "name": "search_products",
-            "description": "Найти товары, услуги, места или мероприятия в интернете. Вызывай, когда пользователь просит найти, купить, подобрать товар/услугу, билеты, куда сходить, где купить.",
+            "description": "Найти товары, услуги, места или мероприятия в интернете. Вызывай, когда пользователь просит найти, купить, подобрать товар/услугу, билеты, куда сходить.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -735,16 +750,143 @@ AGENT_TOOLS = [
                 "required": ["query"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "record_expense",
+            "description": "Записать расход пользователя. Вызывай, когда пользователь сообщает о трате/покупке/оплате с суммой.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "amount": {"type": "number", "description": "Сумма расхода в рублях"},
+                    "category": {"type": "string", "description": "Категория: shop (магазины/продукты), pharmacy (аптека/врачи), utility (ЖКУ/коммуналка), credit (кредиты), transport (транспорт/билеты), leisure (кафе/развлечения/подписки), other (прочее)"},
+                    "comment": {"type": "string", "description": "Краткое описание, 1-2 слова"}
+                },
+                "required": ["amount", "category"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "record_health",
+            "description": "Записать показатель здоровья. Вызывай, когда пользователь сообщает измерение давления, пульса, сахара или веса.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "type": {"type": "string", "description": "pressure (давление), pulse (пульс), sugar (сахар), weight (вес)"},
+                    "value_1": {"type": "number", "description": "Основное значение. Для давления — верхнее (систолическое)"},
+                    "value_2": {"type": "number", "description": "Только для давления — нижнее (диастолическое). Иначе не указывать"}
+                },
+                "required": ["type", "value_1"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_profile",
+            "description": "Обновить структурированный профиль пользователя (о самом пользователе). Вызывай, когда пользователь сообщает свои данные: возраст, пол, рост, вес, профессию, хобби, рабочее давление, доход, вредные привычки, хронические болезни.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "field": {"type": "string", "description": "Поле: age, gender, height, weight, profession, hobbies, income, chronic, heredity"},
+                    "value": {"type": "string", "description": "Значение поля"}
+                },
+                "required": ["field", "value"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remember_fact",
+            "description": "Запомнить произвольный факт о пользователе или его близких, чтобы помогать точнее. Вызывай, когда узнаёшь предпочтения, интересы, важные детали (например: дочь любит рисование; жена — диабетик; годовщина в мае).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "about": {"type": "string", "description": "О ком/чём факт: сам пользователь, дочь, жена, сын, мама и т.п."},
+                    "fact": {"type": "string", "description": "Сам факт, кратко"}
+                },
+                "required": ["fact"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_instruction",
+            "description": "Сохранить постоянную инструкцию о том, как общаться с пользователем. Вызывай, когда пользователь просит что-то учитывать или не делать (например: не предлагать кредиты; не напоминать по выходным; обращаться на ты).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "instruction": {"type": "string", "description": "Инструкция, как её будет читать ассистент"}
+                },
+                "required": ["instruction"]
+            }
+        }
     }
 ]
 
-AGENT_SYSTEM = (
-    "Ты — AI-ассистент приложения OkTolk. Помогаешь с финансами, здоровьем, новостями, поиском и защитой от мошенников. "
-    "Если пользователь просит создать напоминание о приёме лекарства — вызови инструмент create_medication_reminder. "
-    "Если просит найти/купить товар, услугу, билеты, мероприятие — вызови инструмент search_products. "
-    "Для остальных вопросов просто отвечай текстом: тепло, понятно, без сложных слов. "
-    "Время приёма всегда переводи в формат ЧЧ:ММ (9 утра=09:00, 9 вечера=21:00)."
+# Действия, требующие подтверждения пользователя (read-only — search — без подтверждения)
+AGENT_CONFIRM_ACTIONS = {
+    "create_medication_reminder", "record_expense", "record_health",
+    "update_profile", "remember_fact", "save_instruction",
+}
+
+AGENT_SYSTEM_BASE = (
+    "Ты — личный AI-ассистент приложения OkTolk. Помогаешь с финансами, здоровьем, новостями, "
+    "поиском товаров и услуг, защитой от мошенников. Общайся тепло, просто и по-человечески, без сложных слов.\n"
+    "У тебя есть инструменты. Вызывай нужный, когда пользователь просит действие:\n"
+    "- напомнить о лекарстве → create_medication_reminder\n"
+    "- найти/купить товар, услугу, билеты → search_products\n"
+    "- записать трату/покупку → record_expense\n"
+    "- записать давление/пульс/сахар/вес → record_health\n"
+    "- сообщает свои данные (возраст, рост, профессия и т.п.) → update_profile\n"
+    "- узнал предпочтение/важный факт о нём или близких → remember_fact\n"
+    "- просит что-то учитывать или не делать → save_instruction\n"
+    "Все действия выполняются ТОЛЬКО после подтверждения пользователем — ты предлагаешь, "
+    "система спросит подтверждение.\n"
+    "Будь ПРОАКТИВНЫМ помощником: пользователь может не знать всех твоих возможностей. "
+    "Если видишь, что можешь помочь точнее — предложи. Например, если человек ищет подарок дочери, "
+    "предложи: «Если хочешь, я запомню, что любит твоя дочь — и в следующий раз подберу точнее». "
+    "Время приёма всегда переводи в формат ЧЧ:ММ (9 утра=09:00, 9 вечера=21:00). "
+    "Не выдумывай факты о пользователе — используй только то, что есть в памяти ниже или что он сам сказал."
 )
+
+async def build_agent_context(user_id) -> str:
+    """Собирает память о пользователе (профиль + факты + инструкции) для системного промпта."""
+    if not user_id or not db_pool:
+        return ""
+    parts = []
+    try:
+        async with db_pool.acquire() as conn:
+            prof = await conn.fetchrow("SELECT * FROM user_profile WHERE user_id=$1", user_id)
+            if prof:
+                p = []
+                if prof.get("age"): p.append(f"возраст {prof['age']}")
+                if prof.get("gender"): p.append("пол " + ("муж" if prof["gender"] == "м" else "жен"))
+                if prof.get("height"): p.append(f"рост {prof['height']} см")
+                if prof.get("weight"): p.append(f"вес {prof['weight']} кг")
+                if prof.get("profession"): p.append(f"профессия: {prof['profession']}")
+                if prof.get("hobbies"): p.append(f"хобби: {prof['hobbies']}")
+                if prof.get("chronic"): p.append(f"хронические: {prof['chronic']}")
+                if p:
+                    parts.append("Профиль: " + ", ".join(p) + ".")
+            facts = await conn.fetch(
+                "SELECT about, fact FROM user_memory WHERE user_id=$1 ORDER BY created_at DESC LIMIT 30", user_id)
+            if facts:
+                fl = [f"- {f['about']+': ' if f['about'] else ''}{f['fact']}" for f in facts]
+                parts.append("Что я помню о пользователе и близких:\n" + "\n".join(fl))
+            instr = await conn.fetch(
+                "SELECT instruction FROM user_instructions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 20", user_id)
+            if instr:
+                il = [f"- {i['instruction']}" for i in instr]
+                parts.append("Инструкции пользователя (соблюдай всегда):\n" + "\n".join(il))
+    except Exception as e:
+        print(f"[agent] context error: {e}")
+    return ("\n\n" + "\n\n".join(parts)) if parts else ""
 
 def call_ai_with_tools(messages, tools=None, max_tokens=800):
     """Вызов DeepSeek V4 Flash с поддержкой function calling.
@@ -790,6 +932,7 @@ def call_ai_with_tools(messages, tools=None, max_tokens=800):
             print(f"[agent] error: {e}")
             continue
     return {"type": "error", "error": last_err or "AI недоступен"}
+
 
 
 # ── Лимиты токенов ───────────────────────────────────────────────
@@ -1739,15 +1882,31 @@ async def chat_history(domain: str = None, limit: int = 50, user=Depends(get_cur
 
 # ── Агент: тестовый эндпоинт (что решил оркестратор) ─────────────
 @app.post("/api/v1/agent/parse")
-async def agent_parse(req: ChatRequest):
+async def agent_parse(req: ChatRequest, request: Request):
     """ТЕСТОВЫЙ эндпоинт: показывает, что агент решил по сообщению —
-    вызвать инструмент (tool_call) или ответить текстом."""
-    messages = [{"role": "system", "content": AGENT_SYSTEM}]
+    вызвать инструмент (tool_call) или ответить текстом. Подмешивает память пользователя."""
+    # user_id из токена (если есть) — для контекста памяти
+    user_id = None
+    try:
+        token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+        if token and token not in ("demo", "local_demo", "") and db_pool:
+            async with db_pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT user_id FROM sessions WHERE token=$1 AND expires_at > NOW()", token)
+                if row:
+                    user_id = row["user_id"]
+    except Exception:
+        pass
+    ctx = await build_agent_context(user_id)
+    messages = [{"role": "system", "content": AGENT_SYSTEM_BASE + ctx}]
     for h in (req.history or [])[-6:]:
         if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content"):
             messages.append({"role": h["role"], "content": str(h["content"])[:1000]})
     messages.append({"role": "user", "content": req.message})
     result = await asyncio.to_thread(call_ai_with_tools, messages, AGENT_TOOLS)
+    # требуется ли подтверждение для этого действия
+    if result.get("type") == "tool_call":
+        result["needs_confirm"] = result.get("name") in AGENT_CONFIRM_ACTIONS
     # raw_msg не отдаём клиенту — только суть
     return {k: v for k, v in result.items() if k != "raw_msg"}
 
