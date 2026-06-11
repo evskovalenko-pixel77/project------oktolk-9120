@@ -1953,7 +1953,7 @@ async def admin_broadcast(req: BroadcastRequest, admin=Depends(get_admin_user)):
             subs = await conn.fetch("SELECT user_id, endpoint, p256dh, auth FROM push_subscriptions")
             for s in subs:
                 try:
-                    ok = send_web_push(
+                    ok, _err = send_web_push(
                         {"endpoint": s["endpoint"], "keys": {"p256dh": s["p256dh"], "auth": s["auth"]}},
                         req.title.strip(), req.body.strip())
                     if ok:
@@ -4456,23 +4456,34 @@ def _normalize_time(t: str) -> str:
     parts = t.split(':')
     return f"{int(parts[0]):02d}:{int(parts[1]):02d}"
 
-def send_web_push(subscription_info: dict, title: str, body: str, icon: str = "/icon-192.png") -> bool:
-    """Отправить Web Push уведомление через pywebpush"""
+def send_web_push(subscription_info: dict, title: str, body: str, icon: str = "/icon-192.png"):
+    """Отправить Web Push через pywebpush. Возвращает (ok: bool, error: str)."""
     if not VAPID_PRIVATE_PEM:
-        print("[push] VAPID_PRIVATE_PEM не задан — пропуск")
-        return False
+        return False, "VAPID_PRIVATE_PEM не задан"
     try:
-        from pywebpush import webpush
-        webpush(
-            subscription_info=subscription_info,
-            data=json.dumps({"title": title, "body": body, "icon": icon}),
-            vapid_private_key=VAPID_PRIVATE_PEM,
-            vapid_claims=dict(VAPID_CLAIMS)  # копируем, pywebpush мутирует
-        )
-        return True
+        from pywebpush import webpush, WebPushException
+        try:
+            webpush(
+                subscription_info=subscription_info,
+                data=json.dumps({"title": title, "body": body, "icon": icon}),
+                vapid_private_key=VAPID_PRIVATE_PEM,
+                vapid_claims=dict(VAPID_CLAIMS)  # копируем, pywebpush мутирует
+            )
+            return True, ""
+        except WebPushException as e:
+            # WebPushException содержит HTTP-ответ push-сервиса (403/410/400 и т.д.)
+            msg = str(e)
+            if getattr(e, "response", None) is not None:
+                try:
+                    msg += f" | HTTP {e.response.status_code}: {e.response.text[:200]}"
+                except Exception:
+                    pass
+            print(f"[push] Ошибка отправки (WebPush): {msg}")
+            return False, msg
     except Exception as e:
-        print(f"[push] Ошибка отправки: {e}")
-        return False
+        msg = f"{type(e).__name__}: {e}"
+        print(f"[push] Ошибка отправки: {msg}")
+        return False, msg
 
 # Состояние scheduler для диагностики (in-memory, перезаписывается из БД)
 _push_scheduler_state = {
@@ -4620,7 +4631,7 @@ async def push_scheduler():
                         if med.get("dose"):
                             body += f" · {med['dose']}"
                         for sub in subs:
-                            sent = send_web_push(
+                            sent, push_err = send_web_push(
                                 {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
                                 title=f"Пора принять {med['name']}",
                                 body=body
@@ -4634,6 +4645,15 @@ async def push_scheduler():
                                     title=f"Время принять {med['name']}",
                                     body=body
                                 )
+                            else:
+                                # фиксируем ошибку отправки в состоянии scheduler
+                                _push_scheduler_state["last_error"] = push_err
+                                try:
+                                    await conn.execute(
+                                        "UPDATE scheduler_state SET last_error=$1 WHERE name='push'",
+                                        push_err)
+                                except Exception:
+                                    pass
                     # Транзакция завершается → lock автоматически освобождается
 
         except Exception as e:
@@ -4753,15 +4773,18 @@ async def test_push(user=Depends(get_current_user)):
     if not subs:
         return {"status": "no_subscriptions", "message": "Нет активных подписок"}
     sent = 0
+    errors = []
     for sub in subs:
-        ok = send_web_push(
+        ok, err = send_web_push(
             {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
             "OkTolk — тест уведомлений",
             "Push работает! Лекарства будут напоминать вовремя."
         )
         if ok:
             sent += 1
-    return {"status": "ok", "sent": sent, "total": len(subs)}
+        elif err:
+            errors.append(err)
+    return {"status": "ok", "sent": sent, "total": len(subs), "errors": errors}
 
 # ═════════════════════════════════════════════════════════════════
 
