@@ -3048,7 +3048,7 @@ function formatUserDate(isoString) {
     }
   } catch (e) {}
 })();
-async function subscribeToPush() {
+async function subscribeToPush(sendTest = false) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     throw new Error('Push не поддерживается');
   }
@@ -3079,9 +3079,11 @@ async function subscribeToPush() {
     auth: subJson.keys.auth
   });
   console.log('[push] Подписка сохранена');
-  try {
-    await authSend('/api/v1/push/test', 'POST', {});
-  } catch (e) {}
+  if (sendTest) {
+    try {
+      await authSend('/api/v1/push/test', 'POST', {});
+    } catch (e) {}
+  }
   return true;
 }
 async function apiFetch(path, options = {}) {
@@ -8457,7 +8459,7 @@ function MedAddSheet({
         await authSend('/api/v1/health/meds', 'POST', payload);
         if (notify) {
           try {
-            await subscribeToPush();
+            await subscribeToPush(true);
           } catch (e) {
             console.warn('[push]', e);
           }
@@ -14697,6 +14699,17 @@ function App() {
           setUser(prev => ({ ...prev, tariff: d.tariff }));
         }
       }).catch(() => {});
+    }
+  }, [user && user.token]);
+  // Автоподписка на push в ТЕКУЩЕМ браузере, если уведомления уже разрешены.
+  // Web Push привязан к браузеру/устройству — у каждого своя подписка.
+  // Это гарантирует, что в каждом браузере, где юзер разрешил уведомления,
+  // подписка актуальна на сервере и push приходит.
+  React.useEffect(() => {
+    if (user && user.token && user.token !== 'local_demo') {
+      if ('Notification' in window && 'serviceWorker' in navigator && Notification.permission === 'granted') {
+        subscribeToPush(false).catch(e => console.warn('[push] auto:', e));
+      }
     }
   }, [user && user.token]);
   React.useLayoutEffect(() => {
