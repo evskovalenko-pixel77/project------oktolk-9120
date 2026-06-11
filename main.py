@@ -3550,7 +3550,7 @@ def build_ticketland_url(title: str, event_url: str = "", sub1: str = "") -> str
     """
     Строит реферальную ссылку на Ticketland.
     - Если есть event_url от KudaGo и он ведёт на ticketland.ru — используем его напрямую
-    - Иначе — поиск по названию: ticketland.ru/search/?q=TITLE
+    - Иначе (нет прямой ссылки) — ведём на главную ticketland.ru (рабочую)
     - Если задан TICKETLAND_AFFILIATE_TEMPLATE — оборачиваем в Advcake deeplink
     """
     from urllib.parse import quote
@@ -3558,8 +3558,9 @@ def build_ticketland_url(title: str, event_url: str = "", sub1: str = "") -> str
     if event_url and "ticketland.ru" in event_url:
         target_url = event_url
     else:
-        clean_title = title.replace("...", "").strip()
-        target_url = f"https://www.ticketland.ru/search/?q={quote(clean_title)}"
+        # У Ticketland нет /search/?q= (даёт 404). Ведём на рабочую главную —
+        # пользователь увидит каталог и встроенный поиск.
+        target_url = "https://www.ticketland.ru/"
     # Если есть шаблон от Advcake — оборачиваем
     if TICKETLAND_AFFILIATE_TEMPLATE:
         encoded_target = quote(target_url, safe="")
@@ -4070,26 +4071,33 @@ async def search_agent(request: Request):
     # ── 4. TAVILY — для досуга/услуг всегда, для товаров если WB пустой ──
     # events — не используем Tavily, только KudaGo
     if cat not in ("events", "info") and (len(raw_results) < 3 or cat in ["leisure", "services", "goods"]):
-        # Для товаров — добавляем Ozon и Яндекс.Маркет (WB уже через API выше)
+        # Tavily использует include_domains (НЕ site: в тексте — он его игнорирует)
+        inc_domains = None
         if cat == "goods":
-            tq = f"{query} купить цена site:ozon.ru OR site:market.yandex.ru"
+            tq = f"{query} купить цена"
+            inc_domains = ["ozon.ru", "market.yandex.ru"]
         elif cat == "leisure":
-            tq = f"{query} билеты site:ticketland.ru OR site:afisha.ru OR site:kassir.ru OR site:kudago.com"
+            tq = f"{query} билеты афиша расписание"
+            inc_domains = ["ticketland.ru", "afisha.ru", "kassir.ru", "kudago.com"]
         else:  # services
-            tq = f"{query} site:profi.ru OR site:youdo.ru"
+            tq = f"{query} услуги мастер"
+            inc_domains = ["profi.ru", "youdo.ru"]
 
-        print(f"[search] Tavily query: {tq}")
+        print(f"[search] Tavily query: {tq} | domains: {inc_domains}")
         try:
+            _tav_payload = {
+                "api_key": TAVILY_API_KEY,
+                "query": tq,
+                "search_depth": "basic",
+                "max_results": 8,
+                "include_answer": False,
+                "country": "ru",
+            }
+            if inc_domains:
+                _tav_payload["include_domains"] = inc_domains
             r = requests.post(
                 "https://api.tavily.com/search",
-                json={
-                    "api_key": TAVILY_API_KEY,
-                    "query": tq,
-                    "search_depth": "basic",
-                    "max_results": 6,
-                    "include_answer": False,
-                    "country": "ru",
-                },
+                json=_tav_payload,
                 timeout=15
             )
             print(f"[search] Tavily status={r.status_code}")
@@ -4133,19 +4141,9 @@ async def search_agent(request: Request):
         except Exception as e:
             print(f"[search] Tavily error: {e}")
 
-    # Билеты: гарантированно добавляем Ticketland (через affiliate) для билетных запросов
-    _ticket_kw = ("билет", "цирк", "концерт", "театр", "спектакл", "шоу", "выступлен", "мюзикл", "опера", "балет")
-    if cat == "leisure" and any(w in q_lower for w in _ticket_kw):
-        has_tl = any("ticketland.ru" in (r.get("url") or "") for r in raw_results)
-        if not has_tl:
-            raw_results.insert(0, {
-                "title": f"Билеты: {query}",
-                "description": "Поиск и покупка билетов на Ticketland",
-                "source": "ticketland.ru",
-                "url": build_ticketland_url(query),
-                "cat": "leisure"
-            })
-    # Оборачиваем прямые ссылки Ticketland в реферальные
+    # Билеты: оборачиваем реальные ссылки Ticketland (от Tavily) в реферальные.
+    # Искусственную «поисковую» карточку не добавляем — у Ticketland нет /search/?q= (404),
+    # полагаемся на реальные страницы событий, которые находит Tavily.
     for r in raw_results:
         u = r.get("url") or ""
         if "ticketland.ru" in u and "redav.online" not in u:
